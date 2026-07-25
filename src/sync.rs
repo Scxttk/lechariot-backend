@@ -1,8 +1,9 @@
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
+use crate::branches;
 use crate::db;
-use crate::models::{Market, Offer};
+use crate::models::{Branch, Market, Offer};
 use crate::push::{self, PushConfig, PushOptions, SupabaseRow};
 use crate::stores::save_offers;
 
@@ -34,6 +35,8 @@ pub struct SyncOptions {
     /// Nur diese eine PLZ syncen (On-Demand-Trigger); wird bei Bedarf in
     /// `regions` registriert. None = alle aktiven Regionen.
     pub only: Option<String>,
+    /// Nur diese eine Filiale syncen (`run_branch`). Schließt `only` aus.
+    pub market_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -239,8 +242,20 @@ fn seed_chain(cfg: &PushConfig, finder: &BranchFinder, chain: &str, plz: &str) -
     }
     let mut rows: Vec<SupabaseRow> =
         resp.json().context("Quell-Angebote: Antwort passt nicht zum offers-Schema")?;
+    // Auf die Ziel-Filiale umschreiben, nicht nur auf die Ziel-Region: Seit
+    // migration_v13 ist `market_id` Teil des Angebots-Schlüssels. Bliebe die
+    // Filiale der Quellregion stehen, käme der reguläre Scrape direkt danach
+    // nie an diese Zeilen heran — er löscht und upsertet unter der Filiale,
+    // die er selbst gefunden hat. Die Kopien lägen dann für immer verwaist
+    // in der Zielregion.
+    //
+    // Damit trägt eine kopierte Zeile die Filiale, in der sie (noch) nicht
+    // nachgewiesen ist. Das ist genau der Punkt, den Phase 11 unter
+    // „Vorab-Kopie klären" entscheiden muss; hier wird er nur nicht
+    // schlimmer gemacht als vorher.
     for row in &mut rows {
         row.region = Some(plz.to_string());
+        row.market_id = market.id.clone();
     }
     if rows.is_empty() {
         return Ok(0);
@@ -376,6 +391,125 @@ fn sync_region(
         },
         Some(cfg),
     )
+}
+
+/// Angebots-Abruf für genau eine Filiale — ohne Store-Finder, die ID steht
+/// schon fest. In Produktion `stores::fetch_offers` über `Store::from_chain`;
+/// in Tests ein Stub ohne Netz.
+pub type BranchScraper<'a> = dyn Fn(&Branch) -> Result<Vec<Offer>> + 'a;
+
+/// Genau eine Filiale syncen: Angebote holen, Filiale melden, pushen.
+///
+/// Der Unterschied zu [`sync_region`] ist nicht die Menge, sondern der
+/// Schlüssel: Dort bestimmt die PLZ über den Store-Finder, welche Filiale
+/// gemeint ist (`.first()`), hier hat der Nutzer sie im Verzeichnis selbst
+/// ausgewählt. Zwei REWE-Filialen in derselben PLZ sind darüber
+/// unterscheidbar — im PLZ-Weg waren sie es nie.
+pub fn run_branch(
+    opts: &SyncOptions,
+    cfg: Option<&PushConfig>,
+    scraper: &BranchScraper,
+    market_id: &str,
+) -> Result<()> {
+    let cfg = match cfg {
+        Some(c) => c,
+        None => &push::config_from_env()?,
+    };
+    let branch = branches::fetch_branch(cfg, market_id)?;
+
+    // Ohne PLZ kein Push: `offers.region` ist bis Phase 12 das Feld, über das
+    // die App filtert, und der Lidl-Abruf braucht sie ohnehin. Im Verzeichnis
+    // trägt sie jede Zeile — fehlt sie doch einmal, ist die Verzeichniszeile
+    // kaputt und nicht der Lauf.
+    let plz = branch.plz.clone().with_context(|| {
+        format!(
+            "Filiale {market_id} ({}) hat keine PLZ im Verzeichnis — \
+             `smartshop branches-sync` für dieses Gebiet neu laufen lassen.",
+            branch.name
+        )
+    })?;
+    println!(
+        "Filial-Sync: {} {} (ID {market_id}, PLZ {plz})",
+        branch.chain, branch.name,
+    );
+
+    {
+        let conn = db::open(&opts.db_path)?;
+        conn.execute("DELETE FROM offers", [])
+            .context("Lokale offers-Tabelle konnte nicht geleert werden")?;
+    }
+
+    let market = branch.as_market().with_chain(&branch.chain);
+    let offers = scraper(&branch)
+        .with_context(|| format!("Angebote von {} {} laden", branch.chain, branch.name))?;
+    println!("{} {}: {} Angebote gefunden.", branch.chain, branch.name, offers.len());
+    if offers.is_empty() {
+        bail!("{} {}: Scraper lieferte 0 Angebote.", branch.chain, branch.name);
+    }
+    save_offers(&opts.db_path, &market, &offers)?;
+
+    if opts.dry_run {
+        println!("Dry-Run — Filiale wird nicht nach markets gemeldet.");
+    } else {
+        // `markets` führt bis Phase 12 die EINE Filiale je (Kette, PLZ) — die
+        // App liest daraus, welche Ketten es in einer Region gibt. Wer diese
+        // Filiale anfordert, will genau sie sehen, also wird sie dort
+        // eingetragen. Das Verzeichnis in `branches` bleibt davon unberührt.
+        upsert_markets(
+            cfg,
+            &[serde_json::json!({
+                "chain": branch.chain,
+                "branch_name": branch.name,
+                "market_id": branch.market_id,
+                "plz": plz,
+                "lat": branch.lat,
+                "lon": branch.lon,
+                "updated_at": chrono::Utc::now().to_rfc3339(),
+            })],
+        )?;
+    }
+
+    push::run(
+        &PushOptions {
+            db_path: opts.db_path.clone(),
+            chain: None,
+            region: Some(plz),
+            dry_run: opts.dry_run,
+            mirror_images: true,
+            // Wie beim On-Demand-Sync einer PLZ: Hier wartet gerade jemand in
+            // der App, Angebote zuerst, Bilder danach.
+            defer_mirror: true,
+        },
+        Some(cfg),
+    )?;
+
+    if !opts.dry_run {
+        mark_branch_synced(cfg, market_id)?;
+    }
+    Ok(())
+}
+
+/// Die Anforderung als erledigt melden (`branch_requests.last_synced`).
+///
+/// Ohne diesen Schreibvorgang pollt die App bis zum Timeout: Sie sieht ihre
+/// eigene Zeile mit `last_synced: null` und weiß nicht, dass die Angebote
+/// längst da sind. Analog zum Region-Cache, den `push::run` am Ende setzt.
+///
+/// Der Upsert legt die Zeile auch an, wenn sie fehlt — ein Lauf von Hand hat
+/// keine Anforderung vorher. Der Trigger aus migration_v14 lässt sich davon
+/// nicht auslösen: Er steigt aus, sobald `last_synced` gesetzt ist.
+fn mark_branch_synced(cfg: &PushConfig, market_id: &str) -> Result<()> {
+    let client = reqwest::blocking::Client::new();
+    let resp = auth(cfg, client.post(format!("{}/rest/v1/branch_requests", cfg.base_url)))
+        .query(&[("on_conflict", "market_id")])
+        .header("Prefer", "resolution=merge-duplicates")
+        .json(&serde_json::json!([{
+            "market_id": market_id,
+            "last_synced": chrono::Utc::now().to_rfc3339(),
+        }]))
+        .send()
+        .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
+    check_response(&format!("Filiale {market_id} als gesynct eintragen"), resp)
 }
 
 /// Eine PLZ in `regions` registrieren, falls sie noch fehlt (409 = schon da).

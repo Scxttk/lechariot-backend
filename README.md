@@ -144,9 +144,11 @@ The web dashboard lives at `/`, the JSON endpoints under `/api/*`
 ### push — Supabase push
 
 Uploads the stored offers to the Supabase table `public.offers`
-(PostgREST upsert on `market,product,valid_from,region`, batches of 100) and
-registers the ZIP code in `public.regions`. Outdated weeks for the respective
-market are deleted first. Offers without a price are skipped.
+(PostgREST upsert on `market_id,product,valid_from,region`, batches of 100)
+and registers the ZIP code in `public.regions`. Outdated weeks for the
+respective **branch** are deleted first — offers belong to a store, not to a
+chain in a ZIP code (see `supabase/migration_v13_offer_market_id.sql`).
+Offers without a price are skipped.
 
 ```sh
 export SUPABASE_URL="https://xyz.supabase.co"
@@ -214,6 +216,24 @@ Failures of individual regions don't abort the run; exit code ≠ 0 only if all
 regions fail or the table is empty/unreachable. Prerequisite: the migration
 `supabase/migration_v3_multi_region.sql` has been run once in the Supabase SQL
 editor (see [docs/ci.md](docs/ci.md)).
+
+#### `--market-id` — sync a single store
+
+```sh
+smartshop sync-regions --market-id 1766063      # REWE am Postplatz, 01067
+```
+
+The ZIP path asks the store finder which store is *nearest* and takes the
+first hit. That answer is unique per chain and ZIP, and the offers aren't:
+measured on 2026-07-25, the three REWE stores in 01067 published three
+different flyers in the same week — Friedrichstadt carried 101 offers the
+Postplatz store did not, and a Coca-Cola cost €0.75 at two of them and €1.49
+at the third.
+
+With `--market-id` the store is picked from the directory (`public.branches`)
+instead, so there is nothing left to search: the offers are fetched for that
+store, written under its `market_id` and pushed with the store's own ZIP as
+`region`. Conflicts with `--only`.
 
 ### branches-sync — store directory
 

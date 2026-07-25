@@ -173,6 +173,12 @@ enum Command {
         #[arg(long, value_name = "PLZ")]
         only: Option<String>,
 
+        /// Nur diese eine Filiale syncen (ID aus `public.branches`).
+        /// Angebote gehören der Filiale, nicht der Kette in einer PLZ —
+        /// dieser Weg trifft auch die zweite REWE derselben PLZ.
+        #[arg(long, value_name = "ID", conflicts_with = "only")]
+        market_id: Option<String>,
+
         /// Pfad zum Rewe TLS-Zertifikat (PEM)
         #[arg(long, default_value = "cert.pem")]
         cert: String,
@@ -358,8 +364,36 @@ fn main() -> Result<()> {
             };
             smartshop::push::run(&opts, None)
         }
-        Command::SyncRegions { max_regions, only, cert, key, dry_run, db } => {
-            let opts = smartshop::sync::SyncOptions { db_path: db, dry_run, max_regions, only };
+        Command::SyncRegions { max_regions, only, market_id, cert, key, dry_run, db } => {
+            let opts = smartshop::sync::SyncOptions {
+                db_path: db,
+                dry_run,
+                max_regions,
+                only,
+                market_id: market_id.clone(),
+            };
+            if let Some(market_id) = &market_id {
+                // Filial-Sync: Die Filiale steht fest, es gibt nichts zu
+                // suchen — nur die Kette muss auf ihren Scraper zeigen.
+                let scraper = |branch: &smartshop::models::Branch| {
+                    let store = Store::from_chain(&branch.chain).ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Filiale {} trägt die unbekannte Kette '{}'",
+                            branch.market_id,
+                            branch.chain
+                        )
+                    })?;
+                    let zip = branch.plz.as_deref().unwrap_or_default();
+                    smartshop::stores::fetch_offers(
+                        store,
+                        &branch.as_market().with_chain(&branch.chain),
+                        zip,
+                        &cert,
+                        &key,
+                    )
+                };
+                return smartshop::sync::run_branch(&opts, None, &scraper, market_id);
+            }
             let fetcher = |plz: &str| {
                 Store::ALL
                     .iter()

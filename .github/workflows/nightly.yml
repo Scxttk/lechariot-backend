@@ -10,10 +10,15 @@ on:
         description: "Nur diese PLZ syncen (On-Demand-Trigger); leer = Voll-Sync"
         required: false
         default: ""
+      market_id:
+        description: "Nur diese Filiale syncen (ID aus public.branches); schlägt plz"
+        required: false
+        default: ""
 
 concurrency:
-  # On-Demand-Läufe für verschiedene PLZs dürfen parallel zum Voll-Sync laufen.
-  group: nightly-${{ inputs.plz || 'all' }}
+  # On-Demand-Läufe für verschiedene PLZs bzw. Filialen dürfen parallel zum
+  # Voll-Sync laufen.
+  group: nightly-${{ inputs.market_id || inputs.plz || 'all' }}
   cancel-in-progress: false
 
 env:
@@ -51,7 +56,7 @@ jobs:
       # Build, wenn (noch) kein Artefakt existiert oder es abgelaufen ist.
       - name: Download prebuilt binary (on-demand)
         id: prebuilt
-        if: inputs.plz != ''
+        if: inputs.plz != '' || inputs.market_id != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -139,14 +144,21 @@ jobs:
           REWE_CERT: ${{ steps.rewe.outputs.cert }}
           REWE_KEY: ${{ steps.rewe.outputs.key }}
           ONLY_PLZ: ${{ inputs.plz }}
+          ONLY_MARKET: ${{ inputs.market_id }}
         run: |
           set -o pipefail
           CERT_ARGS=()
           [ -n "${REWE_CERT:-}" ] && [ -f "$REWE_CERT" ] && CERT_ARGS+=(--cert "$REWE_CERT")
           [ -n "${REWE_KEY:-}" ] && [ -f "$REWE_KEY" ] && CERT_ARGS+=(--key "$REWE_KEY")
-          # On-Demand-Trigger (Region-INSERT): nur die neue PLZ syncen.
+          # On-Demand-Trigger: nur die angeforderte Filiale (branch_requests)
+          # bzw. die neue PLZ (regions) syncen. Die Filiale schlägt die PLZ —
+          # sie ist der genauere Wunsch, und beide zugleich lehnt die CLI ab.
           ONLY_ARGS=()
-          [ -n "${ONLY_PLZ:-}" ] && ONLY_ARGS+=(--only "$ONLY_PLZ")
+          if [ -n "${ONLY_MARKET:-}" ]; then
+            ONLY_ARGS+=(--market-id "$ONLY_MARKET")
+          elif [ -n "${ONLY_PLZ:-}" ]; then
+            ONLY_ARGS+=(--only "$ONLY_PLZ")
+          fi
           if ./target/release/smartshop sync-regions --db "$DB" \
               ${ONLY_ARGS[@]+"${ONLY_ARGS[@]}"} \
               ${CERT_ARGS[@]+"${CERT_ARGS[@]}"} 2>&1 | tee "$LOG"; then
@@ -157,10 +169,11 @@ jobs:
           fi
 
       # Bootstrap-Fallback: alter Einzel-PLZ-Pfad mit SMARTSHOP_ZIP, damit die
-      # Pipeline nie dunkel geht. Bei On-Demand-Läufen (inputs.plz) wäre der
-      # Fallback die falsche PLZ — dort übernimmt der nächtliche Voll-Sync.
+      # Pipeline nie dunkel geht. Bei On-Demand-Läufen (plz oder market_id)
+      # wäre der Fallback die falsche PLZ — dort übernimmt der nächtliche
+      # Voll-Sync.
       - name: Fallback fetch+push (single ZIP)
-        if: steps.sync.outputs.sync_failed == 'true' && inputs.plz == ''
+        if: steps.sync.outputs.sync_failed == 'true' && inputs.plz == '' && inputs.market_id == ''
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -218,11 +231,11 @@ jobs:
       # Verwaiste Bucket-Bilder aufräumen: der Push löscht veraltete offer-Zeilen
       # (push.rs), aber nie ihre gespiegelten Bilder — der offer-images-Bucket
       # wuchs so über das Free-Limit. Nur beim vollen
-      # Nightly-Sync (nicht bei On-Demand-per-PLZ) und nur Objekte älter als
+      # Nightly-Sync (nicht bei On-Demand-Läufen) und nur Objekte älter als
       # 1 Tag: das schützt frisch Gespiegeltes gegen parallel laufende
       # On-Demand-Läufe, die ihre Bilder noch nicht in offers.image_url haben.
       - name: Prune orphaned bucket images
-        if: inputs.plz == ''
+        if: inputs.plz == '' && inputs.market_id == ''
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

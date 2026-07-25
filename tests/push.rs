@@ -154,9 +154,29 @@ fn dedupe_on_conflict_key() {
     let mut c = a.clone();
     c.region = Some("10115".to_string());
     let rows = dedupe_rows(vec![a.clone(), b, c.clone()]);
-    // gleicher Schlüssel (market, product, valid_from, region): erster gewinnt;
-    // andere Region bleibt erhalten
+    // gleicher Schlüssel (market_id, product, valid_from, region): erster
+    // gewinnt; andere Region bleibt erhalten
     assert_eq!(rows, vec![a, c]);
+}
+
+// Kern von Phase 11: Zwei Filialen derselben Kette in derselben PLZ sind
+// zwei Angebotssätze. Unter dem alten Schlüssel (market, product, valid_from,
+// region) waren sie ununterscheidbar — die zweite Filiale hätte die erste
+// beim Dedupe verschluckt und in Supabase überschrieben.
+#[test]
+fn two_branches_of_one_chain_in_one_plz_stay_apart() {
+    let mut strehlen = offer("Gouda", Some(1.99));
+    strehlen.market_id = "565005".to_string();
+    let mut postplatz = offer("Gouda", Some(2.49));
+    postplatz.market_id = "1766160".to_string();
+
+    let a = map_offer(&strehlen, "REWE", Some("01219")).unwrap();
+    let b = map_offer(&postplatz, "REWE", Some("01219")).unwrap();
+    assert_eq!(a.market_id, "565005");
+    assert_eq!(b.market_id, "1766160");
+    // Gleiche Kette, gleiche PLZ, gleiches Produkt, gleiche Woche — und
+    // trotzdem zwei Zeilen mit zwei Preisen.
+    assert_eq!(dedupe_rows(vec![a.clone(), b.clone()]), vec![a, b]);
 }
 
 // Die vom Scraper gestempelte Kette (stores::scrape_store) schlägt jede
@@ -369,7 +389,10 @@ fn push_batches_deletes_and_upserts() {
     let del = &reqs[0];
     assert_eq!(del.method, "DELETE");
     assert!(del.target.starts_with("/rest/v1/offers?"), "{}", del.target);
-    assert!(del.target.contains("market=eq.REWE"), "{}", del.target);
+    // Aufgeräumt wird pro FILIALE, nicht pro Kette (migration_v13) — sonst
+    // räumte der Push der einen REWE-Filiale die Wochen der Nachbarfiliale ab.
+    assert!(del.target.contains("market_id=eq.m1"), "{}", del.target);
+    assert!(!del.target.contains("market=eq.REWE"), "{}", del.target);
     // Nur die gepushte Region aufräumen — andere Regionen bleiben unberührt.
     assert!(del.target.contains("region=eq.01219"), "{}", del.target);
     // Löscht alte Wochen UND Legacy-Zeilen ohne valid_from (URL-encodiert:
@@ -387,8 +410,8 @@ fn push_batches_deletes_and_upserts() {
     for b in [b1, b2] {
         assert_eq!(b.method, "POST");
         assert!(b.target.starts_with("/rest/v1/offers?"), "{}", b.target);
-        assert!(b.target.contains("on_conflict=market%2Cproduct%2Cvalid_from%2Cregion")
-                || b.target.contains("on_conflict=market,product,valid_from,region"),
+        assert!(b.target.contains("on_conflict=market_id%2Cproduct%2Cvalid_from%2Cregion")
+                || b.target.contains("on_conflict=market_id,product,valid_from,region"),
                 "{}", b.target);
         assert_eq!(b.header("prefer"), Some("resolution=merge-duplicates"));
     }
@@ -443,12 +466,59 @@ fn push_uses_stored_chain_not_branch_name() {
     assert!(!del.target.contains("Nord"), "{}", del.target);
 }
 
+// Dasselbe Ende zu Ende gegen die HTTP-Schicht: Zwei REWE-Filialen in 01219
+// werden als zwei Angebotssätze hochgeladen, und das Aufräumen veralteter
+// Wochen trifft jede Filiale einzeln. Mit dem alten Ketten-Filter hätte der
+// eine DELETE die frisch gepushten Zeilen der anderen Filiale erwischt.
+#[test]
+fn stale_cleanup_is_per_branch_not_per_chain() {
+    let db_path = temp_db("zwei-filialen");
+    let _ = std::fs::remove_file(&db_path);
+    {
+        let conn = db::open(&db_path).unwrap();
+        for (id, name) in [("565005", "REWE Supermarkt"), ("1766160", "REWE Friedrichstadt")] {
+            db::upsert_market(&conn, &Market::new(id, name).with_chain("REWE")).unwrap();
+            let mut o = offer("Gouda", Some(1.99));
+            o.market_id = id.to_string();
+            o.id = Offer::build_id(id, "Gouda", Some("2026-07-13"));
+            db::upsert_offer(&conn, &o).unwrap();
+        }
+    }
+    let (base_url, log) = spawn_mock();
+
+    run_push(&db_path, &base_url).unwrap();
+
+    let reqs = log.lock().unwrap().clone();
+    let deletes: Vec<&Req> = reqs
+        .iter()
+        .filter(|r| r.method == "DELETE" && r.target.starts_with("/rest/v1/offers?"))
+        .collect();
+    assert_eq!(deletes.len(), 2, "je Filiale ein DELETE: {deletes:#?}");
+    // Reihenfolge: nach market_id sortiert (BTreeMap), also "1766160" zuerst.
+    for (del, market_id) in deletes.iter().zip(["1766160", "565005"]) {
+        assert!(del.target.contains(&format!("market_id=eq.{market_id}")), "{}", del.target);
+        assert!(del.target.contains("region=eq.01219"), "{}", del.target);
+    }
+
+    let rows: Vec<SupabaseRow> = reqs
+        .iter()
+        .filter(|r| r.method == "POST" && r.target.starts_with("/rest/v1/offers?"))
+        .flat_map(|r| parse_rows(&r.body))
+        .collect();
+    assert_eq!(rows.len(), 2, "beide Filialen kommen durch: {rows:#?}");
+    let mut ids: Vec<&str> = rows.iter().map(|r| r.market_id.as_str()).collect();
+    ids.sort();
+    assert_eq!(ids, vec!["1766160", "565005"]);
+    assert!(rows.iter().all(|r| r.market == "REWE" && r.product == "Gouda"));
+}
+
 fn parse_rows(body: &str) -> Vec<SupabaseRow> {
     let v: serde_json::Value = serde_json::from_str(body).unwrap();
     v.as_array()
         .unwrap()
         .iter()
         .map(|r| SupabaseRow {
+            market_id: r["market_id"].as_str().unwrap().to_string(),
             market: r["market"].as_str().unwrap().to_string(),
             product: r["product"].as_str().unwrap().to_string(),
             price: r["price"].as_f64().unwrap(),
@@ -755,8 +825,8 @@ fn history_upsert_headers() {
     assert_eq!(hist.len(), 1);
     let h = hist[0];
     assert!(
-        h.target.contains("on_conflict=market%2Cproduct%2Cregion%2Cvalid_from")
-            || h.target.contains("on_conflict=market,product,region,valid_from"),
+        h.target.contains("on_conflict=market_id%2Cproduct%2Cvalid_from%2Cregion")
+            || h.target.contains("on_conflict=market_id,product,valid_from,region"),
         "{}",
         h.target
     );
@@ -865,8 +935,8 @@ fn deferred_mirror_upserts_offers_before_mirroring() {
     assert!(first_upsert < patch_pos, "Nachtrag muss nach Phase 1 kommen: {reqs:#?}");
     let patch = &reqs[patch_pos];
     assert!(
-        patch.target.contains("on_conflict=market%2Cproduct%2Cvalid_from%2Cregion")
-            || patch.target.contains("on_conflict=market,product,valid_from,region"),
+        patch.target.contains("on_conflict=market_id%2Cproduct%2Cvalid_from%2Cregion")
+            || patch.target.contains("on_conflict=market_id,product,valid_from,region"),
         "{}",
         patch.target
     );
