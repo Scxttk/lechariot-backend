@@ -22,6 +22,11 @@ jobs:
 
       # Live-Scraper-Tests sind #[ignore] und bleiben hier ausgeschlossen
       # (kein --include-ignored / --ignored verwenden).
+      #
+      # Kein poppler-utils nötig: Die Fixture des Lidl-Prospekt-Scrapers ist
+      # bereits die `pdftotext -bbox-layout`-Ausgabe, nicht die PDF. Getestet
+      # wird die Kachelbildung, nicht poppler. Der Nightly-Runner installiert
+      # pdftotext, weil dort echte Prospekte gelesen werden.
       - name: cargo test (offline only)
         run: cargo test
 

@@ -1,0 +1,40 @@
+{
+  "flyer": {
+    "id": "019f4c81-893e-710c-957c-5a5a1c461bc3",
+    "name": "Aktionsprospekt",
+    "title": "20.07.2026 – 25.07.2026",
+    "offerStartDate": "2026-07-20",
+    "offerEndDate": "2026-07-25",
+    "pdfUrl": "https://object.storage.eu01.onstackit.cloud/leaflets/pdfs/019f4c81-893e-710c-957c-5a5a1c461bc3/Aktionsprospekt-20-07-2026-25-07-2026-06.pdf",
+    "fileSize": 82828318,
+    "regions": [
+      {
+        "code": "440"
+      }
+    ],
+    "pages": [
+      {
+        "id": "019f8e12-b17b-7508-884d-b1187b2f4b6a",
+        "number": 1,
+        "width": 1415,
+        "height": 2400,
+        "altText": "Prospekt-Titelseite von Lidl mit Rabatten auf Milka Schokolade, Gerolsteiner Mineralwasser, Alesto Nüsse und einen Silvercrest Vakuumierer."
+      },
+      {
+        "id": "019f8e12-b17b-7508-884d-b1187b393716",
+        "number": 2,
+        "width": 1415,
+        "height": 2400,
+        "altText": "Werbeseite für frisches Obst und Gemüse mit Angeboten für rote Paprika, Äpfel, Galia-Melonen und Heidelbeeren."
+      },
+      {
+        "id": "019f8e12-b17b-7508-884d-b1187c1b1fd4",
+        "number": 3,
+        "width": 1415,
+        "height": 2400,
+        "altText": "Angebote für frische kernlose Trauben, Snack-Gurken, Wassermelone, Romatomaten sowie Vollkornbrot und veganen Haferdrink."
+      }
+    ],
+    "products": []
+  }
+}

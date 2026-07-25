@@ -63,6 +63,24 @@ impl Store {
     }
 }
 
+/// Quelle der Lidl-Angebote.
+///
+/// Lidl ist die einzige Kette, die ihre Angebote über einen Dritten
+/// (api.marktguru.de) bezieht, und mit rund 30 % aller Zeilen zugleich die
+/// größte. `scrapers::lidl_prospekt` liest stattdessen Lidls eigenen
+/// Wochenprospekt. Solange beide Wege nebeneinander laufen, entscheidet
+/// `LIDL_SOURCE`:
+///
+/// * `prospekt` — Lidls eigener Prospekt (braucht `pdftotext`)
+/// * alles andere oder nicht gesetzt — marktguru (Stand heute der Standard)
+///
+/// Der Schalter ist bewusst eine Umgebungsvariable und kein CLI-Flag: So
+/// lässt sich ein einzelner nightly-Lauf umstellen, ohne die Aufrufe in
+/// `sync_region` und `fetch_all` anzufassen.
+pub fn lidl_use_prospekt() -> bool {
+    std::env::var("LIDL_SOURCE").is_ok_and(|v| v.eq_ignore_ascii_case("prospekt"))
+}
+
 /// None: die Kette hat laut Store-Finder keine Filiale im Umkreis der PLZ
 /// (nur bei Lidl/ALDI möglich — die übrigen Finder scheitern dann mit Err).
 pub fn scrape_store(
@@ -123,6 +141,9 @@ pub fn fetch_offers(
         Store::Rewe => scrapers::rewe::fetch_offers(market, cert, key)?,
         Store::Penny => scrapers::penny::fetch_offers(market)?,
         Store::Kaufland => scrapers::kaufland::fetch_offers(market)?,
+        // `LIDL_SOURCE` schaltet auf Lidls eigenen Wochenprospekt um —
+        // dieselbe Filiale, andere Quelle (siehe lidl_use_prospekt).
+        Store::Lidl if lidl_use_prospekt() => scrapers::lidl_prospekt::fetch_offers(market, zip)?,
         Store::Lidl => scrapers::lidl::fetch_offers(market, zip)?,
         Store::Netto => scrapers::netto::fetch_offers(market)?,
         Store::AldiNord => scrapers::aldi_nord::fetch_offers(market)?,

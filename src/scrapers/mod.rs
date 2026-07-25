@@ -4,6 +4,7 @@ pub mod edeka;
 pub mod kaufland;
 pub mod netto;
 pub mod lidl;
+pub mod lidl_prospekt;
 pub mod penny;
 pub mod rewe;
 pub mod store_finder;
