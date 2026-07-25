@@ -2,7 +2,7 @@ use anyhow::{Context, Result, bail};
 use chrono::Datelike;
 use scraper::{ElementRef, Html, Selector};
 
-use crate::models::{Market, Offer};
+use crate::models::{Branch, Market, Offer};
 use crate::scrapers::util;
 
 // Scraped von filiale.kaufland.de: der Store-Finder ist öffentliches JSON,
@@ -47,6 +47,54 @@ pub fn find_market(zip: &str) -> Result<Market> {
     // Koordinaten kommen als Strings ("52.066…"); fehlend/kaputt -> None.
     let coord = |k: &str| store.get(k).and_then(|v| v.as_str()).and_then(|s| s.parse().ok());
     Ok(Market::new(id, name).with_geo(coord("lat"), coord("lng")))
+}
+
+/// Das komplette deutsche Kaufland-Verzeichnis — ein einziger Request.
+///
+/// `.klstorefinder.json` ist die Datei, aus der auch der Filialfinder auf
+/// filiale.kaufland.de arbeitet: alle Filialen mit Adresse und Koordinaten,
+/// ohne Suchparameter (787 Stück am 2026-07-25). Deshalb ist Kaufland die
+/// einzige Kette, die im Verzeichnis flächendeckend billig ist.
+pub fn fetch_branches() -> Result<Vec<Branch>> {
+    util::polite_pause(STORE_FINDER_URL);
+    let stores: Vec<serde_json::Value> = client()?
+        .get(STORE_FINDER_URL)
+        .send()
+        .with_context(|| util::ctx("Kaufland", "Filialverzeichnis", STORE_FINDER_URL))?
+        .error_for_status()
+        .with_context(|| util::ctx("Kaufland", "Filialverzeichnis (HTTP-Status)", STORE_FINDER_URL))?
+        .json()
+        .with_context(|| util::ctx("Kaufland", "Filialverzeichnis JSON parsen", STORE_FINDER_URL))?;
+    Ok(parse_branches(&stores))
+}
+
+/// Store-Finder-Einträge als Verzeichniszeilen.
+///
+/// Die Feldnamen sind Kürzel: `n` Filial-ID, `cn` Name, `sn` Straße,
+/// `pc` PLZ, `t` Ort, `lat`/`lng` als Strings.
+pub fn parse_branches(stores: &[serde_json::Value]) -> Vec<Branch> {
+    stores
+        .iter()
+        .filter_map(|store| {
+            let id = store.get("n").and_then(|v| v.as_str())?;
+            let text = |key: &str| {
+                store
+                    .get(key)
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+            };
+            let coord =
+                |key: &str| store.get(key).and_then(|v| v.as_str()).and_then(|s| s.parse().ok());
+            let name = text("cn").unwrap_or_else(|| "Kaufland".to_string());
+            Some(
+                Branch::new(id, "Kaufland", name, "kaufland-storefinder")
+                    .with_address(text("sn"), text("pc"), text("t"))
+                    .with_geo(coord("lat"), coord("lng")),
+            )
+        })
+        .collect()
 }
 
 /// Nächste Filiale zur geocodierten PLZ innerhalb von CUTOFF_KM; None, wenn

@@ -1,6 +1,6 @@
 # CI und Nightly-Lauf auf GitHub Actions
 
-Zwei Workflows liegen unter `.github/workflows/`:
+Drei Workflows liegen unter `.github/workflows/`:
 
 - **`ci.yml`** — läuft bei jedem Push und Pull Request: `cargo check` und
   `cargo test`. Die 7 Live-Scraper-Tests sind `#[ignore]` und werden **nicht**
@@ -15,6 +15,13 @@ Zwei Workflows liegen unter `.github/workflows/`:
   unerreichbar, alle Regionen gescheitert), greift der **Fallback**: der
   alte Einzel-PLZ-Pfad `fetch --all-stores --zip $SMARTSHOP_ZIP` +
   `push --region $SMARTSHOP_ZIP`. Die Pipeline geht also nie dunkel.
+- **`branches.yml`** — frischt das Filialverzeichnis `public.branches` auf
+  (`branches-sync --from-regions`), sonntags 03:15 UTC. Bewusst **nicht** in
+  der Nightly: Filialen ändern sich in Monaten, Angebote wöchentlich; täglich
+  mitzulaufen hieße, deren Laufzeit für ein Ergebnis zu verlängern, das 364
+  Tage im Jahr dasselbe ist. Voraussetzung ist die einmalige Migration
+  `supabase/migration_v12_branches.sql`. Läuft ohne REWE durch, wenn die
+  Zertifikats-Secrets fehlen (Warnung, kein Fehler).
 
 ## Multi-Region: einmalige Migration
 
@@ -167,6 +174,11 @@ mit der Zeitumstellung um eine Stunde. Außerdem garantiert GitHub keine
 pünktliche Ausführung — Verzögerungen von einigen Minuten bis über einer
 Stunde sind normal.
 
+Das Filialverzeichnis (`branches.yml`) läuft sonntags um **03:15 UTC**, also
+gut eine Stunde vor dem Angebots-Sync desselben Morgens: Eine Filiale, die
+über Nacht neu ins Verzeichnis kommt, kann so am selben Tag Angebote
+bekommen.
+
 ## Einmalige Einrichtung
 
 Unter **Settings → Secrets and variables → Actions** im Repo:
@@ -200,6 +212,13 @@ Oder per CLI:
 ```sh
 gh workflow run nightly.yml
 gh run watch          # letzten Lauf live verfolgen
+```
+
+Das Filialverzeichnis genauso:
+
+```sh
+gh workflow run branches.yml                    # alle aktiven Regionen
+gh workflow run branches.yml -f area=01219      # nur ein Gebiet
 ```
 
 ## Ergebnis lesen

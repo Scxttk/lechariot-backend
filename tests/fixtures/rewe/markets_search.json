@@ -1,0 +1,70 @@
+[
+ {
+  "wwIdent": "565005",
+  "name": "REWE Supermarkt",
+  "companyName": "REWE Markt Stefan Köckeritz oHG",
+  "phone": "0351-2051661",
+  "typeId": "REWE",
+  "street": "Pirnaer Landstr. 145",
+  "zipCode": "01257",
+  "city": "Dresden / Leuben",
+  "location": {
+   "latitude": 51.01137,
+   "longitude": 13.82882
+  },
+  "openingStatus": {
+   "openState": "OPEN",
+   "infoText": "bis 22:00 Uhr",
+   "statusText": "Geöffnet"
+  },
+  "openingInfo": [
+   {
+    "days": "Mo - Sa",
+    "hours": "07:00 - 22:00"
+   }
+  ],
+  "category": {
+   "template": "RN",
+   "marketTypeDisplayName": "REWE Markt",
+   "isWarehouse": false,
+   "type": "MARKET"
+  },
+  "serviceFlags": {
+   "hasPickup": true
+  }
+ },
+ {
+  "wwIdent": "565264",
+  "name": "REWE Markt Anja Wirker oHG",
+  "companyName": "REWE Markt Anja Wirker oHG",
+  "phone": "0351-2015749",
+  "typeId": "REWE",
+  "street": "Str. des 17. Juni 32",
+  "zipCode": "01257",
+  "city": "Dresden / Leuben",
+  "location": {
+   "latitude": 51.00048,
+   "longitude": 13.83041
+  },
+  "openingStatus": {
+   "openState": "OPEN",
+   "infoText": "bis 22:00 Uhr",
+   "statusText": "Geöffnet"
+  },
+  "openingInfo": [
+   {
+    "days": "Mo - Sa",
+    "hours": "07:00 - 22:00"
+   }
+  ],
+  "category": {
+   "template": "RN",
+   "marketTypeDisplayName": "REWE Markt",
+   "isWarehouse": false,
+   "type": "MARKET"
+  },
+  "serviceFlags": {
+   "hasPickup": true
+  }
+ }
+]

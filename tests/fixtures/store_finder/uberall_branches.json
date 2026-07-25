@@ -1,0 +1,40 @@
+{
+ "status": "SUCCESS",
+ "response": {
+  "count": 3,
+  "max": 60,
+  "offset": 0,
+  "locations": [
+   {
+    "identifier": "DE036002",
+    "name": "ALDI Nord",
+    "streetAndNumber": "Uhlandstraße 5",
+    "zip": "01069",
+    "city": "Dresden",
+    "lat": 51.036115,
+    "lng": 13.740007,
+    "distance": 380
+   },
+   {
+    "identifier": "DE036057",
+    "name": "ALDI Nord",
+    "streetAndNumber": "Teplitzer Str. 31",
+    "zip": "01219",
+    "city": "Dresden",
+    "lat": 51.014734,
+    "lng": 13.752,
+    "distance": 2400
+   },
+   {
+    "identifier": "DE099999",
+    "name": "ALDI Nord",
+    "streetAndNumber": "Fernstraße 9",
+    "zip": "09111",
+    "city": "Chemnitz",
+    "lat": 50.83,
+    "lng": 12.92,
+    "distance": 48310
+   }
+  ]
+ }
+}

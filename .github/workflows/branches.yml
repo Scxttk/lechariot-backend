@@ -1,0 +1,132 @@
+name: Filialverzeichnis auffrischen
+
+# Eigener Job neben nightly.yml, mit Absicht: Filialen ändern sich in Monaten,
+# Angebote wöchentlich. In der Nightly mitzulaufen würde deren Laufzeit (heute
+# schon bis 150 min) jeden Tag um Requests verlängern, die 364 Tage im Jahr
+# dasselbe Ergebnis liefern.
+on:
+  schedule:
+    # Sonntags 03:15 UTC — vor dem täglichen Angebots-Sync um 04:30, damit ein
+    # neu aufgetauchter Markt am selben Morgen Angebote bekommen kann.
+    - cron: "15 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      area:
+        description: "Nur dieses Gebiet (PLZ); leer = alle aktiven Regionen"
+        required: false
+        default: ""
+      skip_national:
+        description: "Kaufland und Penny überspringen"
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: branches-${{ inputs.area || 'all' }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  branches:
+    runs-on: ubuntu-latest
+    # Deutlich kürzer als die Nightly: keine Angebote, keine Bilder, nur
+    # Filiallisten. Der Löwenanteil sind die Gebietssuchen mit ihren
+    # Höflichkeitspausen.
+    timeout-minutes: 45
+    env:
+      REWE_SECRETS_SET: ${{ secrets.REWE_CERT_PEM != '' && secrets.REWE_KEY_PEM != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preflight (curl)
+        run: |
+          # Netto und EDEKA laufen über system-curl (Akamai).
+          command -v curl >/dev/null || { echo "::error::curl fehlt auf dem Runner."; exit 1; }
+          curl --version | head -1
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release
+        run: cargo build --release
+
+      # REWE braucht ein Client-Zertifikat; ohne Secrets läuft der Lauf ohne
+      # REWE durch (Warnung, kein Fehler) — dieselbe Regel wie in nightly.yml.
+      - name: Setup Go (für rewerse)
+        if: ${{ env.REWE_SECRETS_SET == 'true' }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Setup rewerse + Rewe-Zertifikat
+        id: rewe
+        if: ${{ env.REWE_SECRETS_SET == 'true' }}
+        env:
+          REWE_CERT_PEM: ${{ secrets.REWE_CERT_PEM }}
+          REWE_KEY_PEM: ${{ secrets.REWE_KEY_PEM }}
+        run: |
+          set -euo pipefail
+          go install github.com/ByteSizedMarius/rewerse-engineering/cmd@latest
+          ln -sf "$(go env GOPATH)/bin/cmd" "$(go env GOPATH)/bin/rewerse"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          CERT="$RUNNER_TEMP/rewe-cert.pem"
+          KEY="$RUNNER_TEMP/rewe-private.key"
+          printf '%s' "$REWE_CERT_PEM" | base64 -d > "$CERT"
+          printf '%s' "$REWE_KEY_PEM"  | base64 -d > "$KEY"
+          chmod 600 "$CERT" "$KEY"
+          echo "cert=$CERT" >> "$GITHUB_OUTPUT"
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Filialverzeichnis syncen
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          REWE_CERT: ${{ steps.rewe.outputs.cert }}
+          REWE_KEY: ${{ steps.rewe.outputs.key }}
+          ONLY_AREA: ${{ inputs.area }}
+          SKIP_NATIONAL: ${{ inputs.skip_national }}
+        run: |
+          set -o pipefail
+          ARGS=()
+          [ -n "${REWE_CERT:-}" ] && [ -f "$REWE_CERT" ] && ARGS+=(--cert "$REWE_CERT")
+          [ -n "${REWE_KEY:-}" ] && [ -f "$REWE_KEY" ] && ARGS+=(--key "$REWE_KEY")
+          # Ohne explizites Gebiet: die Regionen, die tatsächlich jemand
+          # angefragt hat. Das Verzeichnis wächst dort, wo die App benutzt wird.
+          if [ -n "${ONLY_AREA:-}" ]; then
+            ARGS+=(--area "$ONLY_AREA")
+          else
+            ARGS+=(--from-regions)
+          fi
+          [ "${SKIP_NATIONAL:-false}" = "true" ] && ARGS+=(--skip-national)
+          ./target/release/smartshop branches-sync "${ARGS[@]}" 2>&1 | tee branches.log
+
+      - name: Zusammenfassung
+        if: always()
+        run: |
+          {
+            echo "## Filialverzeichnis"
+            echo ""
+            echo "| Quelle | Ergebnis |"
+            echo "|---|---|"
+            # Zeilen der Form "[01219] Lidl: 35 Filialen (35 mit Koordinaten)."
+            grep -E ": [0-9]+ Filialen" branches.log \
+              | sed -E 's/^(.*): ([0-9]+ Filialen.*)$/| \1 | \2 |/' || true
+            echo ""
+            grep -E "nach Supabase geschrieben" branches.log || echo "_Nichts geschrieben._"
+            echo ""
+            if grep -q "^WARNUNG" branches.log; then
+              echo "### Warnungen"
+              echo ""
+              grep "^WARNUNG" branches.log | sed 's/^/- /'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Log hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: branches-log
+          path: branches.log
+          if-no-files-found: ignore
+          retention-days: 7

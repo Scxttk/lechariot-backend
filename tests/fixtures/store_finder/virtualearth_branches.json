@@ -1,0 +1,39 @@
+{
+ "d": {
+  "results": [
+   {
+    "EntityID": "1988",
+    "ShownStoreName": "Strehlen",
+    "ShownAddressLine": "Strehlener Platz 1",
+    "ShownPostalCode": "01219",
+    "ShownLocality": "Dresden",
+    "AddressLine": "Strehlener Platz 1",
+    "PostalCode": "01219",
+    "Locality": "Dresden",
+    "Latitude": 51.0338,
+    "Longitude": 13.74984
+   },
+   {
+    "EntityID": "5798",
+    "ShownStoreName": "",
+    "CityDistrict": "Seevorstadt",
+    "ShownAddressLine": "Wiener Platz 4",
+    "ShownPostalCode": "01069",
+    "ShownLocality": "Dresden",
+    "AddressLine": "Wiener Platz 4",
+    "PostalCode": "01069",
+    "Locality": "Dresden",
+    "Latitude": 51.04074,
+    "Longitude": 13.73209
+   },
+   {
+    "ShownStoreName": "Ohne ID",
+    "AddressLine": "Namenlos 1",
+    "PostalCode": "01219",
+    "Locality": "Dresden",
+    "Latitude": 51.0,
+    "Longitude": 13.7
+   }
+  ]
+ }
+}

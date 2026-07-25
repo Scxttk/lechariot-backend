@@ -2,7 +2,7 @@ use anyhow::{Context, Result, bail};
 use scraper::{ElementRef, Html, Selector};
 use std::collections::HashSet;
 
-use crate::models::{Market, Offer};
+use crate::models::{Branch, Market, Offer};
 use crate::scrapers::util::{self, curl_get, curl_redirect_url};
 
 // EDEKA über edeka.de (regionale Angebote, Markt über PLZ wie bei Rewe).
@@ -26,61 +26,128 @@ use crate::scrapers::util::{self, curl_get, curl_redirect_url};
 
 const BASE: &str = "https://www.edeka.de";
 
+const MARKET_SEARCH_HEADERS: &[(&str, &str)] = &[
+    ("Accept", "application/json, text/plain, */*"),
+    ("Referer", "https://www.edeka.de/marktsuche.jsp"),
+    ("Sec-Fetch-Site", "same-origin"),
+    ("Sec-Fetch-Mode", "cors"),
+    ("Sec-Fetch-Dest", "empty"),
+];
+
+const MARKET_PAGE_HEADERS: &[(&str, &str)] = &[
+    ("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
+    ("Sec-Fetch-Site", "none"),
+    ("Sec-Fetch-Mode", "navigate"),
+    ("Sec-Fetch-Dest", "document"),
+    ("Sec-Fetch-User", "?1"),
+    ("Upgrade-Insecure-Requests", "1"),
+];
+
 pub fn find_market(zip: &str) -> Result<Market> {
-    let url = format!("{BASE}/api/marketsearch/markets?searchstring={zip}");
-    let body = curl_get(
-        &url,
-        &[
-            ("Accept", "application/json, text/plain, */*"),
-            ("Referer", "https://www.edeka.de/marktsuche.jsp"),
-            ("Sec-Fetch-Site", "same-origin"),
-            ("Sec-Fetch-Mode", "cors"),
-            ("Sec-Fetch-Dest", "empty"),
-        ],
-    )
-    .with_context(|| util::ctx("EDEKA", "Markt-Lookup", &url))?;
-
-    let raw: serde_json::Value = serde_json::from_str(&body)
-        .with_context(|| util::ctx("EDEKA", "Markt-Lookup JSON parsen", &url))?;
-    let market = raw
-        .get("markets")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
+    let raw = market_search(zip)?;
+    let draft = parse_branch_drafts(&raw)
+        .into_iter()
+        .next()
         .with_context(|| format!("Kein EDEKA-Markt für PLZ {zip} gefunden"))?;
+    Ok(resolve(draft)?.as_market())
+}
 
-    let name = market
-        .get("name")
-        .and_then(|v| v.as_str())
-        .unwrap_or("EDEKA")
-        .to_string();
-    let legacy_url = market
-        .get("url")
-        .and_then(|v| v.as_str())
-        .context("Markt-URL fehlt in der Marktsuche-Antwort")?;
-
-    // Neue URLs (https://www.edeka.de/maerkte/<id>/) tragen die ID schon —
-    // dort gibt es keinen Redirect mehr, den man auflösen könnte
-    if let Some(id) = market_id_from_url(legacy_url) {
-        return Ok(Market::new(id, name));
+/// Alle Filialen der Marktsuche, für das Verzeichnis.
+///
+/// Teuerste Kette im Verzeichnis: Jede Filiale kostet zusätzlich einen
+/// Redirect-Request, siehe [`resolve`]. Für ein Stadtgebiet sind das gut ein
+/// Dutzend — vertretbar; bundesweit wären es zehntausende, und genau deshalb
+/// wird EDEKA nur gebietsweise auf Anforderung geholt.
+pub fn find_branches(zip: &str) -> Result<Vec<Branch>> {
+    let raw = market_search(zip)?;
+    let mut branches = Vec::new();
+    for draft in parse_branch_drafts(&raw) {
+        match resolve(draft) {
+            Ok(branch) => branches.push(branch),
+            // Eine Filiale, deren ID sich nicht auflösen lässt, ist kein
+            // Grund, die anderen zwölf fallen zu lassen.
+            Err(e) => eprintln!("WARNUNG [EDEKA] Filiale übersprungen: {e:#}"),
+        }
     }
+    Ok(branches)
+}
 
-    // Alte URL -> 308-Redirect -> https://www.edeka.de/maerkte/<id>/
-    let target = curl_redirect_url(
-        legacy_url,
-        &[
-            ("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
-            ("Sec-Fetch-Site", "none"),
-            ("Sec-Fetch-Mode", "navigate"),
-            ("Sec-Fetch-Dest", "document"),
-            ("Sec-Fetch-User", "?1"),
-            ("Upgrade-Insecure-Requests", "1"),
-        ],
-    )
-    .with_context(|| util::ctx("EDEKA", "Markt-Redirect auflösen", legacy_url))?;
-    let id = market_id_from_url(&target)
-        .with_context(|| format!("Unerwartetes Redirect-Ziel für EDEKA-Markt: {target}"))?;
+fn market_search(zip: &str) -> Result<serde_json::Value> {
+    let url = format!("{BASE}/api/marketsearch/markets?searchstring={zip}");
+    let body = curl_get(&url, MARKET_SEARCH_HEADERS)
+        .with_context(|| util::ctx("EDEKA", "Markt-Lookup", &url))?;
+    serde_json::from_str(&body)
+        .with_context(|| util::ctx("EDEKA", "Markt-Lookup JSON parsen", &url))
+}
 
-    Ok(Market::new(id, name))
+/// Eine Filiale der Marktsuche, deren **Scrape-ID noch fehlt**.
+///
+/// EDEKA nennt in der Marktsuche eine andere ID (`id`, z. B. 10004808) als
+/// der Angebots-Pfad (`/maerkte/<id>/`), und letztere steht nur hinter dem
+/// Redirect der Markt-URL. Ein Verzeichniseintrag ohne Scrape-ID wäre
+/// nutzlos, deshalb sind die beiden Schritte getrennt: [`parse_branch_drafts`]
+/// liest die Adressdaten ohne Netz, [`resolve`] holt die ID nach.
+pub struct BranchDraft {
+    pub name: String,
+    pub street: Option<String>,
+    pub plz: Option<String>,
+    pub city: Option<String>,
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
+    pub url: String,
+}
+
+pub fn parse_branch_drafts(raw: &serde_json::Value) -> Vec<BranchDraft> {
+    let Some(markets) = raw.get("markets").and_then(|v| v.as_array()) else {
+        return Vec::new();
+    };
+    markets
+        .iter()
+        .filter_map(|market| {
+            let url = market.get("url").and_then(|v| v.as_str())?.to_string();
+            let text = |pointer: &str| {
+                market
+                    .pointer(pointer)
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+            };
+            // Koordinaten kommen als Strings ("51.00879").
+            let coord = |pointer: &str| {
+                market.pointer(pointer).and_then(|v| v.as_str()).and_then(|s| s.parse().ok())
+            };
+            Some(BranchDraft {
+                name: text("/name").unwrap_or_else(|| "EDEKA".to_string()),
+                street: text("/contact/address/street"),
+                plz: text("/contact/address/city/zipCode"),
+                city: text("/contact/address/city/name"),
+                lat: coord("/coordinates/lat"),
+                lon: coord("/coordinates/lon"),
+                url,
+            })
+        })
+        .collect()
+}
+
+/// Scrape-ID nachschlagen und den Entwurf zur Verzeichniszeile machen.
+pub fn resolve(draft: BranchDraft) -> Result<Branch> {
+    // Neue URLs (https://www.edeka.de/maerkte/<id>/) tragen die ID schon —
+    // dort gibt es keinen Redirect mehr, den man auflösen könnte.
+    let id = match market_id_from_url(&draft.url) {
+        Some(id) => id.to_string(),
+        None => {
+            // Alte URL -> 308-Redirect -> https://www.edeka.de/maerkte/<id>/
+            let target = curl_redirect_url(&draft.url, MARKET_PAGE_HEADERS)
+                .with_context(|| util::ctx("EDEKA", "Markt-Redirect auflösen", &draft.url))?;
+            market_id_from_url(&target)
+                .with_context(|| format!("Unerwartetes Redirect-Ziel für EDEKA-Markt: {target}"))?
+                .to_string()
+        }
+    };
+    Ok(Branch::new(id, "EDEKA", draft.name, "edeka-marktsuche")
+        .with_address(draft.street, draft.plz, draft.city)
+        .with_geo(draft.lat, draft.lon))
 }
 
 /// Numerische Markt-ID aus einer https://www.edeka.de/maerkte/<id>/-URL.

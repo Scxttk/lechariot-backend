@@ -1,5 +1,8 @@
 /target
 *.db
+# SQLite-Journaldateien — matchen *.db nicht und landeten sonst im Commit
+*.db-shm
+*.db-wal
 .DS_Store
 
 # Rewe-Client-Zertifikat & Extraktions-Artefakte — NIEMALS committen
