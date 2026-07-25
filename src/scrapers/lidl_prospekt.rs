@@ -57,7 +57,7 @@ const CLUSTER_GAP_PT: f64 = 10.0;
 const PAIR_GAP_PT: f64 = 120.0;
 /// Abstand, in dem Badges (Rabatt, UVP, „Mit Lidl Plus") zur Kachel zählen.
 const BADGE_GAP_PT: f64 = 45.0;
-/// Toleranz der Rechenprobe (siehe [`plausible`]).
+/// Toleranz der Rechenprobe (siehe [`arithmetic_check`]).
 const PRICE_TOLERANCE: f64 = 0.06;
 /// Preise außerhalb dieser Spanne sind keine Lebensmittelangebote.
 const MIN_PRICE: f64 = 0.10;
@@ -203,6 +203,11 @@ const BOILERPLATE: &[&str] = &[
     "auf alle",
     "weitere variante",
     "gültig vom",
+    "angebot ausschließlich",
+    "lidlplus",
+    "coupon",
+    "es gelten die",
+    "personalisierten",
 ];
 
 // -------------------------------------------------------------- Prospekt-JSON
@@ -221,6 +226,15 @@ pub struct Flyer {
     pub pdf_url: Option<String>,
     #[serde(default)]
     pub pages: Vec<serde_json::Value>,
+    /// Artikel, die zusätzlich im Onlineshop verkauft werden — Möbel,
+    /// Großgeräte, Textilien. **Keine Lebensmittel** (2026-07-25: 138
+    /// Einträge, null Food), deshalb taugt das Feld nicht als Hauptquelle.
+    /// Es schließt aber genau die Lücke zu marktguru, die im PDF-Text fehlt:
+    /// Von zehn marktguru-Angeboten ohne Treffer im Prospekttext waren zehn
+    /// Onlineshop-Möbel. Als Bonus liefert es Bild und Kategorie, die der
+    /// PDF-Weg nicht hat.
+    #[serde(default)]
+    pub products: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -549,7 +563,7 @@ fn title_of(island: &Island) -> String {
 /// Mengenangaben („5er-Pack"), abgeschnittene Dekoschrift („aren"),
 /// Werbezeilen. In einer Preisvergleichs-App ist so ein Eintrag schlimmer
 /// als gar keiner, weil er in der Einkaufsliste auf nichts passt.
-fn is_plausible_title(title: &str) -> bool {
+pub fn is_plausible_title(title: &str) -> bool {
     if title.len() < 3 || is_boilerplate(title) {
         return false;
     }
@@ -586,7 +600,7 @@ pub fn parse_price(raw: &str) -> Option<f64> {
 /// `None`, wenn sich nichts nachrechnen lässt (dann wird die Kachel
 /// übernommen — die Probe ist ein Filter gegen Fehlpaarungen, kein
 /// Pflichtnachweis).
-fn plausible(text: &str, price: f64) -> Option<bool> {
+pub fn arithmetic_check(text: &str, price: f64) -> Option<bool> {
     let base = BASE_PRICE.captures(text)?;
     let base_unit = base.get(1)?.as_str();
     // "13.29/11.50": derselbe Artikel in zwei Größen, zwei gültige Grundpreise.
@@ -597,9 +611,14 @@ fn plausible(text: &str, price: f64) -> Option<bool> {
         .filter_map(parse_price)
         .collect();
 
-    // "Je 200/250 g" ebenso — jede Kombination aus Größe und Grundpreis zählt.
+    // Der Grundpreis selbst sieht aus wie eine Packungsgröße: In „1 kg = 2.76"
+    // steckt „1 kg". Bliebe er stehen, ginge die Probe für *jeden* Preis auf,
+    // der zufällig dem Grundpreis entspricht — die Kontrolle liefe leer.
+    let without_base = BASE_PRICE.replace_all(text, " ");
+
+    // "Je 200/250 g" — jede Kombination aus Größe und Grundpreis zählt.
     let mut quantities: Vec<(f64, &str)> = Vec::new();
-    for c in QUANTITY.captures_iter(text) {
+    for c in QUANTITY.captures_iter(&without_base) {
         let mult: f64 = c
             .get(1)
             .and_then(|m| m.as_str().parse().ok())
@@ -641,6 +660,41 @@ fn plausible(text: &str, price: f64) -> Option<bool> {
     if checked { Some(false) } else { None }
 }
 
+/// Wo Sternpreise auf dem Weg zum Angebot verloren gehen.
+///
+/// Der Prospekt ist die Messlatte: Jeder Sternpreis ist ein Angebot, das in
+/// der App landen sollte. Ohne diese Zahlen lässt sich nicht sagen, ob eine
+/// Änderung am Extraktor etwas bringt — deshalb stehen sie in jedem Lauf.
+/// `LIDL_PROSPEKT_DEBUG=1` zeigt jede Kachel, die kein Angebot geworden ist.
+/// Ohne diese Ausgabe lässt sich nicht beurteilen, ob eine Regeländerung
+/// wirklich hilft oder nur die Zahlen verschiebt.
+fn debug_enabled() -> bool {
+    std::env::var("LIDL_PROSPEKT_DEBUG").is_ok_and(|v| v == "1")
+}
+
+#[derive(Default)]
+struct Stats {
+    anchors: usize,
+    no_partner: usize,
+    implausible_price: usize,
+    failed_arithmetic: usize,
+    bad_title: usize,
+}
+
+impl Stats {
+    fn report(&self, kept: usize) {
+        println!(
+            "  {kept} von {} Sternpreisen übernommen (ohne Partner {}, Preis unplausibel {}, \
+             Rechenprobe {}, kein Titel {})",
+            self.anchors,
+            self.no_partner,
+            self.implausible_price,
+            self.failed_arithmetic,
+            self.bad_title
+        );
+    }
+}
+
 /// Kacheln einer `pdftotext -bbox-layout`-Ausgabe in Angebote übersetzen.
 ///
 /// Ablauf je Seite:
@@ -652,7 +706,7 @@ fn plausible(text: &str, price: f64) -> Option<bool> {
 /// 4. Badges im Umkreis liefern Streichpreis und Lidl-Plus-Hinweis. Der
 ///    Rabatt („-42 %") wird bewusst nicht übernommen: `Offer` führt kein
 ///    Rabattfeld, die Auswertung rechnet ihn aus Preis und Streichpreis.
-/// 5. Rechenprobe ([`plausible`]) verwirft Fehlpaarungen.
+/// 5. Rechenprobe ([`arithmetic_check`]) verwirft Fehlpaarungen.
 pub fn extract_offers(
     xml: &str,
     market_id: &str,
@@ -660,7 +714,7 @@ pub fn extract_offers(
     valid_until: Option<&str>,
 ) -> Vec<Offer> {
     let mut offers = Vec::new();
-    let mut dropped = 0usize;
+    let mut stats = Stats::default();
 
     for (page_index, islands) in parse_bbox_layout(xml).into_iter().enumerate() {
         // Seiten mit eigenem Laufzeit-Kopf schlagen die Prospektdaten.
@@ -680,10 +734,13 @@ pub fn extract_offers(
         let mut products = Vec::new();
         let mut badges = Vec::new();
         for tile in tiles {
-            let text = tile.text();
-            if PRICE_STAR.is_match(&text) {
+            if PRICE_STAR.is_match(&tile.text()) {
                 prices.push(tile);
-            } else if !name_words(&text).is_empty() && !is_boilerplate(&text) {
+            } else if is_plausible_title(&title_of(&tile)) {
+                // Bewusst am *Titel* gemessen, nicht am ganzen Kacheltext:
+                // Auf einer Fleisch-Kachel steht neben dem Namen auch
+                // „Frischluftstall", und danach zu verwerfen hätte
+                // „METZGERFRISCH Frisches Rinder-Hackfleisch" mitgerissen.
                 products.push(tile);
             } else {
                 badges.push(tile);
@@ -719,26 +776,44 @@ pub fn extract_offers(
         // tragen ihren Namen aber selbst — sie sind ihre eigene Kachel.
         let self_contained: Vec<usize> = (0..prices.len())
             .filter(|j| !used_price[*j])
-            .filter(|j| {
-                let text = prices[*j].text();
-                !is_boilerplate(&text) && is_plausible_title(&title_of(&prices[*j]))
-            })
+            .filter(|j| is_plausible_title(&title_of(&prices[*j])))
             .collect();
+
+        stats.anchors += prices
+            .iter()
+            .map(|t| PRICE_STAR.find_iter(&t.text()).count())
+            .sum::<usize>();
+        for j in (0..prices.len()).filter(|j| !used_price[*j] && !self_contained.contains(j)) {
+            stats.no_partner += PRICE_STAR.find_iter(&prices[j].text()).count();
+            if debug_enabled() {
+                eprintln!(
+                    "  [S{}] ohne Partner: {:?}",
+                    page_index + 1,
+                    prices[j].text().chars().take(110).collect::<String>()
+                );
+            }
+        }
 
         for (i, j) in matched
             .into_iter()
-            .chain(self_contained.into_iter().map(|j| (j, j)))
+            .chain(self_contained.iter().map(|j| (*j, *j)))
         {
             let price_tile = &prices[j];
             let product = if i == j { price_tile } else { &products[i] };
 
-            let Some(price) = PRICE_STAR
-                .captures(&price_tile.text())
-                .and_then(|c| parse_price(c.get(1)?.as_str()))
+            // Eine Kachel kann mehrere Sternpreise tragen — „29.99* 2.99*"
+            // ist ein Artikel mit zwei Größen, nicht ein Artikel. Jeder Stern
+            // ist ein eigenes Angebot; der Untertitel unterscheidet sie.
+            let tile_prices: Vec<f64> = PRICE_STAR
+                .captures_iter(&price_tile.text())
+                .filter_map(|c| parse_price(c.get(1)?.as_str()))
+                .collect();
+            let usable: Vec<f64> = tile_prices
+                .iter()
+                .copied()
                 .filter(|p| (MIN_PRICE..=MAX_PRICE).contains(p))
-            else {
-                continue;
-            };
+                .collect();
+            stats.implausible_price += tile_prices.len() - usable.len();
 
             let near: String = badges
                 .iter()
@@ -748,24 +823,20 @@ pub fn extract_offers(
                 .join(" ");
             let context = format!("{} {} {near}", product.text(), price_tile.text());
 
-            if plausible(&context, price) == Some(false) {
-                dropped += 1;
-                continue;
-            }
-
             let title = title_of(product);
             // "Mit Lidl Plus" steht mitunter in derselben Zeile wie der Name.
             let title = title.trim_end_matches("Mit Lidl Plus").trim().to_string();
             if !is_plausible_title(&title) {
+                stats.bad_title += usable.len();
+                if debug_enabled() {
+                    eprintln!(
+                        "  [S{}] kein Titel aus: {:?}",
+                        page_index + 1,
+                        product.text().chars().take(110).collect::<String>()
+                    );
+                }
                 continue;
             }
-
-            // Streichpreis nur übernehmen, wenn er über dem Angebotspreis
-            // liegt — sonst hat die Kachel den Grundpreis eingefangen.
-            let regular = REGULAR_PRICE
-                .captures(&context)
-                .and_then(|c| parse_price(c.get(1)?.as_str()))
-                .filter(|r| *r > price);
 
             // „Mit Lidl Plus" heißt: den Preis gibt es nur mit der Kundenkarte.
             // Er wandert mit, aber sichtbar gekennzeichnet — sonst rechnet die
@@ -774,29 +845,64 @@ pub fn extract_offers(
             let lidl_plus = context.contains("Mit Lidl Plus");
             let subtitle = build_subtitle(product, &context, lidl_plus);
 
-            offers.push(Offer {
-                id: Offer::build_id(market_id, &title, valid_from),
-                market_id: market_id.to_string(),
-                title,
-                subtitle,
-                overline: None,
-                price: Some(price),
-                regular_price: regular,
-                category: None,
-                nutri_score: None,
-                valid_from: valid_from.map(str::to_string),
-                valid_until: valid_until.map(str::to_string),
-                images: Vec::new(),
-                biozid: false,
-                flyer_page: Some(page_index as i64 + 1),
-            });
+            // Die Rechenprobe wirkt als *Auswahl*, nicht als Veto.
+            //
+            // Trägt eine Kachel mehrere Sternpreise, sind zwei Produkte
+            // zusammengeclustert und die Probe trennt sie zuverlässig (bei
+            // ARLA Kaergarden bleibt 2.49 € und 3.99 € fliegt raus). Trägt
+            // sie nur einen, ist der Preis über die Geometrie am Produkt
+            // verankert — dann heißt eine gescheiterte Probe meistens, dass
+            // der *Grundpreis* vom Nachbarn stammt, und ein Veto würde ein
+            // korrektes Angebot wegwerfen (BELBAKE Speisestärke 0.59 €).
+            let veto = usable.len() > 1;
+            for price in usable.iter().copied() {
+                if veto && arithmetic_check(&context, price) == Some(false) {
+                    stats.failed_arithmetic += 1;
+                    if debug_enabled() {
+                        eprintln!(
+                            "  [S{}] Rechenprobe {price:.2} €{}: {:?}",
+                            page_index + 1,
+                            if lidl_plus { " (Lidl Plus)" } else { "" },
+                            context.chars().take(120).collect::<String>()
+                        );
+                    }
+                    continue;
+                }
+
+                // Streichpreis nur übernehmen, wenn er über dem Angebotspreis
+                // liegt — sonst hat die Kachel den Grundpreis eingefangen.
+                let regular = REGULAR_PRICE
+                    .captures(&context)
+                    .and_then(|c| parse_price(c.get(1)?.as_str()))
+                    .filter(|r| *r > price);
+
+                offers.push(Offer {
+                    // Preis gehört in die ID: Zwei Kacheln derselben Seite
+                    // tragen oft denselben Namen ("Versch. Sorten") bei
+                    // verschiedenen Preisen — ohne ihn verschluckt das Dedup
+                    // das zweite Angebot.
+                    id: Offer::build_id(market_id, &format!("{title}_{price:.2}"), valid_from),
+                    market_id: market_id.to_string(),
+                    title: title.clone(),
+                    subtitle: subtitle.clone(),
+                    overline: None,
+                    price: Some(price),
+                    regular_price: regular,
+                    category: None,
+                    nutri_score: None,
+                    valid_from: valid_from.map(str::to_string),
+                    valid_until: valid_until.map(str::to_string),
+                    images: Vec::new(),
+                    biozid: false,
+                    flyer_page: Some(page_index as i64 + 1),
+                });
+            }
         }
     }
 
-    if dropped > 0 {
-        println!("  {dropped} Kacheln verworfen (Rechenprobe Preis/Grundpreis gescheitert)");
-    }
-    dedup(offers)
+    let offers = dedup(offers);
+    stats.report(offers.len());
+    offers
 }
 
 /// Untertitel aus Packungsgröße, Grundpreis und Lidl-Plus-Hinweis.
@@ -948,8 +1054,11 @@ fn resolve_flyer(zip: &str) -> Result<Flyer> {
         .context("Gewählte Variante nicht geladen")
 }
 
-/// PDF laden und durch `pdftotext -bbox-layout` schicken.
-fn pdf_to_layout(pdf_url: &str) -> Result<String> {
+/// Prospekt-PDF in eine temporäre Datei laden.
+///
+/// pdftotext braucht eine Datei; bei ~83 MB ist der Umweg über stdin-Pipes
+/// unnötig fragil. Der Aufrufer löscht die Datei wieder.
+fn download_pdf(pdf_url: &str) -> Result<std::path::PathBuf> {
     util::polite_pause(pdf_url);
     let bytes = util::blocking_client()?
         .get(pdf_url)
@@ -961,19 +1070,20 @@ fn pdf_to_layout(pdf_url: &str) -> Result<String> {
         .with_context(|| util::ctx("Lidl", "Prospekt-PDF lesen", pdf_url))?;
     println!("  PDF geladen ({:.0} MB)", bytes.len() as f64 / 1_048_576.0);
 
-    // pdftotext braucht eine Datei; die PDF ist zu groß für einen Umweg über
-    // stdin-Pipes im Hintergrund. Wird am Ende wieder gelöscht.
     let path = std::env::temp_dir().join(format!("smartshop-lidl-{}.pdf", std::process::id()));
     std::fs::write(&path, &bytes)
         .context("Prospekt-PDF konnte nicht zwischengespeichert werden")?;
-    let result = Command::new("pdftotext")
-        .arg("-bbox-layout")
-        .arg(&path)
+    Ok(path)
+}
+
+/// `pdftotext` mit dem gewünschten Modus laufen lassen.
+fn run_pdftotext(path: &std::path::Path, mode: &str) -> Result<String> {
+    let output = Command::new("pdftotext")
+        .arg(mode)
+        .arg(path)
         .arg("-")
         .output()
-        .context("pdftotext nicht gefunden — poppler-utils wird für den Lidl-Prospekt benötigt");
-    let _ = std::fs::remove_file(&path);
-    let output = result?;
+        .context("pdftotext nicht gefunden — poppler-utils wird für den Lidl-Prospekt benötigt")?;
     if !output.status.success() {
         bail!(
             "pdftotext fehlgeschlagen: {}",
@@ -981,6 +1091,101 @@ fn pdf_to_layout(pdf_url: &str) -> Result<String> {
         );
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// PDF laden und durch `pdftotext -bbox-layout` schicken (Wortkoordinaten für
+/// die Kachelbildung).
+fn pdf_to_layout(pdf_url: &str) -> Result<String> {
+    let path = download_pdf(pdf_url)?;
+    let result = run_pdftotext(&path, "-bbox-layout");
+    let _ = std::fs::remove_file(&path);
+    result
+}
+
+/// Onlineshop-Artikel des Prospekts als Angebote.
+///
+/// Diese Einträge stehen sauber strukturiert im Prospekt-JSON und müssen
+/// nicht aus der PDF gelesen werden — Titel, Preis, Bild und Kategorie
+/// kommen fertig. Beide Extraktoren hängen sie an ihr Ergebnis an.
+pub fn products_as_offers(
+    flyer: &Flyer,
+    market_id: &str,
+    valid_from: Option<&str>,
+    valid_until: Option<&str>,
+) -> Vec<Offer> {
+    let mut offers = Vec::new();
+    for product in flyer.products.values() {
+        let Some(title) = product
+            .get("title")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|t| t.len() >= 3)
+        else {
+            continue;
+        };
+        // `price` kommt als String ("9.99").
+        let Some(price) = product
+            .get("price")
+            .and_then(|v| v.as_str())
+            .and_then(parse_price)
+        else {
+            continue;
+        };
+        let images = product
+            .get("image")
+            .and_then(|v| v.as_str())
+            .filter(|u| u.starts_with("https://"))
+            .map(|u| vec![u.to_string()])
+            .unwrap_or_default();
+        // "Kategorien/Wohnen & Einrichten/Heimtextilien/..." — das letzte
+        // Glied ist das aussagekräftigste.
+        let category = product
+            .get("categoryPrimary")
+            .and_then(|v| v.as_str())
+            .and_then(|path| path.rsplit('/').next())
+            .map(str::trim)
+            .filter(|c| !c.is_empty())
+            .map(str::to_string);
+
+        offers.push(Offer {
+            id: Offer::build_id(market_id, &format!("{title}_{price:.2}"), valid_from),
+            market_id: market_id.to_string(),
+            title: title.to_string(),
+            subtitle: Some("Onlineshop".to_string()),
+            overline: None,
+            price: Some(price),
+            regular_price: None,
+            category,
+            nutri_score: None,
+            valid_from: valid_from.map(str::to_string),
+            valid_until: valid_until.map(str::to_string),
+            images,
+            biozid: false,
+            flyer_page: None,
+        });
+    }
+    offers
+}
+
+/// Prospekt der Woche plus seinen Text, seitenweise in Lesereihenfolge.
+///
+/// Gegenstück zu [`pdf_to_layout`]: `-layout` statt `-bbox-layout`, weil hier
+/// kein Programm Koordinaten braucht, sondern ein Sprachmodell die Seite
+/// lesen soll — die Spaltenausrichtung bleibt erhalten, die Wortkoordinaten
+/// entfallen. Genutzt von [`crate::scrapers::lidl_llm`].
+pub fn fetch_layout_pages(zip: &str) -> Result<(Flyer, Vec<String>)> {
+    let flyer = resolve_flyer(zip)?;
+    let pdf_url = flyer.pdf_url.clone().context("Prospekt ohne pdfUrl")?;
+    let path = download_pdf(&pdf_url)?;
+    let result = run_pdftotext(&path, "-layout");
+    let _ = std::fs::remove_file(&path);
+    // pdftotext trennt Seiten mit einem Seitenvorschub.
+    let pages = result?
+        .split('\u{000c}')
+        .map(|page| page.trim_end().to_string())
+        .filter(|page| !page.trim().is_empty())
+        .collect();
+    Ok((flyer, pages))
 }
 
 pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
@@ -992,7 +1197,7 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
         flyer.offer_end_date.as_deref().unwrap_or("?")
     );
     let xml = pdf_to_layout(pdf_url)?;
-    let offers = extract_offers(
+    let mut offers = extract_offers(
         &xml,
         &market.id,
         flyer.offer_start_date.as_deref(),
@@ -1001,7 +1206,29 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
     if offers.is_empty() {
         bail!("Prospekt gelesen, aber keine Angebote extrahiert — Layout geändert?");
     }
+    offers.extend(merge_products(&flyer, &market.id, &offers));
     Ok(offers)
+}
+
+/// Onlineshop-Artikel ergänzen, ohne bereits gelesene doppelt zu zählen.
+pub fn merge_products(flyer: &Flyer, market_id: &str, existing: &[Offer]) -> Vec<Offer> {
+    let seen: std::collections::HashSet<&str> = existing.iter().map(|o| o.id.as_str()).collect();
+    let extra: Vec<Offer> = products_as_offers(
+        flyer,
+        market_id,
+        flyer.offer_start_date.as_deref(),
+        flyer.offer_end_date.as_deref(),
+    )
+    .into_iter()
+    .filter(|o| !seen.contains(o.id.as_str()))
+    .collect();
+    if !extra.is_empty() {
+        println!(
+            "  {} Onlineshop-Artikel aus dem Prospekt-JSON ergänzt",
+            extra.len()
+        );
+    }
+    extra
 }
 
 #[cfg(test)]
@@ -1020,20 +1247,23 @@ mod tests {
     fn the_arithmetic_check_rejects_a_price_that_contradicts_the_base_price() {
         // ARLA Kaergarden: 400 g zu 6.23 €/kg sind 2.49 €, nicht 3.99 €.
         let text = "ARLA Kaergarden XXL Versch. Sorten. Je 400 g 1 kg = 6.23";
-        assert_eq!(plausible(text, 2.49), Some(true));
-        assert_eq!(plausible(text, 3.99), Some(false));
+        assert_eq!(arithmetic_check(text, 2.49), Some(true));
+        assert_eq!(arithmetic_check(text, 3.99), Some(false));
     }
 
     #[test]
     fn the_arithmetic_check_accepts_any_of_several_pack_sizes() {
         // "Je 200/250 g" mit zwei Grundpreisen: beide Lesarten sind gültig.
         let text = "MULINO BIANCO Gebäck Versch. Sorten. Je 200/250 g 1 kg = 11.10";
-        assert_eq!(plausible(text, 2.22), Some(true));
+        assert_eq!(arithmetic_check(text, 2.22), Some(true));
     }
 
     #[test]
     fn the_arithmetic_check_stays_silent_when_nothing_is_computable() {
-        assert_eq!(plausible("GRANT'S Blended Scotch Whisky", 13.99), None);
+        assert_eq!(
+            arithmetic_check("GRANT'S Blended Scotch Whisky", 13.99),
+            None
+        );
     }
 
     #[test]

@@ -549,3 +549,31 @@ fn store_finder_reads_the_absatzregion_as_number_or_string() {
     let empty = serde_json::json!({"d": {"results": []}});
     assert_eq!(scrapers::store_finder::parse_region_code(&empty), None);
 }
+
+// Die zehn marktguru-Angebote, deren Preis nirgends im Prospekttext steht,
+// waren am 2026-07-25 ausnahmslos Onlineshop-Möbel. Genau die stehen sauber
+// strukturiert im `products`-Feld des Prospekt-JSON — inklusive Bild und
+// Kategorie, die der PDF-Weg gar nicht liefern kann.
+#[test]
+fn lidl_prospekt_takes_online_shop_articles_from_the_flyer_json() {
+    let raw: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/lidl/prospekt_flyer.json")).unwrap();
+    let flyer = scrapers::lidl_prospekt::parse_flyer(&raw).unwrap();
+    let offers = scrapers::lidl_prospekt::products_as_offers(
+        &flyer,
+        "LIDL_1988",
+        Some("2026-07-20"),
+        Some("2026-07-25"),
+    );
+
+    let bettwaesche = offers.iter().find(|o| o.title.contains("Wendebettwäsche")).unwrap();
+    // `price` kommt im JSON als String — muss trotzdem als Zahl ankommen.
+    assert_eq!(bettwaesche.price, Some(9.99));
+    // Vom Kategoriepfad bleibt das letzte, aussagekräftigste Glied.
+    assert_eq!(bettwaesche.category.as_deref(), Some("Kinderbettwäsche"));
+    assert_eq!(bettwaesche.images.len(), 1);
+    assert_eq!(bettwaesche.subtitle.as_deref(), Some("Onlineshop"));
+
+    // Beim Zusammenführen darf nichts doppelt gezählt werden.
+    assert!(scrapers::lidl_prospekt::merge_products(&flyer, "LIDL_1988", &offers).is_empty());
+}

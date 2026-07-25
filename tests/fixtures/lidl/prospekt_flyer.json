@@ -35,6 +35,14 @@
         "altText": "Angebote für frische kernlose Trauben, Snack-Gurken, Wassermelone, Romatomaten sowie Vollkornbrot und veganen Haferdrink."
       }
     ],
-    "products": []
+    "products": {
+      "019f8e12-ba9e-7a37-8e90-8bc610d036b1": {
+        "productId": "100407285",
+        "title": "Wendebettwäsche »Minecraft / Pokémon«, 135 x 200 cm",
+        "price": "9.99",
+        "image": "https://www.lidl.de/assets/gcp0b31f80305d34571b8830b068796d060.jpg",
+        "categoryPrimary": "Kategorien/Wohnen & Einrichten/Heimtextilien/Bettwäsche/Kinderbettwäsche"
+      }
+    }
   }
 }

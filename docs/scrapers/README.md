@@ -50,9 +50,34 @@ Was der Prospekt besser kann:
 - **seitengenaue Laufzeiten** — Donnerstag-Angebote tragen im Seitenkopf
   („Ab Do. 23.7. bis Sa. 25.7.") eine kürzere Gültigkeit als der Prospekt.
 
-Was er schlechter kann: **weniger Zeilen** (2026-07-25 für 01219: 195 gegen
-392 marktguru-Zeilen derselben Woche). Der Prospekt enthält nur, was gedruckt
-ist; marktguru indexiert zusätzlich Onlineshop- und Dauerangebote.
+### Wie vollständig ist der Prospekt-Weg?
+
+Gemessen gegen marktguru, weil das die Messlatte ist. marktguru bezieht seine
+Lidl-Daten aus **demselben Prospekt** — die API gruppiert Angebote nach
+`leafletFlightId`, und für die Woche 20.–25.07.2026 hängen alle 375 Zeilen an
+genau einem Flight. Es gibt also keine geheime Zusatzquelle.
+
+Stand 2026-07-25 für PLZ 01219:
+
+| | marktguru | Prospekt-Weg |
+|---|---:|---:|
+| Angebote der Woche | 375 | **382** |
+| Preis in der jeweils anderen Quelle vorhanden | — | **96,3 %** |
+| Preis **und** passender Name | — | **76,5 %** |
+
+Die zweite Zeile ist die eigentliche Aussage: 361 der 375 marktguru-Preise
+kommen auch hier heraus. Die 14 Fehlenden sind Randfälle (Artikel, deren Preis
+im Prospekt nur im Fließtext steht).
+
+Zwei Funde haben den Weg dorthin gebracht:
+
+1. **Die Daten sind vollständig im PDF.** 365 der 375 marktguru-Angebote
+   stehen mit ihrem Preis in der Textebene, 357 davon als Sternpreis. Es fehlte
+   nie eine Quelle, nur die Extraktion.
+2. **Die restlichen zehn stehen im `products`-Feld des Prospekt-JSON** — alles
+   Onlineshop-Möbel und -Großgeräte. Die kommen jetzt aus dem JSON dazu
+   (`products_as_offers`), sauber strukturiert und mit Bild und Kategorie, die
+   der PDF-Weg gar nicht liefern kann.
 
 Drei Fallen, die beim Bauen Zeit gekostet haben:
 
@@ -79,6 +104,27 @@ schlimmer als ein fehlendes Produkt.
 Bekannte Grenze: Vereinzelt landet eine Werbezeile als Produktname in den
 Daten („Woche", „Kernarm") — rund 2 % der Zeilen. Die Preise dieser Zeilen
 sind korrekt, nur der Name taugt nicht zum Matchen.
+
+### Dritter Weg: `LIDL_SOURCE=prospekt-llm`
+
+Dieselbe Textebene, aber seitenweise durch ein Sprachmodell
+(`src/scrapers/lidl_llm.rs`, braucht `ANTHROPIC_API_KEY`). Gedacht für die
+Kacheln, an denen die Geometrie scheitert — Obst und Gemüse ohne Marke,
+Non-Food ohne Marke-Name-Beschreibung-Struktur.
+
+Die Halluzinationsfrage ist die einzige, die hier zählt, und sie ist
+mechanisch beantwortet: Jeder Preis muss **wörtlich im Seitentext stehen**
+(`price_is_grounded`), und wo Packungsgröße und Grundpreis vorliegen, muss
+dieselbe Rechenprobe aufgehen wie im geometrischen Weg. Was das nicht besteht,
+wird verworfen — das Modell kann Zeilen übersehen, aber keine erfinden.
+
+Kosten: ein Wochenprospekt sind rund 35.000 Tokens; der Systemprompt ist über
+alle Seiten identisch und wird per `cache_control` zwischengespeichert. Seiten
+ohne Sternpreis gehen gar nicht erst ans Modell.
+
+```sh
+ANTHROPIC_API_KEY=... LIDL_SOURCE=prospekt-llm smartshop fetch --store lidl --zip 01219 --dry-run
+```
 
 ## Gemeinsame Infrastruktur (`src/scrapers/util.rs`)
 
