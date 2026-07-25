@@ -61,6 +61,35 @@ impl Store {
     pub fn from_chain(chain: &str) -> Option<Store> {
         Store::ALL.into_iter().find(|s| s.chain() == chain)
     }
+
+    /// Ketten, deren Angebotskatalog bundesweit derselbe ist und die deshalb
+    /// **genau einmal** gespeichert werden, unter einer synthetischen
+    /// National-ID statt unter jeder einzelnen Filiale.
+    ///
+    /// Gemessen am 2026-07-25 gegen die Live-Datenbank: ALDI Nord stand mit
+    /// 2.633 Zeilen in 11 Regionen, die sich in **genau einem Angebot**
+    /// unterschieden — und der Trennstrich lag exakt am Sync-Zeitpunkt, nicht
+    /// an der Region. Die Kopien haben also den Scrape-Zeitpunkt gespeichert,
+    /// nicht regionale Wahrheit.
+    ///
+    /// **Lidl gehört ausdrücklich nicht dazu.** Die Kette galt früher als
+    /// national (der marktguru-Weg lieferte bundesweit dasselbe), aber seit
+    /// der Prospekt-Quelle hängt der Katalog an der Filiale — `fetch_offers`
+    /// bekommt die PLZ übergeben und lädt den Prospekt dieses Marktes.
+    pub fn stores_nationally(self) -> bool {
+        matches!(self, Store::AldiNord | Store::AldiSued)
+    }
+
+    /// Die synthetische National-Filiale einer solchen Kette
+    /// (`ALDI_NORD_DE` / `ALDI_SUED_DE`); None für alle übrigen.
+    pub fn national_market(self) -> Option<Market> {
+        match self {
+            Store::AldiNord => Some(scrapers::aldi_nord::national()),
+            Store::AldiSued => Some(scrapers::aldi_sued::national()),
+            _ => None,
+        }
+        .map(|m| m.with_chain(self.chain()))
+    }
 }
 
 /// Quelle der Lidl-Angebote.
@@ -105,6 +134,21 @@ pub fn scrape_store(
     cert: &str,
     key: &str,
 ) -> Result<Option<(Market, Vec<Offer>)>> {
+    let Some(market) = find_market(store, zip, cert, key)? else {
+        return Ok(None);
+    };
+    let offers = fetch_offers(store, &market, zip, cert, key)?;
+    Ok(Some((market, offers)))
+}
+
+/// Nur die Filiale suchen, ohne Angebote zu laden — die erste Hälfte von
+/// [`scrape_store`].
+///
+/// Eigener Einstieg für die national gespeicherten Ketten: Ob ALDI in einer
+/// Region überhaupt vertreten ist, bleibt eine regionale Frage (der
+/// Aldi-Äquator verläuft mitten durch Deutschland), die Angebote sind es
+/// nicht. Der Regions-Sync fragt deshalb nur noch nach der Filiale.
+pub fn find_market(store: Store, zip: &str, cert: &str, key: &str) -> Result<Option<Market>> {
     println!("Suche {}-Markt für PLZ {zip}...", store.label());
     let market = match store {
         Store::Rewe => scrapers::rewe::find_market(zip, cert, key)?,
@@ -129,8 +173,7 @@ pub fn scrape_store(
     // Push muss sie später nicht mehr aus ID und Filialname erraten.
     let market = market.with_chain(store.chain());
     println!("Markt gefunden: {} (ID: {})", market.name, market.id);
-    let offers = fetch_offers(store, &market, zip, cert, key)?;
-    Ok(Some((market, offers)))
+    Ok(Some(market))
 }
 
 /// Angebote **dieser** Filiale holen, ohne vorher zu suchen.

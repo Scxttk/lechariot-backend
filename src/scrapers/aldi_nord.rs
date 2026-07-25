@@ -25,7 +25,9 @@ pub fn find_market(zip: &str) -> Result<Option<Market>> {
     Ok(store_finder::resolve("ALDI Nord", store_finder::aldi_nord_branch(zip), national()))
 }
 
-fn national() -> Market {
+/// Der bundesweite Katalog-Markt. Seit Phase 12 nicht mehr nur Rückfall des
+/// Store-Finders, sondern die Filiale, unter der ALDI Nord gespeichert wird.
+pub fn national() -> Market {
     Market::new("ALDI_NORD_DE", "ALDI Nord Deutschland")
 }
 

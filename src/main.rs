@@ -147,9 +147,17 @@ enum Command {
         #[arg(long, default_value_t = false)]
         all_stores: bool,
 
-        /// PLZ, aus der die Angebote stammen (Pflicht außer bei --dry-run)
+        /// PLZ, aus der die Angebote stammen (Pflicht außer bei --dry-run
+        /// oder --national)
         #[arg(long)]
         region: Option<String>,
+
+        /// Bundesweit speichern statt für eine PLZ: die Zeilen bekommen
+        /// `region = NULL` und gelten für jede Filiale ihrer Kette. Nur für
+        /// Ketten mit bundesweit identischem Katalog (ALDI Nord, ALDI SÜD) —
+        /// bei allen anderen wären die Angebote schlicht falsch.
+        #[arg(long, default_value_t = false, conflicts_with = "region")]
+        national: bool,
 
         /// Nur zeigen, was hochgeladen würde — kein Netzwerkzugriff
         #[arg(long, default_value_t = false)]
@@ -367,7 +375,18 @@ fn main() -> Result<()> {
         Command::List { action } => shopping_list(action),
         Command::Deals { since, db } => deals(since, db),
         Command::Serve { port, host, db } => smartshop::api::serve(&host, port, db),
-        Command::Push { store, all_stores: _, region, dry_run, no_mirror_images, db } => {
+        Command::Push { store, all_stores: _, region, national, dry_run, no_mirror_images, db } => {
+            // Ohne PLZ und ohne --national landeten die Zeilen mit
+            // `region = NULL` in der Datenbank und wären für jede Filiale
+            // sichtbar — bei REWE oder Kaufland schlicht falsch. Der Schalter
+            // erzwingt, dass „bundesweit" eine Entscheidung ist, kein
+            // vergessenes Argument.
+            if region.is_none() && !national && !dry_run {
+                anyhow::bail!(
+                    "--region <PLZ> ist Pflicht (außer bei --dry-run). \
+                     Bundesweite Ketten wie ALDI brauchen stattdessen --national."
+                );
+            }
             let opts = smartshop::push::PushOptions {
                 db_path: db,
                 chain: store.map(|s| s.chain().to_string()),
@@ -387,6 +406,11 @@ fn main() -> Result<()> {
                 max_regions,
                 only,
                 market_id: market_id.clone(),
+            };
+            // Bundesweite Ketten: Der National-Markt steht fest, es gibt
+            // nichts zu suchen — nur den Katalog zu holen.
+            let national = |store: Store, market: &smartshop::models::Market| {
+                smartshop::stores::fetch_offers(store, market, "", &cert, &key)
             };
             if let Some(market_id) = &market_id {
                 // Filial-Sync: Die Filiale steht fest, es gibt nichts zu
@@ -408,13 +432,25 @@ fn main() -> Result<()> {
                         &key,
                     )
                 };
-                return smartshop::sync::run_branch(&opts, None, &scraper, market_id);
+                return smartshop::sync::run_branch(&opts, None, &scraper, &national, market_id);
             }
             let fetcher = |plz: &str| {
                 Store::ALL
                     .iter()
                     .map(|store| {
-                        (store.chain().to_string(), scrape_store(*store, plz, &cert, &key))
+                        // Bundesweite Ketten werden hier nur noch gesucht:
+                        // Ob ALDI in der Region vertreten ist, entscheidet
+                        // der Store-Finder, die Angebote holt der
+                        // bundesweite Lauf. Die leere Angebotsliste ist
+                        // Absicht — `sync_region` erkennt die Kette daran
+                        // nicht, sondern an `stores_nationally`.
+                        let result = if store.stores_nationally() {
+                            smartshop::stores::find_market(*store, plz, &cert, &key)
+                                .map(|m| m.map(|m| (m, Vec::new())))
+                        } else {
+                            scrape_store(*store, plz, &cert, &key)
+                        };
+                        (store.chain().to_string(), result)
                     })
                     .collect()
             };
@@ -426,7 +462,7 @@ fn main() -> Result<()> {
                 "ALDI SÜD" => smartshop::scrapers::aldi_sued::find_market(plz),
                 other => anyhow::bail!("Kein Filial-Lookup für Kette '{other}'"),
             };
-            smartshop::sync::run(&opts, None, &fetcher, &finder)
+            smartshop::sync::run(&opts, None, &fetcher, &finder, &national)
         }
         Command::BranchesSync {
             area,
