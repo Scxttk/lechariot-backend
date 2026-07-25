@@ -159,6 +159,27 @@ fn dedupe_on_conflict_key() {
     assert_eq!(rows, vec![a, c]);
 }
 
+// Die vom Scraper gestempelte Kette (stores::scrape_store) schlägt jede
+// Namensdeutung — sonst entscheidet Fremdtext über offers.market.
+#[test]
+fn chain_from_market_field_beats_branch_name() {
+    let koeln = Market::new("ALDI_SUED_B330", "ALDI SÜD Köln-Altstadt-Nord");
+    assert_eq!(chain_for(&koeln.clone().with_chain("ALDI SÜD")), Some("ALDI SÜD"));
+    // Unbekannter Wert wird verworfen statt ungeprüft durchgereicht.
+    assert_eq!(chain_for(&Market::new("42", "Feinkost Meier").with_chain("Tante Emma")), None);
+}
+
+// Regression: der Stadtteil im Filialnamen hat die Kette gekippt — der ganze
+// nationale ALDI-SÜD-Katalog stand in Köln (50667) unter market='ALDI Nord'.
+#[test]
+fn chain_detection_ignores_district_in_branch_name() {
+    let m = |id: &str, name: &str| Market::new(id, name);
+    assert_eq!(chain_for(&m("ALDI_SUED_B330", "ALDI SÜD Köln-Altstadt-Nord")), Some("ALDI SÜD"));
+    assert_eq!(chain_for(&m("ALDI_NORD_DE036002", "ALDI Nord Dresden-Süd")), Some("ALDI Nord"));
+    // Filialname ohne erkennbare Gesellschaft: überspringen statt raten.
+    assert_eq!(chain_for(&m("4711", "ALDI Filiale")), None);
+}
+
 #[test]
 fn chain_detection_from_market() {
     let m = |id: &str, name: &str| Market::new(id, name);
@@ -186,6 +207,12 @@ fn chain_for_matches_store_chain_for_every_store() {
             chain_for(&market),
             Some(canonical),
             "chain_for weicht für {canonical} von Store::chain() ab"
+        );
+        // … und erst recht, wenn der Scraper die Kette gestempelt hat.
+        assert_eq!(
+            chain_for(&market.with_chain(canonical)),
+            Some(canonical),
+            "chain_for verwirft die gestempelte Kette {canonical}"
         );
     }
 }
@@ -378,6 +405,42 @@ fn push_batches_deletes_and_upserts() {
     let v: serde_json::Value = serde_json::from_str(&reg.body).unwrap();
     assert_eq!(v[0]["plz"], "01219");
     assert!(v[0]["last_synced"].as_str().unwrap().starts_with("20"));
+}
+
+// Ende-zu-Ende gegen den Fall aus Köln (50667): der Filialname der ALDI-SÜD-
+// Filiale trägt "Nord", die Angebote müssen trotzdem als ALDI SÜD hochgehen.
+#[test]
+fn push_uses_stored_chain_not_branch_name() {
+    let db_path = temp_db("chain");
+    let _ = std::fs::remove_file(&db_path);
+    {
+        let conn = db::open(&db_path).unwrap();
+        let koeln = Market::new("ALDI_SUED_B330", "ALDI SÜD Köln-Altstadt-Nord")
+            .with_chain("ALDI SÜD");
+        db::upsert_market(&conn, &koeln).unwrap();
+        let mut o = offer("Aperitivo Italiano 0,7 l", Some(4.99));
+        o.market_id = "ALDI_SUED_B330".to_string();
+        db::upsert_offer(&conn, &o).unwrap();
+    }
+    let (base_url, log) = spawn_mock();
+
+    run_push(&db_path, &base_url).unwrap();
+
+    let reqs = log.lock().unwrap().clone();
+    let post = reqs
+        .iter()
+        .find(|r| r.method == "POST" && r.target.starts_with("/rest/v1/offers"))
+        .expect("offers-POST fehlt");
+    let rows = parse_rows(&post.body);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].market, "ALDI SÜD");
+
+    // … und die Aufräum-DELETEs treffen dieselbe Kette, nicht ALDI Nord.
+    let del = reqs
+        .iter()
+        .find(|r| r.method == "DELETE" && r.target.starts_with("/rest/v1/offers"))
+        .expect("offers-DELETE fehlt");
+    assert!(!del.target.contains("Nord"), "{}", del.target);
 }
 
 fn parse_rows(body: &str) -> Vec<SupabaseRow> {

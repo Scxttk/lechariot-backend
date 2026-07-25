@@ -245,13 +245,38 @@ fn uberall_branch(plz: &str, key: &str, chain: &str, id_prefix: &str) -> Result<
         .with_context(|| util::ctx(chain, "Filialsuche (HTTP-Status)", &url))?
         .json()
         .with_context(|| util::ctx(chain, "Filialsuche JSON parsen", &url))?;
-    parse_uberall(&raw, chain, id_prefix)
+    parse_uberall(&raw, (lat, lon), chain, id_prefix)
 }
 
 /// Nächste Filiale einer Uberall-Antwort als Market, sofern innerhalb des
-/// Cutoffs (`distance` in Metern); None ohne Treffer im Umkreis.
+/// Cutoffs; None ohne Treffer im Umkreis.
+///
+/// Die Entfernung kommt aus `distance` (Meter). Fehlt das Feld, wird sie aus
+/// den Filialkoordinaten gegen `origin` (die Koordinaten der PLZ) gerechnet —
+/// die Abfrage filtert serverseitig nicht nach Radius (`max=1` ohne
+/// Umkreisparameter), ein ungeprüfter Treffer machte die Kette also überall
+/// vertreten. Ohne beides ist die Antwort unbrauchbar: Err, damit `resolve`
+/// mit dem nationalen Platzhalter greift statt still zu raten.
+/// Entfernung eines Uberall-Treffers zum Suchmittelpunkt in km, oder None,
+/// wenn sie sich nicht bestimmen lässt.
+///
+/// Uberall liefert `distance` in Metern — aber nicht immer, und die Abfrage
+/// filtert serverseitig nicht nach Radius. Fehlt das Feld, wird die Entfernung
+/// aus den Filialkoordinaten gerechnet. Beides zu haben ist der Normalfall;
+/// keins von beidem heißt, dass über die Nähe dieser Filiale nichts bekannt
+/// ist — was die beiden Aufrufer unterschiedlich behandeln müssen, siehe dort.
+fn uberall_distance_km(store: &serde_json::Value, origin: (f64, f64)) -> Option<f64> {
+    if let Some(meters) = store.get("distance").and_then(|v| v.as_f64()) {
+        return Some(meters / 1000.0);
+    }
+    let lat = store.get("lat").and_then(|v| v.as_f64())?;
+    let lng = store.get("lng").and_then(|v| v.as_f64())?;
+    Some(distance_km(origin, (lat, lng)))
+}
+
 pub fn parse_uberall(
     raw: &serde_json::Value,
+    origin: (f64, f64),
     chain: &str,
     id_prefix: &str,
 ) -> Result<Option<Market>> {
@@ -265,10 +290,13 @@ pub fn parse_uberall(
     let Some(store) = locations.first() else {
         return Ok(None);
     };
-    if let Some(dist) = store.get("distance").and_then(|v| v.as_f64()) {
-        if dist > CUTOFF_KM * 1000.0 {
-            return Ok(None);
-        }
+    let lat = store.get("lat").and_then(|v| v.as_f64());
+    let lng = store.get("lng").and_then(|v| v.as_f64());
+    let dist_km = uberall_distance_km(store, origin).with_context(|| {
+        format!("Uberall-Treffer ohne distance und ohne Koordinaten — Entfernung nicht prüfbar: {store}")
+    })?;
+    if dist_km > CUTOFF_KM {
+        return Ok(None);
     }
     let id = store
         .get("identifier")
@@ -279,10 +307,7 @@ pub fn parse_uberall(
         Some(city) => format!("{chain} {city}"),
         None => chain.to_string(),
     };
-    Ok(Some(Market::new(id, name).with_geo(
-        store.get("lat").and_then(|v| v.as_f64()),
-        store.get("lng").and_then(|v| v.as_f64()),
-    )))
+    Ok(Some(Market::new(id, name).with_geo(lat, lng)))
 }
 
 /// Alle ALDI-Filialen im Umkreis, für das Verzeichnis.
@@ -319,7 +344,7 @@ fn uberall_branches(
         .with_context(|| util::ctx(chain, "Filialverzeichnis (HTTP-Status)", &url))?
         .json()
         .with_context(|| util::ctx(chain, "Filialverzeichnis JSON parsen", &url))?;
-    parse_uberall_branches(&raw, chain, id_prefix, radius_km)
+    parse_uberall_branches(&raw, (lat, lon), chain, id_prefix, radius_km)
 }
 
 /// Alle Filialen einer Uberall-Antwort innerhalb des Radius.
@@ -330,6 +355,7 @@ fn uberall_branches(
 /// nirgends gibt.
 pub fn parse_uberall_branches(
     raw: &serde_json::Value,
+    origin: (f64, f64),
     chain: &str,
     id_prefix: &str,
     radius_km: f64,
@@ -344,11 +370,15 @@ pub fn parse_uberall_branches(
 
     Ok(locations
         .iter()
+        // Dieselbe Entfernungsrechnung wie in `parse_uberall`, aber eine
+        // andere Antwort auf "Entfernung unbekannt": Dort IST der eine
+        // Treffer das Ergebnis, ein ungeprüfter macht die Kette in der Region
+        // vertreten — also lieber ein Fehler. Hier ist er eine Zeile von
+        // vielen, und die ganze Liste wegen einer Datenlücke fallen zu
+        // lassen wäre schlimmer, als die Zeile zu behalten (`branches::within`
+        // entscheidet später genauso).
         .filter(|store| {
-            store
-                .get("distance")
-                .and_then(|v| v.as_f64())
-                .is_none_or(|d| d <= radius_km * 1000.0)
+            uberall_distance_km(store, origin).is_none_or(|km| km <= radius_km)
         })
         .filter_map(|store| {
             let id = store.get("identifier").and_then(|v| v.as_str())?;
@@ -379,9 +409,6 @@ pub fn parse_uberall_branches(
 
 // ---------------------------------------------------------------- Fallback
 
-/// Finder-Ergebnis auf das Sync-Verhalten abbilden: Treffer -> echte Filiale,
-/// sauberes "keine Filiale" -> None (Kette wird für die Region nicht
-/// registriert), Fehler -> WARN + nationaler Platzhalter.
 /// Großkreis-Distanz zweier Koordinaten in km (Haversine).
 pub fn distance_km(a: (f64, f64), b: (f64, f64)) -> f64 {
     const R: f64 = 6371.0;
@@ -391,6 +418,9 @@ pub fn distance_km(a: (f64, f64), b: (f64, f64)) -> f64 {
     2.0 * R * h.sqrt().asin()
 }
 
+/// Finder-Ergebnis auf das Sync-Verhalten abbilden: Treffer -> echte Filiale,
+/// sauberes "keine Filiale" -> None (Kette wird für die Region nicht
+/// registriert), Fehler -> WARN + nationaler Platzhalter.
 pub fn resolve(
     chain: &str,
     found: Result<Option<Market>>,

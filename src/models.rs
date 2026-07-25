@@ -10,16 +10,28 @@ pub struct Market {
     pub lat: Option<f64>,
     #[serde(default)]
     pub lon: Option<f64>,
+    /// Kette der Filiale (`Store::chain()`), gesetzt von `stores::scrape_store`.
+    /// Der Push braucht sie für `offers.market` und darf sie NICHT aus dem
+    /// Filialnamen raten — der ist Fremdtext des Store-Finders und mehrdeutig
+    /// ("ALDI SÜD Köln-Altstadt-Nord"). None nur bei markets-Zeilen aus
+    /// lokalen DBs vor Schema v5.
+    #[serde(default)]
+    pub chain: Option<String>,
 }
 
 impl Market {
     pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
-        Market { id: id.into(), name: name.into(), lat: None, lon: None }
+        Market { id: id.into(), name: name.into(), lat: None, lon: None, chain: None }
     }
 
     pub fn with_geo(mut self, lat: Option<f64>, lon: Option<f64>) -> Self {
         self.lat = lat;
         self.lon = lon;
+        self
+    }
+
+    pub fn with_chain(mut self, chain: impl Into<String>) -> Self {
+        self.chain = Some(chain.into());
         self
     }
 }

@@ -41,19 +41,44 @@ pub struct SupabaseRow {
     pub match_key: Vec<String>,
 }
 
-/// Ketten-Anzeigename für einen gespeicherten Markt. Die Zuordnung läuft über
-/// Markt-ID und Filialnamen; Filialen ohne erkennbare Kette liefern None und
+/// Ketten-Anzeigename für einen gespeicherten Markt. Maßgeblich ist die Kette,
+/// die `stores::scrape_store` am Markt hinterlegt hat; nur Markt-Zeilen aus
+/// lokalen DBs vor Schema v5 tragen sie nicht und werden über ID und
+/// Filialnamen zugeordnet. Filialen ohne erkennbare Kette liefern None und
 /// werden beim Push übersprungen.
 pub fn chain_for(market: &Market) -> Option<&'static str> {
     use crate::stores::Store;
-    let hay = format!("{} {}", market.id, market.name).to_lowercase();
+    if let Some(store) = market.chain.as_deref().and_then(Store::from_chain) {
+        return Some(store.chain());
+    }
+    chain_from_name(market)
+}
+
+/// Fallback-Heuristik für Altbestand ohne `markets.chain`.
+///
+/// Die ALDI-Zuordnung hängt am ID-Präfix, das der Store-Finder garantiert
+/// setzt (`ALDI_NORD_…` / `ALDI_SUED_…`, nationale Platzhalter eingeschlossen).
+/// Der Filialname taugt dafür nicht: er trägt den Stadtteil, und ein freies
+/// `contains("nord")` hat "ALDI SÜD Köln-Altstadt-Nord" als ALDI Nord
+/// eingestuft — der komplette SÜD-Katalog landete unter der falschen Kette.
+/// Deshalb hier nur die Kette als Präfix des Namens, nicht irgendwo darin.
+fn chain_from_name(market: &Market) -> Option<&'static str> {
+    use crate::stores::Store;
+    let id = market.id.to_lowercase();
+    let name = market.name.to_lowercase();
+    let hay = format!("{id} {name}");
     if hay.contains("aldi") {
-        if hay.contains("nord") {
+        if id.starts_with("aldi_nord") || name.starts_with("aldi nord") {
             return Some(Store::AldiNord.chain());
         }
-        if hay.contains("süd") || hay.contains("sued") {
+        if id.starts_with("aldi_sued")
+            || name.starts_with("aldi süd")
+            || name.starts_with("aldi sued")
+        {
             return Some(Store::AldiSued.chain());
         }
+        // "aldi" ohne erkennbare Gesellschaft: lieber überspringen als raten.
+        return None;
     }
     // Kanonischer Name kommt IMMER aus Store::chain() — `offers.market` muss
     // exakt zu markets.chain passen, die App filtert mit market=in.(…).

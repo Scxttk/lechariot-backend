@@ -54,6 +54,13 @@ impl Store {
             Store::Edeka => "EDEKA",
         }
     }
+
+    /// Gegenstück zu `chain()`: gespeicherten Kettennamen zurück auf den Store
+    /// abbilden. Unbekannte Werte liefern None, damit der Push sie verwirft
+    /// statt sie ungeprüft nach `offers.market` durchzureichen.
+    pub fn from_chain(chain: &str) -> Option<Store> {
+        Store::ALL.into_iter().find(|s| s.chain() == chain)
+    }
 }
 
 /// None: die Kette hat laut Store-Finder keine Filiale im Umkreis der PLZ
@@ -84,6 +91,9 @@ pub fn scrape_store(
             None => return Ok(None),
         },
     };
+    // Kette hier einmal zentral stempeln: der Aufrufer kennt sie exakt, der
+    // Push muss sie später nicht mehr aus ID und Filialname erraten.
+    let market = market.with_chain(store.chain());
     println!("Markt gefunden: {} (ID: {})", market.name, market.id);
     println!("Lade Angebote...");
     let offers = match store {

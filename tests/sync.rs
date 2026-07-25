@@ -385,6 +385,19 @@ fn chain_without_nearby_branch_is_skipped_not_failed() {
     assert_eq!(dels.len(), 1, "Requests: {reqs:#?}");
     assert!(dels[0].target.contains("chain=eq.Lidl"), "{}", dels[0].target);
     assert!(dels[0].target.contains("plz=eq.01219"), "{}", dels[0].target);
+
+    // … und die Angebote gleich mit: ohne Filiale bleiben sie sonst für immer
+    // in der Region liegen, der Push räumt nur Ketten ab, die er selbst pusht.
+    let offer_dels: Vec<&Req> = reqs
+        .iter()
+        .filter(|r| {
+            r.method == "DELETE"
+                && r.target.starts_with("/rest/v1/offers")
+                && r.target.contains("market=eq.Lidl")
+        })
+        .collect();
+    assert_eq!(offer_dels.len(), 1, "Requests: {reqs:#?}");
+    assert!(offer_dels[0].target.contains("region=eq.01219"), "{}", offer_dels[0].target);
 }
 
 // Finder-Fehler dürfen NICHT löschen — nur ein definitives Ok(None). Fehler
@@ -407,6 +420,10 @@ fn chain_error_keeps_existing_market_row() {
     assert!(
         !reqs.iter().any(|r| r.method == "DELETE" && r.target.starts_with("/rest/v1/markets")),
         "Fehler darf keine Markt-Zeile löschen: {reqs:#?}"
+    );
+    assert!(
+        !reqs.iter().any(|r| r.method == "DELETE" && r.target.contains("market=eq.Lidl")),
+        "Fehler darf keine Angebote löschen: {reqs:#?}"
     );
 }
 
