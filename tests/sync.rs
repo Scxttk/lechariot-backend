@@ -503,14 +503,14 @@ fn spawn_routed_mock(
 
 /// Eine kopierbare Lidl-Quellzeile im offers-Schema (Region 01219).
 const LIDL_SOURCE_ROW: &str = r#"[{
-    "market": "Lidl", "product": "Bio-Gouda", "price": 1.99,
+    "market_id": "LIDL_1988", "market": "Lidl", "product": "Bio-Gouda", "price": 1.99,
     "regular_price": 2.79, "unit": "Stück", "category": "Molkerei & Eier",
     "emoji": "🧀", "image_url": null,
     "valid_from": "2026-07-13", "valid_until": "2026-07-19",
     "base_price": null, "base_unit": null, "brand": null, "ean": null,
     "source": "smartshop-rust", "region": "01219"
 },{
-    "market": "Lidl", "product": "Akku-Schrauber", "price": 29.99,
+    "market_id": "LIDL_1988", "market": "Lidl", "product": "Akku-Schrauber", "price": 29.99,
     "regular_price": null, "unit": "Stück", "category": "Haushalt",
     "emoji": "🔧", "image_url": null,
     "valid_from": "2026-07-30", "valid_until": "2026-08-05",
@@ -571,9 +571,14 @@ fn only_mode_copies_national_chain_offers_before_scraping() {
     let weeks: Vec<&str> = rows.iter().map(|r| r["valid_from"].as_str().unwrap()).collect();
     assert_eq!(weeks, vec!["2026-07-13", "2026-07-30"]);
     assert!(rows.iter().all(|r| r["region"] == "10115" && r["market"] == "Lidl"));
+    // Die Kopie trägt die ZIEL-Filiale, nicht die der Quellregion (v13):
+    // sonst käme der reguläre Scrape nie an diese Zeilen heran — er löscht
+    // und upsertet unter der Filiale, die er selbst gefunden hat, und die
+    // Kopien lägen für immer verwaist in der Zielregion.
+    assert!(rows.iter().all(|r| r["market_id"] == "LIDL_123"), "{rows:#?}");
     assert!(
-        copy.target.contains("on_conflict=market%2Cproduct%2Cvalid_from%2Cregion")
-            || copy.target.contains("on_conflict=market,product,valid_from,region"),
+        copy.target.contains("on_conflict=market_id%2Cproduct%2Cvalid_from%2Cregion")
+            || copy.target.contains("on_conflict=market_id,product,valid_from,region"),
         "{}",
         copy.target
     );

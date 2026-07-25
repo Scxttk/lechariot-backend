@@ -144,9 +144,11 @@ The web dashboard lives at `/`, the JSON endpoints under `/api/*`
 ### push — Supabase push
 
 Uploads the stored offers to the Supabase table `public.offers`
-(PostgREST upsert on `market,product,valid_from,region`, batches of 100) and
-registers the ZIP code in `public.regions`. Outdated weeks for the respective
-market are deleted first. Offers without a price are skipped.
+(PostgREST upsert on `market_id,product,valid_from,region`, batches of 100)
+and registers the ZIP code in `public.regions`. Outdated weeks for the
+respective **branch** are deleted first — offers belong to a store, not to a
+chain in a ZIP code (see `supabase/migration_v13_offer_market_id.sql`).
+Offers without a price are skipped.
 
 ```sh
 export SUPABASE_URL="https://xyz.supabase.co"

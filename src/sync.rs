@@ -239,8 +239,20 @@ fn seed_chain(cfg: &PushConfig, finder: &BranchFinder, chain: &str, plz: &str) -
     }
     let mut rows: Vec<SupabaseRow> =
         resp.json().context("Quell-Angebote: Antwort passt nicht zum offers-Schema")?;
+    // Auf die Ziel-Filiale umschreiben, nicht nur auf die Ziel-Region: Seit
+    // migration_v13 ist `market_id` Teil des Angebots-Schlüssels. Bliebe die
+    // Filiale der Quellregion stehen, käme der reguläre Scrape direkt danach
+    // nie an diese Zeilen heran — er löscht und upsertet unter der Filiale,
+    // die er selbst gefunden hat. Die Kopien lägen dann für immer verwaist
+    // in der Zielregion.
+    //
+    // Damit trägt eine kopierte Zeile die Filiale, in der sie (noch) nicht
+    // nachgewiesen ist. Das ist genau der Punkt, den Phase 11 unter
+    // „Vorab-Kopie klären" entscheiden muss; hier wird er nur nicht
+    // schlimmer gemacht als vorher.
     for row in &mut rows {
         row.region = Some(plz.to_string());
+        row.market_id = market.id.clone();
     }
     if rows.is_empty() {
         return Ok(0);

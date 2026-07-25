@@ -1,7 +1,7 @@
 //! Upload gespeicherter Angebote in die Supabase-Tabelle `public.offers`
 //! (PostgREST-API). Ersetzt den Python-Uploader `supabase_uploader.py`:
-//! Upsert mit on_conflict=market,product,valid_from,region, Batches à 100,
-//! vorheriges Löschen veralteter Wochen pro Markt, Region-Cache in
+//! Upsert mit on_conflict=market_id,product,valid_from,region, Batches à 100,
+//! vorheriges Löschen veralteter Wochen pro Filiale, Region-Cache in
 //! `public.regions`.
 
 use std::collections::{BTreeMap, HashSet};
@@ -17,6 +17,12 @@ pub const BATCH_SIZE: usize = 100;
 /// Zeile im Supabase-Schema (schema.sql + migration_v2.sql + migration_regions.sql).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SupabaseRow {
+    /// Filial-ID der Kette (migration_v13) — der Angebots-Schlüssel. Dieselbe
+    /// ID wie in `markets.market_id` und `branches.market_id`; kein Default,
+    /// denn eine Zeile ohne Filiale gehört seit v13 niemandem.
+    pub market_id: String,
+    /// Ketten-Anzeigename ("REWE"). Nicht mehr Teil des Schlüssels, aber das
+    /// Feld, über das die App filtert.
     pub market: String,
     pub product: String,
     pub price: f64,
@@ -145,6 +151,9 @@ pub fn map_offer(offer: &Offer, chain: &str, region: Option<&str>) -> Option<Sup
         &[offer.subtitle.as_deref(), offer.overline.as_deref(), Some(&offer.title)],
     );
     Some(SupabaseRow {
+        // Die Filiale steht schon am lokalen Angebot: `stores::scrape_store`
+        // speichert jedes Angebot unter der Markt-ID, aus der es stammt.
+        market_id: offer.market_id.clone(),
         market: chain.to_string(),
         product: product_name(offer),
         price,
@@ -175,14 +184,14 @@ pub fn map_offer(offer: &Offer, chain: &str, region: Option<&str>) -> Option<Sup
     })
 }
 
-/// Duplikate auf dem Upsert-Schlüssel (market, product, valid_from, region)
-/// entfernen; der erste Treffer gewinnt.
+/// Duplikate auf dem Upsert-Schlüssel (market_id, product, valid_from,
+/// region) entfernen; der erste Treffer gewinnt.
 pub fn dedupe_rows(rows: Vec<SupabaseRow>) -> Vec<SupabaseRow> {
     let mut seen = HashSet::new();
     rows.into_iter()
         .filter(|r| {
             seen.insert((
-                r.market.clone(),
+                r.market_id.clone(),
                 r.product.clone(),
                 r.valid_from.clone(),
                 r.region.clone(),
@@ -195,6 +204,7 @@ pub fn dedupe_rows(rows: Vec<SupabaseRow>) -> Vec<SupabaseRow> {
 /// Spalten einer SupabaseRow; `recorded_at` setzt die Datenbank.
 #[derive(Debug, Serialize)]
 struct HistoryRow<'a> {
+    market_id: &'a str,
     market: &'a str,
     product: &'a str,
     region: Option<&'a str>,
@@ -211,6 +221,7 @@ struct HistoryRow<'a> {
 impl<'a> From<&'a SupabaseRow> for HistoryRow<'a> {
     fn from(r: &'a SupabaseRow) -> Self {
         HistoryRow {
+            market_id: &r.market_id,
             market: &r.market,
             product: &r.product,
             region: r.region.as_deref(),
@@ -402,7 +413,7 @@ fn push_history(
             .post(&url)
             .header("apikey", &cfg.api_key)
             .header("Authorization", format!("Bearer {}", cfg.api_key))
-            .query(&[("on_conflict", "market,product,region,valid_from")])
+            .query(&[("on_conflict", "market_id,product,valid_from,region")])
             .header("Prefer", "resolution=merge-duplicates")
             .json(&payload)
             .send()
@@ -467,7 +478,7 @@ pub fn upsert_branches(cfg: &PushConfig, branches: &[crate::models::Branch]) -> 
 }
 
 /// Zeilen in Batches nach `public.offers` upserten (Konfliktschlüssel wie
-/// Schema: market, product, valid_from, region).
+/// Schema: market_id, product, valid_from, region — migration_v13).
 pub fn upsert_offer_rows(
     client: &reqwest::blocking::Client,
     cfg: &PushConfig,
@@ -480,7 +491,7 @@ pub fn upsert_offer_rows(
             .post(&url)
             .header("apikey", &cfg.api_key)
             .header("Authorization", format!("Bearer {}", cfg.api_key))
-            .query(&[("on_conflict", "market,product,valid_from,region")])
+            .query(&[("on_conflict", "market_id,product,valid_from,region")])
             .header("Prefer", "resolution=merge-duplicates")
             .json(batch)
             .send()
@@ -544,15 +555,30 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
             continue;
         }
 
-        // Veraltete Wochen dieses Markts in DIESER Region löschen — nur wenn
+        // Veraltete Wochen DIESER FILIALE in DIESER Region löschen — nur wenn
         // neue Daten mit Gültigkeitsdatum vorliegen. Legacy-Zeilen ohne
         // valid_from (alte Scraper-Läufe) matchen `lt.` nie und müssen
-        // explizit mit weg. Der Region-Filter verhindert, dass der Push einer
-        // Region die noch nicht neu gesyncten Wochen anderer Regionen löscht.
-        if let Some(current) = rows.iter().filter_map(|r| r.valid_from.as_deref()).max() {
+        // explizit mit weg.
+        //
+        // Gefiltert wird auf `market_id`, nicht mehr auf die Kette: Seit v13
+        // gehören Angebote der Filiale, und in einer PLZ können zwei Filialen
+        // derselben Kette stehen — ein Ketten-Filter räumte beim Push der
+        // einen die Wochen der anderen ab. Der Region-Filter bleibt daneben
+        // stehen, weil dieselbe Filiale bis Phase 12 unter mehreren PLZ
+        // geführt wird und der Push einer Region die anderen nicht anfassen
+        // darf.
+        let mut latest: BTreeMap<&str, &str> = BTreeMap::new();
+        for row in rows {
+            let Some(valid_from) = row.valid_from.as_deref() else { continue };
+            let newest = latest.entry(row.market_id.as_str()).or_insert(valid_from);
+            if valid_from > *newest {
+                *newest = valid_from;
+            }
+        }
+        for (market_id, current) in latest {
             let resp = auth(client.delete(&offers_url))
                 .query(&[
-                    ("market", format!("eq.{chain}")),
+                    ("market_id", format!("eq.{market_id}")),
                     ("region", format!("eq.{region}")),
                     ("or", format!("(valid_from.lt.{current},valid_from.is.null)")),
                 ])
