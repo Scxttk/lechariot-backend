@@ -155,6 +155,64 @@ fn edeka_returns_nothing_for_a_response_without_markets() {
     assert!(scrapers::edeka::parse_branch_drafts(&json("{}")).is_empty());
 }
 
+/// Der Kölner Fall: In der Marktsuche für 50667 steht auf Platz 1 ein Markt
+/// **ohne `url`-Feld** (EDEKA Heyßel, Hohenstaufenring 28 — der Markt in der
+/// Innenstadt). Der Parser hat solche Einträge früher per `filter_map`
+/// verworfen; damit verschwand ausgerechnet die nächstgelegene Filiale
+/// spurlos aus dem Verzeichnis. Für 01219 (Dresden) gibt es keinen solchen
+/// Eintrag — deshalb fiel es dort nie auf.
+#[test]
+fn edeka_keeps_markets_without_a_market_url() {
+    let raw = json(include_str!("fixtures/edeka/marketsearch_koeln.json"));
+    let drafts = scrapers::edeka::parse_branch_drafts(&raw);
+
+    assert_eq!(drafts.len(), 3, "der Markt ohne url darf nicht verschwinden");
+
+    let heyssel = &drafts[0];
+    assert_eq!(heyssel.name, "EDEKA Heyßel");
+    assert!(heyssel.url.is_none(), "dieser Markt hat in der Antwort kein url-Feld");
+    // Adresse und Koordinaten stehen trotzdem in der Antwort und müssen
+    // ankommen — sonst wäre die Meldung über den übersprungenen Markt
+    // nicht einmal zuzuordnen.
+    assert_eq!(heyssel.street.as_deref(), Some("Hohenstaufenring 28"));
+    assert_eq!(heyssel.plz.as_deref(), Some("50674"));
+    assert_eq!(heyssel.city.as_deref(), Some("Köln"));
+    assert!((heyssel.lat.unwrap() - 50.93119).abs() < 1e-9);
+    assert!((heyssel.lon.unwrap() - 6.9412).abs() < 1e-9);
+}
+
+/// Ohne Markt-URL gibt es keine Scrape-ID (weder /maerkte/10008482/ noch die
+/// zusammengesetzte /eh/-URL existieren, beide 404). `branches.market_id` ist
+/// der Primär- und Scrape-Schlüssel — eine geratene ID wäre schlimmer als
+/// keine Zeile. `resolve` muss deshalb scheitern, aber mit einer Begründung,
+/// die den Markt benennt: `find_branches` macht daraus die Warnung, die den
+/// stillen Verlust ersetzt.
+#[test]
+fn edeka_rejects_a_draft_without_a_market_url() {
+    let raw = json(include_str!("fixtures/edeka/marketsearch_koeln.json"));
+    let heyssel = scrapers::edeka::parse_branch_drafts(&raw).into_iter().next().unwrap();
+
+    let err = scrapers::edeka::resolve(heyssel).unwrap_err();
+
+    let msg = format!("{err:#}");
+    assert!(msg.contains("EDEKA Heyßel"), "Meldung muss den Markt benennen: {msg}");
+    assert!(msg.contains("Markt-URL"), "Meldung muss den Grund nennen: {msg}");
+}
+
+/// Die Kölner Markt-URLs tragen Umlaute und ß **unkodiert** ("dürener-straße"),
+/// die Dresdner teilweise prozentkodiert. Beide Formen müssen unverändert an
+/// curl durchgereicht werden; der Parser darf daran nichts drehen.
+#[test]
+fn edeka_keeps_market_urls_verbatim() {
+    let raw = json(include_str!("fixtures/edeka/marketsearch_koeln.json"));
+    let drafts = scrapers::edeka::parse_branch_drafts(&raw);
+
+    assert_eq!(
+        drafts[1].url.as_deref(),
+        Some("https://www.edeka.de/eh/rhein-ruhr/edeka-zickuhr-dürener-straße-199-203/index.jsp")
+    );
+}
+
 // ---------------------------------------------------------------- Kaufland
 
 #[test]

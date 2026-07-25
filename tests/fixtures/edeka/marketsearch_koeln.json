@@ -1,0 +1,93 @@
+{
+ "totalCount": 17,
+ "limit": 10,
+ "offset": 0,
+ "markets": [
+  {
+   "id": 10008482,
+   "name": "EDEKA Heyßel",
+   "distributionChannelName": "EDEKA",
+   "isEdekaHomepageMarket": true,
+   "validFrom": "02.03.2026",
+   "region": {
+    "abbreviation": "RR",
+    "name": "Rhein-Ruhr",
+    "id": 900
+   },
+   "contact": {
+    "address": {
+     "city": {
+      "name": "Köln",
+      "zipCode": "50674"
+     },
+     "street": "Hohenstaufenring 28",
+     "federalState": "Nordrhein-Westfalen"
+    },
+    "phoneNumber": "+4928412090"
+   },
+   "coordinates": {
+    "lat": "50.93119",
+    "lon": "6.9412"
+   }
+  },
+  {
+   "id": 12180,
+   "name": "EDEKA Zickuhr",
+   "distributionChannelName": "EDEKA",
+   "isEdekaHomepageMarket": true,
+   "validFrom": "01.01.2006",
+   "region": {
+    "abbreviation": "RR",
+    "name": "Rhein-Ruhr",
+    "id": 900
+   },
+   "contact": {
+    "address": {
+     "city": {
+      "name": "Köln-Lindenthal",
+      "zipCode": "50931"
+     },
+     "street": "Dürener Straße 199 - 203",
+     "federalState": "Nordrhein-Westfalen"
+    },
+    "emailAddress": "rr0992.rr.eh@edeka.de",
+    "facsimileNumber": "+49221403544",
+    "phoneNumber": "+492219402106"
+   },
+   "coordinates": {
+    "lat": "50.93",
+    "lon": "6.913979100000001"
+   },
+   "url": "https://www.edeka.de/eh/rhein-ruhr/edeka-zickuhr-dürener-straße-199-203/index.jsp"
+  },
+  {
+   "id": 12145,
+   "name": "EDEKA Romano",
+   "distributionChannelName": "EDEKA",
+   "isEdekaHomepageMarket": true,
+   "validFrom": "01.01.2006",
+   "region": {
+    "abbreviation": "RR",
+    "name": "Rhein-Ruhr",
+    "id": 900
+   },
+   "contact": {
+    "address": {
+     "city": {
+      "name": "Köln-Sülz",
+      "zipCode": "50937"
+     },
+     "street": "Berrenrather Straße 339",
+     "federalState": "Nordrhein-Westfalen"
+    },
+    "facsimileNumber": "+492214200968",
+    "phoneNumber": "+49221411022"
+   },
+   "coordinates": {
+    "lat": "50.91659000000001",
+    "lon": "6.92367"
+   },
+   "url": "https://www.edeka.de/eh/rhein-ruhr/edeka-romano-berrenrather-straße-339/index.jsp"
+  }
+ ]
+}
