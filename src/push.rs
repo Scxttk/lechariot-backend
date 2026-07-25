@@ -256,6 +256,9 @@ pub struct PushOptions {
     pub chain: Option<String>,
     /// PLZ, aus der die Angebote stammen. Pflicht außer bei --dry-run.
     pub region: Option<String>,
+    /// Filiale, deren Anforderung dieser Push bedient (`branch_requests`).
+    /// Gesetzt nur im Filial-Sync; None beim Regions-Sync.
+    pub branch_id: Option<String>,
     pub dry_run: bool,
     /// Produktbilder in den Supabase-Storage-Bucket spiegeln (Händler-URL ->
     /// Bucket-URL). Bei --dry-run wird ohnehin nicht gespiegelt.
@@ -613,6 +616,25 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
         .send()
         .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
     check_response(&format!("Region {region} eintragen"), resp)?;
+
+    // Die Anforderung als erledigt melden — HIER, nicht nach dem Spiegeln.
+    // Genau dafür gibt es `defer_mirror`: Die Angebote sind ab jetzt in der
+    // App sichtbar, die Bilder kommen nach (bis dahin greift das Emoji).
+    // Live gemessen am 2026-07-25: Scrape und Push waren nach 43 Sekunden
+    // durch, das Spiegeln von 162 Bildern brauchte danach noch Minuten —
+    // so lange hätte die App auf ein „fertig" gewartet, das längst galt.
+    if let Some(market_id) = opts.branch_id.as_deref() {
+        let resp = auth(client.post(format!("{}/rest/v1/branch_requests", cfg.base_url)))
+            .query(&[("on_conflict", "market_id")])
+            .header("Prefer", "resolution=merge-duplicates")
+            .json(&serde_json::json!([{
+                "market_id": market_id,
+                "last_synced": chrono::Utc::now().to_rfc3339(),
+            }]))
+            .send()
+            .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
+        check_response(&format!("Filiale {market_id} als gesynct eintragen"), resp)?;
+    }
 
     println!("Fertig: {total} Angebote nach Supabase gepusht (Region {region}).");
 

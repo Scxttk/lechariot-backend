@@ -385,6 +385,8 @@ fn sync_region(
             db_path: opts.db_path.clone(),
             chain: None,
             region: Some(plz.to_string()),
+            // Der Regions-Sync bedient keine Filial-Anforderung.
+            branch_id: None,
             dry_run: opts.dry_run,
             mirror_images: true,
             defer_mirror,
@@ -474,6 +476,11 @@ pub fn run_branch(
             db_path: opts.db_path.clone(),
             chain: None,
             region: Some(plz),
+            // Die Fertigmeldung (`branch_requests.last_synced`) schreibt der
+            // Push selbst, direkt nach dem Angebots-Upsert und VOR dem
+            // Spiegeln der Bilder — sonst wartet die App auf ein „fertig",
+            // das längst gilt.
+            branch_id: Some(branch.market_id.clone()),
             dry_run: opts.dry_run,
             mirror_images: true,
             // Wie beim On-Demand-Sync einer PLZ: Hier wartet gerade jemand in
@@ -481,35 +488,7 @@ pub fn run_branch(
             defer_mirror: true,
         },
         Some(cfg),
-    )?;
-
-    if !opts.dry_run {
-        mark_branch_synced(cfg, market_id)?;
-    }
-    Ok(())
-}
-
-/// Die Anforderung als erledigt melden (`branch_requests.last_synced`).
-///
-/// Ohne diesen Schreibvorgang pollt die App bis zum Timeout: Sie sieht ihre
-/// eigene Zeile mit `last_synced: null` und weiß nicht, dass die Angebote
-/// längst da sind. Analog zum Region-Cache, den `push::run` am Ende setzt.
-///
-/// Der Upsert legt die Zeile auch an, wenn sie fehlt — ein Lauf von Hand hat
-/// keine Anforderung vorher. Der Trigger aus migration_v14 lässt sich davon
-/// nicht auslösen: Er steigt aus, sobald `last_synced` gesetzt ist.
-fn mark_branch_synced(cfg: &PushConfig, market_id: &str) -> Result<()> {
-    let client = reqwest::blocking::Client::new();
-    let resp = auth(cfg, client.post(format!("{}/rest/v1/branch_requests", cfg.base_url)))
-        .query(&[("on_conflict", "market_id")])
-        .header("Prefer", "resolution=merge-duplicates")
-        .json(&serde_json::json!([{
-            "market_id": market_id,
-            "last_synced": chrono::Utc::now().to_rfc3339(),
-        }]))
-        .send()
-        .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
-    check_response(&format!("Filiale {market_id} als gesynct eintragen"), resp)
+    )
 }
 
 /// Eine PLZ in `regions` registrieren, falls sie noch fehlt (409 = schon da).

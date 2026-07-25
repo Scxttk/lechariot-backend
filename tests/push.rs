@@ -363,7 +363,7 @@ fn seed_db(path: &str, n: usize) {
 fn run_push(db_path: &str, base_url: &str) -> anyhow::Result<()> {
     let opts = PushOptions {
         db_path: db_path.to_string(),
-        chain: None,
+        chain: None, branch_id: None,
         region: Some("01219".to_string()),
         dry_run: false,
         mirror_images: false,
@@ -588,7 +588,7 @@ fn push_fails_with_german_error_on_http_error() {
 fn push_requires_region_unless_dry_run() {
     let db_path = temp_db("region");
     seed_db(&db_path, 1);
-    let opts = PushOptions { db_path, chain: None, region: None, dry_run: false, mirror_images: false, defer_mirror: false };
+    let opts = PushOptions { db_path, chain: None, branch_id: None, region: None, dry_run: false, mirror_images: false, defer_mirror: false };
     let err = push::run(&opts, None).unwrap_err().to_string();
     assert!(err.contains("--region"), "{err}");
 }
@@ -598,7 +598,7 @@ fn dry_run_makes_no_requests() {
     let db_path = temp_db("dry");
     seed_db(&db_path, 3);
     let (_base_url, log) = spawn_mock();
-    let opts = PushOptions { db_path, chain: None, region: None, dry_run: true, mirror_images: true, defer_mirror: false };
+    let opts = PushOptions { db_path, chain: None, branch_id: None, region: None, dry_run: true, mirror_images: true, defer_mirror: false };
     // cfg: None — Dry-Run braucht weder Env noch Netzwerk (auch nicht fürs Spiegeln)
     push::run(&opts, None).unwrap();
     assert!(log.lock().unwrap().is_empty());
@@ -625,7 +625,7 @@ fn push_skips_unsafe_image_url_but_uses_cached_bucket_url() {
     let cfg = PushConfig { base_url: base_url.clone(), api_key: "k".to_string() };
     let opts = PushOptions {
         db_path: db_path.clone(),
-        chain: None,
+        chain: None, branch_id: None,
         region: Some("01219".to_string()),
         dry_run: false,
         mirror_images: true,
@@ -693,6 +693,7 @@ fn chain_filter_limits_push() {
     let opts = PushOptions {
         db_path,
         chain: Some("Lidl".to_string()), // DB enthält nur REWE
+        branch_id: None,
         region: Some("01219".to_string()),
         dry_run: false,
         mirror_images: false,
@@ -898,6 +899,8 @@ fn deferred_mirror_upserts_offers_before_mirroring() {
     let opts = PushOptions {
         db_path,
         chain: None,
+        // Filial-Sync: Die Fertigmeldung muss VOR dem Spiegeln stehen.
+        branch_id: Some("1763556".to_string()),
         region: Some("01219".to_string()),
         dry_run: false,
         mirror_images: true,
@@ -940,4 +943,16 @@ fn deferred_mirror_upserts_offers_before_mirroring() {
         "{}",
         patch.target
     );
+
+    // Die Fertigmeldung liegt DAZWISCHEN: nach den Angeboten, vor dem
+    // Bild-Nachtrag. Genau dafür gibt es defer_mirror — die App soll die
+    // Angebote sehen, sobald sie da sind, und nicht auf Bilder warten, für
+    // die sie ohnehin einen Emoji-Fallback hat. Live gemessen: Scrape und
+    // Push waren nach 43 s durch, das Spiegeln danach dauerte Minuten.
+    let done_pos = reqs
+        .iter()
+        .position(|r| r.method == "POST" && r.target.starts_with("/rest/v1/branch_requests"))
+        .expect("Fertigmeldung fehlt");
+    assert!(first_upsert < done_pos, "Fertigmeldung vor den Angeboten: {reqs:#?}");
+    assert!(done_pos < patch_pos, "Fertigmeldung erst nach dem Bild-Nachtrag: {reqs:#?}");
 }

@@ -357,6 +357,8 @@ fn main() -> Result<()> {
             let opts = smartshop::push::PushOptions {
                 db_path: db,
                 chain: store.map(|s| s.chain().to_string()),
+                // Der Push von Hand bedient keine Filial-Anforderung.
+                branch_id: None,
                 region,
                 dry_run,
                 mirror_images: !no_mirror_images,
