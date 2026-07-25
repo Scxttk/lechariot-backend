@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use scraper::{ElementRef, Html, Selector};
 use std::collections::HashSet;
 
@@ -45,11 +45,29 @@ const MARKET_PAGE_HEADERS: &[(&str, &str)] = &[
 
 pub fn find_market(zip: &str) -> Result<Market> {
     let raw = market_search(zip)?;
-    let draft = parse_branch_drafts(&raw)
-        .into_iter()
-        .next()
-        .with_context(|| format!("Kein EDEKA-Markt für PLZ {zip} gefunden"))?;
-    Ok(resolve(draft)?.as_market())
+    let drafts = parse_branch_drafts(&raw);
+    if drafts.is_empty() {
+        bail!("Kein EDEKA-Markt für PLZ {zip} gefunden");
+    }
+
+    // Nicht blind den ersten Treffer nehmen: Die Marktsuche stellt auch
+    // Märkte ohne Marktseite nach vorn (siehe [`resolve`]) — für 50667 steht
+    // genau so einer auf Platz 1. Der erste Markt, dessen Scrape-ID sich
+    // auflösen lässt, ist der erste, mit dem sich überhaupt etwas anfangen
+    // lässt.
+    let mut last_err = None;
+    for draft in drafts {
+        match resolve(draft) {
+            Ok(branch) => return Ok(branch.as_market()),
+            Err(e) => {
+                // Die Meldung nennt den Markt bereits.
+                eprintln!("WARNUNG [EDEKA] Markt übersprungen: {e:#}");
+                last_err = Some(e);
+            }
+        }
+    }
+    Err(last_err.unwrap_or_else(|| anyhow!("Kein EDEKA-Markt für PLZ {zip} gefunden")))
+        .with_context(|| format!("Kein auflösbarer EDEKA-Markt für PLZ {zip}"))
 }
 
 /// Alle Filialen der Marktsuche, für das Verzeichnis.
@@ -87,6 +105,9 @@ fn market_search(zip: &str) -> Result<serde_json::Value> {
 /// Redirect der Markt-URL. Ein Verzeichniseintrag ohne Scrape-ID wäre
 /// nutzlos, deshalb sind die beiden Schritte getrennt: [`parse_branch_drafts`]
 /// liest die Adressdaten ohne Netz, [`resolve`] holt die ID nach.
+///
+/// `url` ist optional, weil die Marktsuche das Feld nicht bei jedem Markt
+/// füllt — siehe [`parse_branch_drafts`].
 pub struct BranchDraft {
     pub name: String,
     pub street: Option<String>,
@@ -94,17 +115,27 @@ pub struct BranchDraft {
     pub city: Option<String>,
     pub lat: Option<f64>,
     pub lon: Option<f64>,
-    pub url: String,
+    pub url: Option<String>,
 }
 
+/// Adressdaten aller Märkte der Antwort — **auch derer ohne `url`**.
+///
+/// Ein Teil der Märkte kommt ohne `url`-Feld, weil es zu ihnen auf edeka.de
+/// keine Marktseite gibt (gemessen 2026-07-25: 50667 Köln einer von zehn,
+/// 94032 Passau einer von zehn, 01219 Dresden keiner). Diese Einträge hier
+/// stillschweigend wegzuwerfen hat zwei Folgen: Das Verzeichnis verliert die
+/// Filiale ohne jede Meldung, und [`find_market`] verschiebt seine Auswahl
+/// unbemerkt auf den nächsten Markt — in Köln steht genau so ein Eintrag an
+/// erster Stelle. Sie kommen deshalb mit `url: None` durch; erst [`resolve`]
+/// lehnt sie mit Begründung ab, und die Aufrufer melden das.
 pub fn parse_branch_drafts(raw: &serde_json::Value) -> Vec<BranchDraft> {
     let Some(markets) = raw.get("markets").and_then(|v| v.as_array()) else {
         return Vec::new();
     };
     markets
         .iter()
-        .filter_map(|market| {
-            let url = market.get("url").and_then(|v| v.as_str())?.to_string();
+        .map(|market| {
+            let url = market.get("url").and_then(|v| v.as_str()).map(str::to_string);
             let text = |pointer: &str| {
                 market
                     .pointer(pointer)
@@ -117,7 +148,7 @@ pub fn parse_branch_drafts(raw: &serde_json::Value) -> Vec<BranchDraft> {
             let coord = |pointer: &str| {
                 market.pointer(pointer).and_then(|v| v.as_str()).and_then(|s| s.parse().ok())
             };
-            Some(BranchDraft {
+            BranchDraft {
                 name: text("/name").unwrap_or_else(|| "EDEKA".to_string()),
                 street: text("/contact/address/street"),
                 plz: text("/contact/address/city/zipCode"),
@@ -125,21 +156,37 @@ pub fn parse_branch_drafts(raw: &serde_json::Value) -> Vec<BranchDraft> {
                 lat: coord("/coordinates/lat"),
                 lon: coord("/coordinates/lon"),
                 url,
-            })
+            }
         })
         .collect()
 }
 
 /// Scrape-ID nachschlagen und den Entwurf zur Verzeichniszeile machen.
 pub fn resolve(draft: BranchDraft) -> Result<Branch> {
+    // Ohne Markt-URL gibt es keinen Weg zur Scrape-ID: Weder
+    // /maerkte/<marktsuche-id>/ noch die aus Region, Name und Straße
+    // zusammengesetzte /eh/-URL existieren (beide 404, geprüft 2026-07-25 an
+    // „EDEKA Heyßel“, ID 10008482). `branches.market_id` ist der
+    // Scrape-Schlüssel und Primärschlüssel — eine Zeile mit geratener ID wäre
+    // schlimmer als keine. Also abbrechen, aber hörbar: Die Aufrufer melden
+    // den übersprungenen Markt, statt ihn wie bisher stumm zu verlieren.
+    let url = draft.url.as_deref().with_context(|| {
+        format!(
+            "EDEKA-Markt „{}“ ohne Markt-URL in der Marktsuche — zu diesem \
+             Markt gibt es auf edeka.de keine Marktseite und damit keine \
+             Scrape-ID",
+            draft.name
+        )
+    })?;
+
     // Neue URLs (https://www.edeka.de/maerkte/<id>/) tragen die ID schon —
     // dort gibt es keinen Redirect mehr, den man auflösen könnte.
-    let id = match market_id_from_url(&draft.url) {
+    let id = match market_id_from_url(url) {
         Some(id) => id.to_string(),
         None => {
             // Alte URL -> 308-Redirect -> https://www.edeka.de/maerkte/<id>/
-            let target = curl_redirect_url(&draft.url, MARKET_PAGE_HEADERS)
-                .with_context(|| util::ctx("EDEKA", "Markt-Redirect auflösen", &draft.url))?;
+            let target = curl_redirect_url(url, MARKET_PAGE_HEADERS)
+                .with_context(|| util::ctx("EDEKA", "Markt-Redirect auflösen", url))?;
             market_id_from_url(&target)
                 .with_context(|| format!("Unerwartetes Redirect-Ziel für EDEKA-Markt: {target}"))?
                 .to_string()
@@ -176,6 +223,20 @@ pub fn fetch_offers(market: &Market) -> Result<Vec<Offer>> {
     let offers = parse_offers(&html, &market.id)
         .with_context(|| util::ctx("EDEKA", "Angebote parsen", &url))?;
     if offers.is_empty() {
+        // Zwei sehr verschiedene Fälle, die bisher dieselbe (irreführende)
+        // Meldung bekamen. Märkte ohne Angebotsseite liefern unter
+        // /angebote/ keine 404, sondern mit HTTP 200 die Marktseite — die
+        // trägt keinen einzigen "#angebot-"-Anker. Fehlt der Anker komplett,
+        // ist es dieser Markt und nicht das Markup, das sich geändert hat.
+        // (Geprüft 2026-07-25: 070992 und 070538 in Köln.)
+        if !html.contains("#angebot-") {
+            bail!(
+                "[EDEKA] Markt {} ({}) veröffentlicht auf edeka.de keine Angebote — \
+                 {url} liefert die Marktseite statt einer Angebotsliste",
+                market.name,
+                market.id
+            );
+        }
         bail!("[EDEKA] Keine Angebote gefunden ({url}) — Seitenstruktur hat sich möglicherweise geändert");
     }
     Ok(offers)
