@@ -11,9 +11,14 @@ use smartshop::models::{Market, Offer};
 use smartshop::push::PushConfig;
 use smartshop::sync::{self, FetchResult, SyncOptions};
 
-/// Finder-Stub für Tests ohne nationale Ketten: nirgends eine Filiale.
-fn no_finder(_chain: &str, _plz: &str) -> anyhow::Result<Option<Market>> {
-    Ok(None)
+/// Scraper-Stub für den bundesweiten Lauf: liefert nichts, also pusht
+/// `sync_national` auch nichts. Die Tests hier prüfen den Regions-Weg; der
+/// bundesweite hat eigene Tests weiter unten.
+fn no_national(
+    _store: smartshop::stores::Store,
+    _market: &Market,
+) -> anyhow::Result<Vec<Offer>> {
+    Ok(Vec::new())
 }
 
 fn offer(title: &str, price: Option<f64>) -> Offer {
@@ -209,7 +214,7 @@ fn cap_limits_number_of_synced_regions() {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let fetcher = ok_fetcher(calls.clone());
     let db_path = temp_db("cap");
-    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_finder).unwrap();
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
 
     let called = calls.lock().unwrap().clone();
     assert_eq!(called.len(), 10, "nur max_regions Regionen syncen: {called:?}");
@@ -223,7 +228,7 @@ fn markets_upsert_sends_expected_payload() {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let fetcher = ok_fetcher(calls);
     let db_path = temp_db("markets");
-    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_finder).unwrap();
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
 
     let reqs = log.lock().unwrap().clone();
     let markets: Vec<&Req> = reqs
@@ -268,7 +273,7 @@ fn per_region_failure_does_not_abort_run() {
         }
     };
     let db_path = temp_db("isolation");
-    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_finder).unwrap();
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
 
     assert_eq!(calls.lock().unwrap().len(), 2, "beide Regionen versucht");
     let reqs = log.lock().unwrap().clone();
@@ -287,7 +292,7 @@ fn all_regions_failing_returns_error() {
     let fetcher =
         |_plz: &str| -> FetchResult { vec![("REWE".to_string(), Err(anyhow!("Scraper kaputt")))] };
     let db_path = temp_db("allfail");
-    let err = sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_finder).unwrap_err();
+    let err = sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap_err();
     assert!(err.to_string().contains("Alle 2 Region(en) fehlgeschlagen"), "Fehler: {err:#}");
 }
 
@@ -296,7 +301,7 @@ fn empty_regions_table_returns_error() {
     let (base_url, _log) = spawn_mock("[]");
     let fetcher = ok_fetcher(Arc::new(Mutex::new(Vec::new())));
     let db_path = temp_db("empty");
-    let err = sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_finder).unwrap_err();
+    let err = sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap_err();
     assert!(err.to_string().contains("Keine aktiven Regionen"), "Fehler: {err:#}");
 }
 
@@ -305,7 +310,7 @@ fn unreachable_or_failing_supabase_returns_error() {
     let base_url = spawn_failing_mock(500, "kaputt");
     let fetcher = ok_fetcher(Arc::new(Mutex::new(Vec::new())));
     let db_path = temp_db("unreachable");
-    let err = sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_finder).unwrap_err();
+    let err = sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap_err();
     assert!(err.to_string().contains("Regionen laden fehlgeschlagen"), "Fehler: {err:#}");
 }
 
@@ -315,7 +320,7 @@ fn dry_run_only_reads_regions() {
     let fetcher = ok_fetcher(Arc::new(Mutex::new(Vec::new())));
     let db_path = temp_db("dryrun");
     let opts = SyncOptions { db_path, dry_run: true, max_regions: 10, only: None, market_id: None };
-    sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &no_finder).unwrap();
+    sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
 
     let reqs = log.lock().unwrap().clone();
     assert_eq!(reqs.len(), 1, "nur der regions-GET erwartet: {reqs:#?}");
@@ -336,7 +341,7 @@ fn only_mode_registers_and_syncs_single_plz_without_region_list() {
         only: Some("04626".to_string()),
         market_id: None,
     };
-    sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &no_finder).unwrap();
+    sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
 
     // Genau die eine PLZ wurde gescrapet …
     assert_eq!(calls.lock().unwrap().clone(), vec!["04626"]);
@@ -368,7 +373,7 @@ fn chain_without_nearby_branch_is_skipped_not_failed() {
         result
     };
     let db_path = temp_db("no-branch");
-    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_finder).unwrap();
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
 
     let reqs = log.lock().unwrap().clone();
     let markets: Vec<&Req> = reqs
@@ -421,7 +426,7 @@ fn chain_error_keeps_existing_market_row() {
         result
     };
     let db_path = temp_db("chain-err");
-    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_finder).unwrap();
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
 
     let reqs = log.lock().unwrap().clone();
     assert!(
@@ -508,152 +513,16 @@ fn spawn_routed_mock(
     (format!("http://{addr}"), log)
 }
 
-/// Eine kopierbare Lidl-Quellzeile im offers-Schema (Region 01219).
-const LIDL_SOURCE_ROW: &str = r#"[{
-    "market_id": "LIDL_1988", "market": "Lidl", "product": "Bio-Gouda", "price": 1.99,
-    "regular_price": 2.79, "unit": "Stück", "category": "Molkerei & Eier",
-    "emoji": "🧀", "image_url": null,
-    "valid_from": "2026-07-13", "valid_until": "2026-07-19",
-    "base_price": null, "base_unit": null, "brand": null, "ean": null,
-    "source": "smartshop-rust", "region": "01219"
-},{
-    "market_id": "LIDL_1988", "market": "Lidl", "product": "Akku-Schrauber", "price": 29.99,
-    "regular_price": null, "unit": "Stück", "category": "Haushalt",
-    "emoji": "🔧", "image_url": null,
-    "valid_from": "2026-07-30", "valid_until": "2026-08-05",
-    "base_price": null, "base_unit": null, "brand": null, "ean": null,
-    "source": "smartshop-rust", "region": "01219"
-}]"#;
-
+/// Was der On-Demand-Sync NICHT mehr tut: fremde Angebote in die neue Region
+/// kopieren. Bis Phase 12 wurde der Lidl-Katalog aus der ergiebigsten anderen
+/// Region geholt und auf die Ziel-Filiale umgeschrieben — 743 Dresdner Zeilen
+/// standen so als Passauer Angebote da, ohne jede Kennzeichnung.
 #[test]
-fn only_mode_copies_national_chain_offers_before_scraping() {
-    static ROUTES: [(&str, &str); 2] = [
-        // Quellregion-Suche (select=region): 01219 hat die meisten gültigen
-        // Zeilen; 08451 ist dünn, die Ziel-PLZ 10115 darf nicht zählen.
-        (
-            "select=region",
-            r#"[{"region":"01219"},{"region":"01219"},{"region":"01219"},{"region":"08451"},{"region":"10115"},{"region":"10115"},{"region":"10115"},{"region":"10115"}]"#,
-        ),
-        // Zeilen-Suche in der gewählten Quellregion: zwei überlappende Wochen
-        // (Lebensmittel 13.07 + Non-Food-Vorschau 30.07) — beide gültig.
-        ("region=eq.01219", LIDL_SOURCE_ROW),
-    ];
-    let (base_url, log) = spawn_routed_mock(&ROUTES);
-    let fetcher = ok_fetcher(Arc::new(Mutex::new(Vec::new())));
-    // Lidl hat eine Filiale, ALDI Nord keine, ALDI SÜD-Finder ist kaputt.
-    let finder = |chain: &str, _plz: &str| -> anyhow::Result<Option<Market>> {
-        match chain {
-            "Lidl" => Ok(Some(
-                Market::new("LIDL_123", "Lidl Berlin").with_geo(Some(52.5), Some(13.4)),
-            )),
-            "ALDI Nord" => Ok(None),
-            _ => Err(anyhow!("Finder kaputt")),
-        }
-    };
-    let db_path = temp_db("seed");
-    let opts = SyncOptions {
-        db_path,
-        dry_run: false,
-        max_regions: 10,
-        only: Some("10115".to_string()),
-        market_id: None,
-    };
-    sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &finder).unwrap();
-
-    let reqs = log.lock().unwrap().clone();
-    // Die Kopie upsertet die Quellzeile mit der NEUEN Region und dem
-    // regulären Konfliktschlüssel …
-    let copy = reqs
-        .iter()
-        .find(|r| {
-            r.method == "POST"
-                && r.target.starts_with("/rest/v1/offers")
-                && r.body.contains("Bio-Gouda")
-        })
-        .expect("Vorab-Kopie-Upsert fehlt");
-    let rows: serde_json::Value = serde_json::from_str(&copy.body).unwrap();
-    let rows = rows.as_array().unwrap();
-    // ALLE gültigen Wochen kommen mit (Lebensmittel + Vorschau), nicht nur
-    // die mit max. valid_from.
-    assert_eq!(rows.len(), 2, "{rows:#?}");
-    let weeks: Vec<&str> = rows.iter().map(|r| r["valid_from"].as_str().unwrap()).collect();
-    assert_eq!(weeks, vec!["2026-07-13", "2026-07-30"]);
-    assert!(rows.iter().all(|r| r["region"] == "10115" && r["market"] == "Lidl"));
-    // Die Kopie trägt die ZIEL-Filiale, nicht die der Quellregion (v13):
-    // sonst käme der reguläre Scrape nie an diese Zeilen heran — er löscht
-    // und upsertet unter der Filiale, die er selbst gefunden hat, und die
-    // Kopien lägen für immer verwaist in der Zielregion.
-    assert!(rows.iter().all(|r| r["market_id"] == "LIDL_123"), "{rows:#?}");
-    assert!(
-        copy.target.contains("on_conflict=market_id%2Cproduct%2Cvalid_from%2Cregion")
-            || copy.target.contains("on_conflict=market_id,product,valid_from,region"),
-        "{}",
-        copy.target
-    );
-    // … und meldet die Lidl-Filiale nach markets, BEVOR der Scrape-Push kommt.
-    let market_pos = reqs
-        .iter()
-        .position(|r| {
-            r.method == "POST"
-                && r.target.starts_with("/rest/v1/markets")
-                && r.body.contains("LIDL_123")
-        })
-        .expect("markets-Upsert der Vorab-Kopie fehlt");
-    let scrape_pos = reqs
-        .iter()
-        .position(|r| {
-            r.method == "POST" && r.target.starts_with("/rest/v1/offers") && r.body.contains("REWE")
-        })
-        .unwrap_or(usize::MAX);
-    assert!(market_pos < scrape_pos, "Seeding muss vor dem Scrape-Push laufen");
-
-    // ALDI Nord (keine Filiale) und ALDI SÜD (Finder-Fehler) werden nicht
-    // kopiert: nur die beiden Lidl-GETs auf offers.
-    let offer_gets: Vec<&Req> = reqs
-        .iter()
-        .filter(|r| r.method == "GET" && r.target.starts_with("/rest/v1/offers"))
-        .collect();
-    assert_eq!(offer_gets.len(), 2, "{offer_gets:#?}");
-    assert!(offer_gets.iter().all(|r| r.target.contains("market=eq.Lidl")));
-    // Beide GETs filtern serverseitig auf noch gültige Zeilen — abgelaufene
-    // Wochen können so gar nicht erst in die Kopie geraten.
-    assert!(
-        offer_gets.iter().all(|r| r.target.contains("valid_until=gte.")),
-        "{offer_gets:#?}"
-    );
-    // Die Zeilen-Suche zieht die Quellregion mit den meisten gültigen Zeilen
-    // (01219), nicht die dünne (08451) und nicht die Ziel-PLZ selbst (10115).
-    assert!(
-        offer_gets.iter().any(|r| r.target.contains("region=eq.01219")),
-        "{offer_gets:#?}"
-    );
-    assert!(
-        !offer_gets.iter().any(|r| r.target.contains("region=eq.10115")
-            || r.target.contains("region=eq.08451")),
-        "{offer_gets:#?}"
-    );
-}
-
-#[test]
-fn full_sync_never_calls_branch_finder() {
-    let (base_url, _log) = spawn_mock(r#"[{"plz":"01219"}]"#);
-    let fetcher = ok_fetcher(Arc::new(Mutex::new(Vec::new())));
-    let finder = |_: &str, _: &str| -> anyhow::Result<Option<Market>> {
-        panic!("Voll-Sync darf keinen Filial-Lookup fürs Seeding machen")
-    };
-    let db_path = temp_db("noseed");
-    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &finder).unwrap();
-}
-
-#[test]
-fn seeding_without_source_offers_copies_nothing() {
-    // Wochen-Suche liefert leer — es gibt noch keine gültigen Lidl-Angebote.
+fn only_mode_copies_nothing_it_has_not_scraped() {
     let (base_url, log) = spawn_mock("[]");
-    let fetcher = ok_fetcher(Arc::new(Mutex::new(Vec::new())));
-    let finder = |_: &str, _: &str| -> anyhow::Result<Option<Market>> {
-        Ok(Some(Market::new("LIDL_1", "Lidl Test")))
-    };
-    let db_path = temp_db("seed-empty");
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let fetcher = ok_fetcher(calls.clone());
+    let db_path = temp_db("kein-seed");
     let opts = SyncOptions {
         db_path,
         dry_run: false,
@@ -661,17 +530,24 @@ fn seeding_without_source_offers_copies_nothing() {
         only: Some("10115".to_string()),
         market_id: None,
     };
-    sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &finder).unwrap();
+
+    sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
 
     let reqs = log.lock().unwrap().clone();
-    // Kein Kopier-Upsert mit fremden Produkten — nur der reguläre Scrape-Push.
+    // Keine Suche nach einer Quellregion …
     assert!(
-        !reqs.iter().any(|r| r.method == "POST"
-            && r.target.starts_with("/rest/v1/markets")
-            && r.body.contains("LIDL_1")
-            && !r.body.contains("REWE")),
-        "ohne Quell-Angebote darf keine Filiale gemeldet werden: {reqs:#?}"
+        !reqs.iter().any(|r| r.method == "GET"
+            && r.target.starts_with("/rest/v1/offers")
+            && r.target.contains("select=region")),
+        "Quellregion-Suche der Vorab-Kopie ist noch da: {reqs:#?}"
     );
+    // … und hochgeladen wird nur, was der Fetcher wirklich geliefert hat.
+    for req in reqs.iter().filter(|r| {
+        r.method == "POST" && r.target.starts_with("/rest/v1/offers?")
+    }) {
+        assert!(req.body.contains("REWE"), "fremde Zeilen im Upsert: {}", req.body);
+    }
+    assert_eq!(*calls.lock().unwrap(), vec!["10115".to_string()]);
 }
 
 // ------------------------------------------------------- Filial-Sync (v13)
@@ -700,7 +576,7 @@ fn branch_mode_scrapes_exactly_the_requested_branch() {
     let mut opts = opts(&db_path);
     opts.market_id = Some("1766063".to_string());
 
-    sync::run_branch(&opts, Some(&cfg(&base_url)), &scraper, "1766063").unwrap();
+    sync::run_branch(&opts, Some(&cfg(&base_url)), &scraper, &no_national, "1766063").unwrap();
 
     // Der Scraper bekommt die angeforderte Filiale — kein Store-Finder,
     // keine „nächste Filiale zur PLZ".
@@ -767,9 +643,226 @@ fn branch_mode_fails_loudly_on_unknown_market_id() {
     let db_path = temp_db("filiale-unbekannt");
     let opts = opts(&db_path);
 
-    let err = sync::run_branch(&opts, Some(&cfg(&base_url)), &scraper, "4711")
+    let err = sync::run_branch(&opts, Some(&cfg(&base_url)), &scraper, &no_national, "4711")
         .unwrap_err()
         .to_string();
     assert!(err.contains("4711"), "{err}");
     assert!(err.contains("Verzeichnis"), "{err}");
+}
+
+// -------------------------------------------- Bundesweite Ketten (Phase 12)
+
+/// Angebot mit ausdrücklicher Filial-ID — der Push gruppiert über sie.
+fn offer_for(market_id: &str, title: &str, price: f64) -> Offer {
+    let mut o = offer(title, Some(price));
+    o.id = Offer::build_id(market_id, title, Some("2026-07-13"));
+    o.market_id = market_id.to_string();
+    o
+}
+
+/// Fetcher-Stub für eine Region mit ALDI: Die Kette wird gefunden, liefert
+/// hier aber **keine** Angebote — genau so ruft `main` sie seit Phase 12 auf
+/// (nur `find_market`, kein Angebots-Abruf).
+fn aldi_fetcher(chains: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> FetchResult {
+    move |plz: &str| {
+        chains
+            .iter()
+            .map(|(chain, market_id)| {
+                (
+                    chain.to_string(),
+                    Ok(Some((
+                        Market::new(*market_id, format!("{chain} {plz}")).with_chain(*chain),
+                        Vec::new(),
+                    ))),
+                )
+            })
+            .collect()
+    }
+}
+
+/// Der Kern von Schritt 5: ALDI wird **einmal** gespeichert, ohne Region.
+/// Vorher bekam jede der 16 Regionen ihre eigene Kopie desselben Katalogs.
+#[test]
+fn national_chains_are_pushed_once_without_a_region() {
+    let (base_url, log) = spawn_mock(r#"[{"plz":"01219"},{"plz":"01067"}]"#);
+    let fetcher = ok_fetcher(Arc::new(Mutex::new(Vec::new())));
+    let national = |store: smartshop::stores::Store, market: &Market| {
+        assert!(store.stores_nationally(), "{} ist nicht bundesweit", store.chain());
+        Ok(vec![
+            offer_for(&market.id, "Ofenkäse", 2.22),
+            offer_for(&market.id, "Rispentomaten", 1.11),
+        ])
+    };
+    let db_path = temp_db("national");
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &national).unwrap();
+
+    let reqs = log.lock().unwrap().clone();
+    let national_rows: Vec<serde_json::Value> = reqs
+        .iter()
+        .filter(|r| r.method == "POST" && r.target.starts_with("/rest/v1/offers?"))
+        .filter_map(|r| serde_json::from_str::<serde_json::Value>(&r.body).ok())
+        .flat_map(|v| v.as_array().cloned().unwrap_or_default())
+        .filter(|row| row["market"].as_str().is_some_and(|m| m.starts_with("ALDI")))
+        .collect();
+
+    assert_eq!(national_rows.len(), 4, "je 2 Angebote für Nord und SÜD: {national_rows:#?}");
+    for row in &national_rows {
+        assert!(row["region"].is_null(), "bundesweite Zeile mit Region: {row}");
+    }
+    let ids: std::collections::BTreeSet<&str> =
+        national_rows.iter().filter_map(|r| r["market_id"].as_str()).collect();
+    assert_eq!(
+        ids,
+        ["ALDI_NORD_DE", "ALDI_SUED_DE"].into_iter().collect(),
+        "unter der National-Filiale gespeichert, nicht unter einer echten"
+    );
+
+    // Der eigentliche Punkt steckt in der Zahl oben: zwei Regionen, aber
+    // trotzdem nur 2×2 Zeilen. Im alten Modell wären es 2×2×2 gewesen — und
+    // in Produktion 2.965 statt rund 320.
+}
+
+/// Der Regions-Sync meldet die ALDI-Filiale weiterhin nach `markets` (die App
+/// muss wissen, dass es die Kette hier gibt), speichert aber keine Angebote
+/// mehr für sie — und räumt weg, was der alte, regionale Weg hinterlassen hat.
+#[test]
+fn region_sync_reports_the_aldi_branch_but_stores_no_offers_for_it() {
+    static CHAINS: [(&str, &str); 1] = [("ALDI Nord", "ALDI_NORD_4711")];
+    let (base_url, log) = spawn_mock(r#"[{"plz":"01219"}]"#);
+    let fetcher = aldi_fetcher(&CHAINS);
+    let db_path = temp_db("aldi-region");
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
+
+    let reqs = log.lock().unwrap().clone();
+    let market = reqs
+        .iter()
+        .find(|r| r.method == "POST" && r.target.starts_with("/rest/v1/markets"))
+        .expect("markets-Upsert fehlt");
+    assert!(market.body.contains("ALDI_NORD_4711"), "{}", market.body);
+    assert!(market.body.contains("01219"), "{}", market.body);
+
+    assert!(
+        !reqs.iter().any(|r| r.method == "POST"
+            && r.target.starts_with("/rest/v1/offers?")
+            && r.body.contains("ALDI")),
+        "der Regions-Sync darf keine ALDI-Angebote mehr hochladen: {reqs:#?}"
+    );
+
+    // Nachlass aufräumen: die regionalen Kopien aus der Zeit vor Phase 12.
+    assert!(
+        reqs.iter().any(|r| r.method == "DELETE"
+            && r.target.starts_with("/rest/v1/offers")
+            && r.target.contains("market=eq.ALDI+Nord")
+            && r.target.contains("region=eq.01219")),
+        "regionale ALDI-Zeilen werden nicht gelöscht: {reqs:#?}"
+    );
+}
+
+/// Pflicht-Testfall am Aldi-Äquator: 96515 Sonneberg hat ALDI SÜD im Ort und
+/// ALDI Nord 15 km nördlich. Beide Kataloge müssen nebeneinander stehen —
+/// zwei Ketten, zwei National-Filialen, keine verdrängt die andere.
+#[test]
+fn at_the_aldi_equator_both_catalogues_stand_side_by_side() {
+    static CHAINS: [(&str, &str); 2] =
+        [("ALDI Nord", "ALDI_NORD_NEUHAUS"), ("ALDI SÜD", "ALDI_SUED_SONNEBERG")];
+    let (base_url, log) = spawn_mock(r#"[{"plz":"96515"}]"#);
+    let fetcher = aldi_fetcher(&CHAINS);
+    let national = |_: smartshop::stores::Store, market: &Market| {
+        // Zwei klar unterscheidbare Kataloge.
+        Ok(vec![offer_for(&market.id, &format!("Katalog {}", market.id), 1.0)])
+    };
+    let db_path = temp_db("aldi-aequator");
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &national).unwrap();
+
+    let reqs = log.lock().unwrap().clone();
+
+    // Beide Filialen sind in 96515 gemeldet.
+    let markets: String = reqs
+        .iter()
+        .filter(|r| r.method == "POST" && r.target.starts_with("/rest/v1/markets"))
+        .map(|r| r.body.clone())
+        .collect();
+    assert!(markets.contains("ALDI_NORD_NEUHAUS"), "{markets}");
+    assert!(markets.contains("ALDI_SUED_SONNEBERG"), "{markets}");
+
+    // Beide Kataloge sind hochgeladen, jeder unter seiner eigenen ID.
+    let rows: Vec<serde_json::Value> = reqs
+        .iter()
+        .filter(|r| r.method == "POST" && r.target.starts_with("/rest/v1/offers?"))
+        .filter_map(|r| serde_json::from_str::<serde_json::Value>(&r.body).ok())
+        .flat_map(|v| v.as_array().cloned().unwrap_or_default())
+        .collect();
+    assert!(rows.iter().any(|r| r["product"] == "Katalog ALDI_NORD_DE"), "{rows:#?}");
+    assert!(rows.iter().any(|r| r["product"] == "Katalog ALDI_SUED_DE"), "{rows:#?}");
+
+    // Und keiner räumt dem anderen die Zeilen ab. Am bundesweiten Bestand
+    // (region is null) wird ausschließlich je Filiale gelöscht — ein
+    // Ketten-Filter hätte hier genau den Fehler gemacht, den der Äquator
+    // sichtbar macht. Die Löschung über die Kette gibt es nur mit PLZ, das
+    // ist das Aufräumen der regionalen Altlast.
+    let deletes: Vec<&Req> = reqs
+        .iter()
+        .filter(|r| r.method == "DELETE" && r.target.starts_with("/rest/v1/offers"))
+        .collect();
+    for d in &deletes {
+        if d.target.contains("region=eq.96515") {
+            continue; // Altlast dieser einen Region
+        }
+        assert!(
+            d.target.contains("market_id=eq.ALDI_NORD_DE")
+                || d.target.contains("market_id=eq.ALDI_SUED_DE"),
+            "Löschen über die Kette statt über die Filiale: {}",
+            d.target
+        );
+    }
+    assert!(
+        deletes.iter().any(|d| d.target.contains("market_id=eq.ALDI_NORD_DE")),
+        "kein Aufräumen alter Wochen für ALDI Nord: {deletes:#?}"
+    );
+    assert!(
+        deletes.iter().any(|d| d.target.contains("market_id=eq.ALDI_SUED_DE")),
+        "kein Aufräumen alter Wochen für ALDI SÜD: {deletes:#?}"
+    );
+}
+
+/// Eine ALDI-Filiale kann man in der App anfordern — scrapen kann man sie
+/// nicht, die Angebots-APIs kennen keinen Filialbezug. Statt so zu tun als ob,
+/// wird der bundesweite Katalog aufgefrischt und die Anforderung beantwortet.
+#[test]
+fn a_branch_request_for_aldi_refreshes_the_national_catalogue() {
+    static BRANCH: &str = r#"[{
+        "market_id": "ALDI_NORD_4711", "chain": "ALDI Nord",
+        "name": "ALDI Nord Dresden-Prohlis",
+        "street": "Prohliser Allee 10", "plz": "01239", "city": "Dresden",
+        "lat": 50.99, "lon": 13.79, "source": "uberall"
+    }]"#;
+    static ROUTES: [(&str, &str); 1] = [("branches", BRANCH)];
+    let (base_url, log) = spawn_routed_mock(&ROUTES);
+    let scraper = |_: &smartshop::models::Branch| panic!("ALDI darf nicht filialweise gescrapt werden");
+    let national = |_: smartshop::stores::Store, market: &Market| {
+        Ok(vec![offer_for(&market.id, "Ofenkäse", 2.22)])
+    };
+    let db_path = temp_db("aldi-anforderung");
+    let mut opts = opts(&db_path);
+    opts.market_id = Some("ALDI_NORD_4711".to_string());
+
+    sync::run_branch(&opts, Some(&cfg(&base_url)), &scraper, &national, "ALDI_NORD_4711").unwrap();
+
+    let reqs = log.lock().unwrap().clone();
+    let upsert = reqs
+        .iter()
+        .find(|r| r.method == "POST" && r.target.starts_with("/rest/v1/offers?"))
+        .expect("offers-Upsert fehlt");
+    let rows: serde_json::Value = serde_json::from_str(&upsert.body).unwrap();
+    assert_eq!(rows[0]["market_id"], "ALDI_NORD_DE");
+    assert!(rows[0]["region"].is_null(), "{}", upsert.body);
+
+    // Die Anforderung wird trotzdem beantwortet, sonst pollt die App bis zum
+    // Timeout auf eine Filiale, die längst Angebote zeigt.
+    let done = reqs
+        .iter()
+        .find(|r| r.method == "POST" && r.target.starts_with("/rest/v1/branch_requests"))
+        .expect("Fertigmeldung an branch_requests fehlt");
+    let body: serde_json::Value = serde_json::from_str(&done.body).unwrap();
+    assert_eq!(body[0]["market_id"], "ALDI_NORD_4711");
 }

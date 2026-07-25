@@ -584,13 +584,47 @@ fn push_fails_with_german_error_on_http_error() {
     assert!(err.contains("Invalid API key"), "{err}");
 }
 
+/// Ohne Region ist der Push **bundesweit** (Phase 12, ALDI): Die Zeilen gehen
+/// mit `region: null` hoch, das Aufräumen alter Wochen filtert `region=is.null`
+/// statt `eq.` — `eq.` trifft NULL nie und ließe jede alte Woche stehen — und
+/// `regions` wird nicht angefasst, denn dieser Push gehört zu keiner PLZ.
 #[test]
-fn push_requires_region_unless_dry_run() {
-    let db_path = temp_db("region");
-    seed_db(&db_path, 1);
-    let opts = PushOptions { db_path, chain: None, branch_id: None, region: None, dry_run: false, mirror_images: false, defer_mirror: false };
-    let err = push::run(&opts, None).unwrap_err().to_string();
-    assert!(err.contains("--region"), "{err}");
+fn push_without_region_stores_nationwide() {
+    let db_path = temp_db("national");
+    seed_db(&db_path, 2);
+    let (base_url, log) = spawn_mock();
+
+    let opts = PushOptions {
+        db_path,
+        chain: None,
+        branch_id: None,
+        region: None,
+        dry_run: false,
+        mirror_images: false,
+        defer_mirror: false,
+    };
+    let cfg = PushConfig { base_url, api_key: "test-key".to_string() };
+    push::run(&opts, Some(&cfg)).unwrap();
+
+    let log = log.lock().unwrap();
+    let deletes: Vec<&Req> = log.iter().filter(|r| r.method == "DELETE").collect();
+    assert!(!deletes.is_empty(), "kein Aufräumen alter Wochen");
+    for req in &deletes {
+        assert!(req.target.contains("region=is.null"), "{}", req.target);
+        assert!(!req.target.contains("region=eq."), "{}", req.target);
+    }
+
+    let posts: Vec<&Req> = log.iter().filter(|r| r.method == "POST").collect();
+    let offers: Vec<&&Req> = posts.iter().filter(|r| r.target.starts_with("/rest/v1/offers")).collect();
+    assert!(!offers.is_empty(), "keine Angebote hochgeladen");
+    for req in &offers {
+        assert!(req.body.contains("\"region\":null"), "{}", req.body);
+    }
+
+    assert!(
+        !posts.iter().any(|r| r.target.starts_with("/rest/v1/regions")),
+        "bundesweiter Push darf keine Region als frisch melden"
+    );
 }
 
 #[test]

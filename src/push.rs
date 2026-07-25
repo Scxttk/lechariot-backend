@@ -254,7 +254,10 @@ pub struct PushOptions {
     pub db_path: String,
     /// Nur diese Kette pushen (Anzeigename, z. B. "REWE"); None = alle.
     pub chain: Option<String>,
-    /// PLZ, aus der die Angebote stammen. Pflicht außer bei --dry-run.
+    /// PLZ, aus der die Angebote stammen. `None` heißt **bundesweit**: die
+    /// Zeilen bekommen `region = NULL` und gelten für jede Filiale ihrer
+    /// Kette (siehe `Store::stores_nationally`). Vor Phase 12 war das ein
+    /// Fehler — die App fragte `region=in.(…)` und hätte sie nie gesehen.
     pub region: Option<String>,
     /// Filiale, deren Anforderung dieser Push bedient (`branch_requests`).
     /// Gesetzt nur im Filial-Sync; None beim Regions-Sync.
@@ -515,9 +518,7 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
         return dry_run_report(&groups);
     }
 
-    let Some(region) = opts.region.as_deref() else {
-        bail!("--region <PLZ> ist Pflicht (außer bei --dry-run): die App filtert Angebote pro Region.");
-    };
+    let region = opts.region.as_deref();
     let cfg = match cfg {
         Some(c) => c,
         None => &config_from_env()?,
@@ -578,11 +579,18 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
                 *newest = valid_from;
             }
         }
+        // Bundesweite Zeilen tragen keine Region; `eq.` trifft NULL nie, der
+        // Filter muss also `is.null` lauten — sonst bliebe jede alte
+        // ALDI-Woche für immer stehen.
+        let region_filter = match region {
+            Some(r) => format!("eq.{r}"),
+            None => "is.null".to_string(),
+        };
         for (market_id, current) in latest {
             let resp = auth(client.delete(&offers_url))
                 .query(&[
                     ("market_id", format!("eq.{market_id}")),
-                    ("region", format!("eq.{region}")),
+                    ("region", region_filter.clone()),
                     ("or", format!("(valid_from.lt.{current},valid_from.is.null)")),
                 ])
                 .send()
@@ -605,17 +613,22 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
         }
     }
 
-    // Region-Cache aktualisieren: diese PLZ wurde soeben gesynct.
-    let resp = auth(client.post(format!("{}/rest/v1/regions", cfg.base_url)))
-        .query(&[("on_conflict", "plz")])
-        .header("Prefer", "resolution=merge-duplicates")
-        .json(&serde_json::json!([{
-            "plz": region,
-            "last_synced": chrono::Utc::now().to_rfc3339(),
-        }]))
-        .send()
-        .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
-    check_response(&format!("Region {region} eintragen"), resp)?;
+    // Region-Cache aktualisieren: diese PLZ wurde soeben gesynct. Ein
+    // bundesweiter Push gehört zu keiner Region und darf hier nichts
+    // anfassen — sonst meldete er 16 Regionen als frisch, die er nie
+    // angesehen hat.
+    if let Some(region) = region {
+        let resp = auth(client.post(format!("{}/rest/v1/regions", cfg.base_url)))
+            .query(&[("on_conflict", "plz")])
+            .header("Prefer", "resolution=merge-duplicates")
+            .json(&serde_json::json!([{
+                "plz": region,
+                "last_synced": chrono::Utc::now().to_rfc3339(),
+            }]))
+            .send()
+            .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
+        check_response(&format!("Region {region} eintragen"), resp)?;
+    }
 
     // Die Anforderung als erledigt melden — HIER, nicht nach dem Spiegeln.
     // Genau dafür gibt es `defer_mirror`: Die Angebote sind ab jetzt in der
@@ -636,7 +649,10 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
         check_response(&format!("Filiale {market_id} als gesynct eintragen"), resp)?;
     }
 
-    println!("Fertig: {total} Angebote nach Supabase gepusht (Region {region}).");
+    match region {
+        Some(region) => println!("Fertig: {total} Angebote nach Supabase gepusht (Region {region})."),
+        None => println!("Fertig: {total} Angebote nach Supabase gepusht (bundesweit, ohne Region)."),
+    }
 
     // Phase 2 (defer_mirror): Bilder jetzt spiegeln und die betroffenen Zeilen
     // erneut upserten — die App zeigt die Angebote längst, hier kommen nur noch
