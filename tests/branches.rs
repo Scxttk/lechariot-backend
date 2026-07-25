@@ -252,6 +252,68 @@ fn aldi_radius_decides_what_comes_along() {
     assert_eq!(wide.len(), 3);
 }
 
+// ---------------------------------------------------------------- Gebiet
+
+/// Dresden-Strehlen als Mittelpunkt (Nominatim für 01219).
+const CENTER: (f64, f64) = (51.0231864, 13.7659125);
+
+#[test]
+fn the_radius_keeps_the_neighbourhood_and_drops_the_next_city() {
+    let near = Branch::new("A", "Lidl", "Lidl Strehlen", "test").with_geo(Some(51.0338), Some(13.7498));
+    let far = Branch::new("B", "Lidl", "Lidl Chemnitz", "test").with_geo(Some(50.83), Some(12.92));
+
+    assert!(smartshop::branches::within(&near, CENTER, 25.0));
+    assert!(!smartshop::branches::within(&far, CENTER, 25.0));
+}
+
+/// Eine Filiale ohne Koordinaten wegen einer Datenlücke des Finders
+/// verschwinden zu lassen wäre schlimmer als sie zu behalten — die Suche galt
+/// ja diesem Gebiet.
+#[test]
+fn a_branch_without_coordinates_survives_the_radius() {
+    let unknown = Branch::new("C", "EDEKA", "EDEKA ohne Geo", "test");
+
+    assert!(smartshop::branches::within(&unknown, CENTER, 1.0));
+}
+
+/// Benachbarte Gebiete überlappen sich im Umkreis; dieselbe Filiale kommt
+/// dann zweimal. Der erste Treffer gewinnt.
+#[test]
+fn the_same_branch_from_two_areas_is_written_once() {
+    let first = Branch::new("565005", "REWE", "Aus 01219", "test");
+    let second = Branch::new("565005", "REWE", "Aus 01257", "test");
+    let other = Branch::new("565264", "REWE", "Andere Filiale", "test");
+
+    let rows = smartshop::branches::deduplicated(vec![first, second, other]);
+
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].name, "Aus 01219");
+}
+
+/// Ohne die Stadt fällt die REWE-Suche auf die PLZ zurück — und die liefert
+/// nachweislich die falsche Nachbarschaft.
+#[test]
+fn nominatim_yields_the_city_for_the_rewe_search() {
+    let raw = json(include_str!("fixtures/store_finder/nominatim_plz.json"));
+    // Das alte Fixture hat keinen addressdetails-Block.
+    assert_eq!(scrapers::store_finder::parse_nominatim_city(&raw), None);
+
+    let with_details = json(
+        r#"[{"lat":"51.02","lon":"13.76","address":{"suburb":"Strehlen","city":"Dresden"}}]"#,
+    );
+    assert_eq!(
+        scrapers::store_finder::parse_nominatim_city(&with_details),
+        Some("Dresden".to_string())
+    );
+
+    // Auf dem Land heißt das Feld town oder village.
+    let village = json(r#"[{"lat":"51.0","lon":"13.0","address":{"village":"Bannewitz"}}]"#);
+    assert_eq!(
+        scrapers::store_finder::parse_nominatim_city(&village),
+        Some("Bannewitz".to_string())
+    );
+}
+
 #[test]
 fn aldi_rejects_a_failed_uberall_response() {
     let raw = json(include_str!("fixtures/store_finder/uberall_error.json"));

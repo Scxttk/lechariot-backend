@@ -215,6 +215,40 @@ regions fail or the table is empty/unreachable. Prerequisite: the migration
 `supabase/migration_v3_multi_region.sql` has been run once in the Supabase SQL
 editor (see [docs/ci.md](docs/ci.md)).
 
+### branches-sync — store directory
+
+Fills `public.branches`, the directory the app searches to show *nearby*
+stores. This is a different question from "which store do we scrape": until
+now the backend kept exactly one store per chain and ZIP — whichever the
+finder returned first — and threw the rest of the response away. That is where
+rows like "REWE in 01219" come from: searching REWE for `01219` returns five
+stores, all of them in 01257/01259/01277.
+
+Chains differ wildly in what a full directory costs, and the command follows
+that: Kaufland (787 stores) and Penny (2120) publish theirs in a single
+request and are fetched nationwide; everything else is fetched per area, so
+the directory grows where the app is actually used.
+
+```sh
+export SUPABASE_URL="https://xyz.supabase.co"
+export SUPABASE_SERVICE_KEY="…"
+
+smartshop branches-sync                            # Kaufland + Penny, nationwide
+smartshop branches-sync --area 01219               # plus every chain around one ZIP
+smartshop branches-sync --from-regions             # areas = active regions
+smartshop branches-sync --area 01219 --dry-run     # no Supabase writes
+```
+
+For an area, REWE is searched twice — once by ZIP (the neighbourhood) and once
+by city (the centre; that search caps at 20 hits) — and everything outside
+`--radius-km` (default 25) is dropped afterwards, because each finder draws
+its own boundary differently. EDEKA is the expensive one: its offer id sits
+behind a redirect, so every store costs an extra request.
+
+Failures of individual chains only warn. Prerequisite: the migration
+`supabase/migration_v12_branches.sql` has been run once in the Supabase SQL
+editor. Refreshed weekly by `.github/workflows/branches.yml`.
+
 ## Scraper support
 
 | Chain | Auth required | Market | Offers (ballpark) |

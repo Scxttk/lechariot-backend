@@ -189,6 +189,41 @@ enum Command {
         #[arg(long, default_value = "smartshop.db")]
         db: String,
     },
+    /// Filialverzeichnis (`public.branches`) befüllen.
+    ///
+    /// Ohne `--area` nur die beiden Ketten, deren komplettes Verzeichnis einen
+    /// einzigen Request kostet (Kaufland, Penny). Gebiete kosten pro Kette
+    /// eine Suche und werden deshalb angefordert, nicht geraten.
+    /// Braucht SUPABASE_URL und SUPABASE_SERVICE_KEY in der Umgebung.
+    BranchesSync {
+        /// PLZ, deren Umkreis geholt wird (mehrfach angebbar)
+        #[arg(long, value_name = "PLZ")]
+        area: Vec<String>,
+
+        /// Alle aktiven Regionen aus Supabase als Gebiete verwenden
+        #[arg(long, default_value_t = false)]
+        from_regions: bool,
+
+        /// Kaufland und Penny nicht mitziehen
+        #[arg(long, default_value_t = false)]
+        skip_national: bool,
+
+        /// Umkreis der Gebietssuche in km
+        #[arg(long, default_value_t = smartshop::branches::AREA_RADIUS_KM)]
+        radius_km: f64,
+
+        /// Pfad zum Rewe TLS-Zertifikat (PEM)
+        #[arg(long, default_value = "cert.pem")]
+        cert: String,
+
+        /// Pfad zum privaten Schlüssel
+        #[arg(long, default_value = "private.key")]
+        key: String,
+
+        /// Nur zeigen, was geschrieben würde — keine Supabase-Writes
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
+    },
     /// Preisverlauf eines Produkts anzeigen
     History {
         /// Suchbegriff (Teilstring des Titels)
@@ -342,6 +377,34 @@ fn main() -> Result<()> {
                 other => anyhow::bail!("Kein Filial-Lookup für Kette '{other}'"),
             };
             smartshop::sync::run(&opts, None, &fetcher, &finder)
+        }
+        Command::BranchesSync {
+            area,
+            from_regions,
+            skip_national,
+            radius_km,
+            cert,
+            key,
+            dry_run,
+        } => {
+            let cfg = smartshop::push::config_from_env()?;
+            let mut areas = area;
+            if from_regions {
+                let from_db = smartshop::branches::areas_from_regions(&cfg)?;
+                println!("{} aktive Region(en) aus Supabase als Gebiete.", from_db.len());
+                areas.extend(from_db);
+            }
+            areas.sort();
+            areas.dedup();
+            let opts = smartshop::branches::DirectoryOptions {
+                areas,
+                national: !skip_national,
+                radius_km,
+                cert,
+                key,
+                dry_run,
+            };
+            smartshop::branches::sync(&cfg, &opts).map(|_| ())
         }
         Command::History { query, db } => history(query, db),
         Command::PruneImages { execute, min_age_days } => {

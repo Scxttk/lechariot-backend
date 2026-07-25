@@ -387,6 +387,60 @@ fn push_history(
     Ok(rows.len())
 }
 
+/// Filialen nach `public.branches` upserten (Konfliktschlüssel `market_id`,
+/// siehe `supabase/migration_v12_branches.sql`).
+///
+/// Anders als die Preis-Historie ist das **kein** Best-Effort: Wenn das
+/// Verzeichnis nicht geschrieben werden kann, hat der Lauf sein einziges Ziel
+/// verfehlt und soll das auch melden.
+pub fn upsert_branches(cfg: &PushConfig, branches: &[crate::models::Branch]) -> Result<()> {
+    #[derive(Serialize)]
+    struct BranchRow<'a> {
+        market_id: &'a str,
+        chain: &'a str,
+        name: &'a str,
+        street: Option<&'a str>,
+        plz: Option<&'a str>,
+        city: Option<&'a str>,
+        lat: Option<f64>,
+        lon: Option<f64>,
+        source: &'a str,
+        updated_at: String,
+    }
+
+    let client = reqwest::blocking::Client::new();
+    let url = format!("{}/rest/v1/branches", cfg.base_url);
+    let now = chrono::Utc::now().to_rfc3339();
+    for batch in branches.chunks(BATCH_SIZE) {
+        let payload: Vec<BranchRow> = batch
+            .iter()
+            .map(|b| BranchRow {
+                market_id: &b.market_id,
+                chain: &b.chain,
+                name: &b.name,
+                street: b.street.as_deref(),
+                plz: b.plz.as_deref(),
+                city: b.city.as_deref(),
+                lat: b.lat,
+                lon: b.lon,
+                source: &b.source,
+                updated_at: now.clone(),
+            })
+            .collect();
+        let resp = client
+            .post(&url)
+            .header("apikey", &cfg.api_key)
+            .header("Authorization", format!("Bearer {}", cfg.api_key))
+            .query(&[("on_conflict", "market_id")])
+            .header("Prefer", "resolution=merge-duplicates")
+            .json(&payload)
+            .send()
+            .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
+        check_response(&format!("Upsert von {} Filialen", payload.len()), resp)?;
+    }
+    Ok(())
+}
+
 /// Zeilen in Batches nach `public.offers` upserten (Konfliktschlüssel wie
 /// Schema: market, product, valid_from, region).
 pub fn upsert_offer_rows(
