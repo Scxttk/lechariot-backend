@@ -240,6 +240,35 @@ fn rewe_available(cert: &str, key: &str) -> bool {
     std::path::Path::new(cert).exists() && std::path::Path::new(key).exists()
 }
 
+/// Eine Filiale aus dem Verzeichnis holen. Fehlt sie, ist das ein Fehler und
+/// keine leere Liste: Wer mit `--market-id` syncen will, hat eine bestimmte
+/// Filiale gemeint, und eine unbekannte ID ist ein Tippfehler oder ein
+/// Verzeichnis, das für dieses Gebiet noch nie gelaufen ist.
+pub fn fetch_branch(cfg: &PushConfig, market_id: &str) -> Result<Branch> {
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .get(format!("{}/rest/v1/branches", cfg.base_url))
+        .header("apikey", &cfg.api_key)
+        .header("Authorization", format!("Bearer {}", cfg.api_key))
+        .query(&[("market_id", format!("eq.{market_id}"))])
+        .send()
+        .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().unwrap_or_default();
+        let excerpt: String = body.chars().take(300).collect();
+        anyhow::bail!("Filiale {market_id} laden fehlgeschlagen (HTTP {status}): {excerpt}");
+    }
+    let rows: Vec<Branch> =
+        resp.json().context("Filial-Antwort passt nicht zum branches-Schema")?;
+    rows.into_iter().next().with_context(|| {
+        format!(
+            "Filiale {market_id} steht nicht im Verzeichnis. \
+             `smartshop branches-sync --area <PLZ>` füllt das Gebiet nach."
+        )
+    })
+}
+
 /// Aktive Regionen als Gebiete — das Verzeichnis wächst dort, wo jemand die
 /// App tatsächlich benutzt.
 pub fn areas_from_regions(cfg: &PushConfig) -> Result<Vec<String>> {

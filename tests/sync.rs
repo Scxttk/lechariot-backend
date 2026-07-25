@@ -149,7 +149,13 @@ fn cfg(base_url: &str) -> PushConfig {
 }
 
 fn opts(db_path: &str) -> SyncOptions {
-    SyncOptions { db_path: db_path.to_string(), dry_run: false, max_regions: 10, only: None }
+    SyncOptions {
+        db_path: db_path.to_string(),
+        dry_run: false,
+        max_regions: 10,
+        only: None,
+        market_id: None,
+    }
 }
 
 /// Fetcher-Stub: eine REWE-Kette mit 2 Angeboten, protokolliert die PLZs.
@@ -308,7 +314,7 @@ fn dry_run_only_reads_regions() {
     let (base_url, log) = spawn_mock(r#"[{"plz":"01219"}]"#);
     let fetcher = ok_fetcher(Arc::new(Mutex::new(Vec::new())));
     let db_path = temp_db("dryrun");
-    let opts = SyncOptions { db_path, dry_run: true, max_regions: 10, only: None };
+    let opts = SyncOptions { db_path, dry_run: true, max_regions: 10, only: None, market_id: None };
     sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &no_finder).unwrap();
 
     let reqs = log.lock().unwrap().clone();
@@ -328,6 +334,7 @@ fn only_mode_registers_and_syncs_single_plz_without_region_list() {
         dry_run: false,
         max_regions: 10,
         only: Some("04626".to_string()),
+        market_id: None,
     };
     sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &no_finder).unwrap();
 
@@ -549,6 +556,7 @@ fn only_mode_copies_national_chain_offers_before_scraping() {
         dry_run: false,
         max_regions: 10,
         only: Some("10115".to_string()),
+        market_id: None,
     };
     sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &finder).unwrap();
 
@@ -651,6 +659,7 @@ fn seeding_without_source_offers_copies_nothing() {
         dry_run: false,
         max_regions: 10,
         only: Some("10115".to_string()),
+        market_id: None,
     };
     sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &finder).unwrap();
 
@@ -663,4 +672,86 @@ fn seeding_without_source_offers_copies_nothing() {
             && !r.body.contains("REWE")),
         "ohne Quell-Angebote darf keine Filiale gemeldet werden: {reqs:#?}"
     );
+}
+
+// ------------------------------------------------------- Filial-Sync (v13)
+
+/// Zwei REWE-Filialen in derselben PLZ, wie sie in 01067 wirklich stehen.
+const BRANCH_POSTPLATZ: &str = r#"[{
+    "market_id": "1766063", "chain": "REWE",
+    "name": "REWE Ketzscher oHG am Postplatz",
+    "street": "Wallstr. 2b", "plz": "01067", "city": "Dresden",
+    "lat": 51.0504, "lon": 13.7317, "source": "rewe-marketsearch"
+}]"#;
+
+#[test]
+fn branch_mode_scrapes_exactly_the_requested_branch() {
+    static ROUTES: [(&str, &str); 1] = [("branches", BRANCH_POSTPLATZ)];
+    let (base_url, log) = spawn_routed_mock(&ROUTES);
+    let seen: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let seen2 = seen.clone();
+    let scraper = move |branch: &smartshop::models::Branch| {
+        seen2.lock().unwrap().push(branch.market_id.clone());
+        let mut o = offer("Coca-Cola", Some(0.75));
+        o.market_id = branch.market_id.clone();
+        Ok(vec![o])
+    };
+    let db_path = temp_db("filiale");
+    let mut opts = opts(&db_path);
+    opts.market_id = Some("1766063".to_string());
+
+    sync::run_branch(&opts, Some(&cfg(&base_url)), &scraper, "1766063").unwrap();
+
+    // Der Scraper bekommt die angeforderte Filiale — kein Store-Finder,
+    // keine „nächste Filiale zur PLZ".
+    assert_eq!(*seen.lock().unwrap(), vec!["1766063".to_string()]);
+
+    let reqs = log.lock().unwrap().clone();
+    let lookup = reqs
+        .iter()
+        .find(|r| r.method == "GET" && r.target.starts_with("/rest/v1/branches"))
+        .expect("Verzeichnis-Abfrage fehlt");
+    assert!(lookup.target.contains("market_id=eq.1766063"), "{}", lookup.target);
+
+    // Die Angebote gehen unter der Filiale hoch, mit deren eigener PLZ als
+    // Region — nicht unter der Kette.
+    let upsert = reqs
+        .iter()
+        .find(|r| r.method == "POST" && r.target.starts_with("/rest/v1/offers?"))
+        .expect("offers-Upsert fehlt");
+    let rows: serde_json::Value = serde_json::from_str(&upsert.body).unwrap();
+    assert_eq!(rows[0]["market_id"], "1766063");
+    assert_eq!(rows[0]["market"], "REWE");
+    assert_eq!(rows[0]["region"], "01067");
+
+    // Aufgeräumt wird nur diese Filiale — die Nachbarfiliale derselben PLZ
+    // bleibt unangetastet.
+    let deletes: Vec<&Req> = reqs
+        .iter()
+        .filter(|r| r.method == "DELETE" && r.target.starts_with("/rest/v1/offers"))
+        .collect();
+    assert!(deletes.iter().all(|d| d.target.contains("market_id=eq.1766063")), "{deletes:#?}");
+    assert!(!deletes.iter().any(|d| d.target.contains("market=eq.REWE")), "{deletes:#?}");
+
+    // … und die Filiale wird als die des Gebiets gemeldet.
+    let market = reqs
+        .iter()
+        .find(|r| r.method == "POST" && r.target.starts_with("/rest/v1/markets"))
+        .expect("markets-Upsert fehlt");
+    assert!(market.body.contains("1766063"), "{}", market.body);
+    assert!(market.body.contains("01067"), "{}", market.body);
+}
+
+#[test]
+fn branch_mode_fails_loudly_on_unknown_market_id() {
+    let (base_url, _log) = spawn_mock("[]");
+    let scraper = |_: &smartshop::models::Branch| Ok(Vec::new());
+    let db_path = temp_db("filiale-unbekannt");
+    let opts = opts(&db_path);
+
+    let err = sync::run_branch(&opts, Some(&cfg(&base_url)), &scraper, "4711")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("4711"), "{err}");
+    assert!(err.contains("Verzeichnis"), "{err}");
 }

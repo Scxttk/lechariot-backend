@@ -95,18 +95,40 @@ pub fn scrape_store(
     // Push muss sie später nicht mehr aus ID und Filialname erraten.
     let market = market.with_chain(store.chain());
     println!("Markt gefunden: {} (ID: {})", market.name, market.id);
-    println!("Lade Angebote...");
-    let offers = match store {
-        Store::Rewe => scrapers::rewe::fetch_offers(&market, cert, key)?,
-        Store::Penny => scrapers::penny::fetch_offers(&market)?,
-        Store::Kaufland => scrapers::kaufland::fetch_offers(&market)?,
-        Store::Lidl => scrapers::lidl::fetch_offers(&market, zip)?,
-        Store::Netto => scrapers::netto::fetch_offers(&market)?,
-        Store::AldiNord => scrapers::aldi_nord::fetch_offers(&market)?,
-        Store::AldiSued => scrapers::aldi_sued::fetch_offers(&market)?,
-        Store::Edeka => scrapers::edeka::fetch_offers(&market)?,
-    };
+    let offers = fetch_offers(store, &market, zip, cert, key)?;
     Ok(Some((market, offers)))
+}
+
+/// Angebote **dieser** Filiale holen, ohne vorher zu suchen.
+///
+/// Die zweite Hälfte von [`scrape_store`], als eigener Einstieg: Seit
+/// migration_v13 gehören Angebote der Filiale, und die App wählt sie selbst
+/// aus dem Verzeichnis (`public.branches`). Dann gibt es nichts mehr zu
+/// finden — die ID steht schon fest.
+///
+/// `zip` braucht nur Lidl (die marktguru-Abfrage filtert über die PLZ, nicht
+/// über die Filial-ID); alle übrigen Ketten binden die Filiale über
+/// `market.id`: REWE als `-market`-Parameter, Kaufland über das Cookie
+/// `x-aem-variant`, Netto über `netto_user_stores_id`, EDEKA über den
+/// Marktpfad.
+pub fn fetch_offers(
+    store: Store,
+    market: &Market,
+    zip: &str,
+    cert: &str,
+    key: &str,
+) -> Result<Vec<Offer>> {
+    println!("Lade Angebote...");
+    Ok(match store {
+        Store::Rewe => scrapers::rewe::fetch_offers(market, cert, key)?,
+        Store::Penny => scrapers::penny::fetch_offers(market)?,
+        Store::Kaufland => scrapers::kaufland::fetch_offers(market)?,
+        Store::Lidl => scrapers::lidl::fetch_offers(market, zip)?,
+        Store::Netto => scrapers::netto::fetch_offers(market)?,
+        Store::AldiNord => scrapers::aldi_nord::fetch_offers(market)?,
+        Store::AldiSued => scrapers::aldi_sued::fetch_offers(market)?,
+        Store::Edeka => scrapers::edeka::fetch_offers(market)?,
+    })
 }
 
 pub fn save_offers(db: &str, market: &Market, offers: &[Offer]) -> Result<()> {
