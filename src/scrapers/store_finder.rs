@@ -114,6 +114,49 @@ pub fn lidl_branch(plz: &str) -> Result<Option<Market>> {
     parse_virtualearth(&raw)
 }
 
+/// Absatzregion („AR") der nächsten Lidl-Filiale.
+///
+/// Lidl schneidet seine Wochenprospekte nach Absatzregionen zu, und dasselbe
+/// Filialdataset, das wir für die Filialsuche ohnehin abfragen, trägt die
+/// Region im Feld `AR` (Dresden 20, Passau 31, Köln 42, München 9 — gemessen
+/// 2026-07-25). Damit ist der Prospekt regionsgenau adressierbar, ohne eine
+/// zweite Quelle. Genutzt von [`crate::scrapers::lidl_prospekt`].
+///
+/// Achtung: `$top=1` nimmt die *nächste* Filiale. In großen Städten können
+/// Filialen im selben Umkreis verschiedene ARs tragen (Hamburg: 446 in
+/// St. Georg, 15 in Eimsbüttel). Solange Angebote an der PLZ hängen, ist die
+/// nächste Filiale die beste verfügbare Näherung; unter Phase 11 (Angebote
+/// gehören der Filiale) wandert die AR an die einzelne Filiale.
+pub fn lidl_region_code(plz: &str) -> Result<Option<String>> {
+    let (lat, lon) = geocode_plz(plz)?;
+    let url = format!(
+        "https://spatial.virtualearth.net/REST/v1/data/{LIDL_DATASET}/Filialdaten-SEC/Filialdaten-SEC\
+         ?key={LIDL_KEY}&$filter=Adresstyp%20Eq%201&spatialFilter=nearby({lat},{lon},{CUTOFF_KM})\
+         &$select=EntityID,AR&$format=json&$top=1"
+    );
+    util::polite_pause(&url);
+    let raw: serde_json::Value = util::blocking_client()?
+        .get(&url)
+        .send()
+        .with_context(|| util::ctx("Lidl", "Absatzregion", &url))?
+        .error_for_status()
+        .with_context(|| util::ctx("Lidl", "Absatzregion (HTTP-Status)", &url))?
+        .json()
+        .with_context(|| util::ctx("Lidl", "Absatzregion JSON parsen", &url))?;
+    Ok(parse_region_code(&raw))
+}
+
+/// AR-Feld der ersten Filiale. Bing liefert es je nach Datensatz als Zahl
+/// oder als String, deshalb beide Formen.
+pub fn parse_region_code(raw: &serde_json::Value) -> Option<String> {
+    let store = raw.pointer("/d/results")?.as_array()?.first()?;
+    match store.get("AR")? {
+        serde_json::Value::Number(n) => Some(n.to_string()),
+        serde_json::Value::String(s) if !s.trim().is_empty() => Some(s.trim().to_string()),
+        _ => None,
+    }
+}
+
 /// Erste Filiale einer Bing-SDS-Antwort als Market; None bei leerer Liste,
 /// Fehler bei unerwartetem Format (damit der Aufrufer auf den Platzhalter
 /// zurückfällt statt die Kette fälschlich abzumelden).

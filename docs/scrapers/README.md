@@ -10,7 +10,8 @@ Angebotszahlen schwanken je Woche und Region.
 | REWE | `rewerse`-CLI (mobile API) | **mTLS**: Client-Zertifikat aus der REWE-App nötig (`cert.pem` + `private.key`, siehe [docs/rewe-cert.md](../rewe-cert.md)) | filialspezifisch (PLZ → marketId) | variiert je Filiale | `tests/fixtures/rewe/discounts.json` (handgebaut im rewerse-Format) |
 | Penny | `penny.de/.rest/market`, Kategorien aus `/angebote`-HTML, dann `/.rest/offers/by-category/<JAHR-WOCHE>/<kategorie>?region=<sellingRegion>` | nur Browser-User-Agent; Aktionspreise als String mit Fußnoten-Sternchen (`"0.49*"`) | regional (`sellingRegion` des Markts) | ~550-600 (2 Wochen) | `tests/fixtures/penny/offers_kuehlregal.json` |
 | Kaufland | `filiale.kaufland.de/.klstorefinder.json` + server-seitig gerendertes `/angebote/uebersicht.html` | Filiale über Cookie `x-aem-variant=<id>`; **Titel = Marke, Produkt im Untertitel** (Offer-ID enthält deshalb den Untertitel); **dasselbe Angebot erscheint in mehreren Kategorien** (Warengruppe + „Unsere Knüller" etc.) — Dedup erst beim DB-Upsert über die ID | filialspezifisch | ~650 (inkl. Kategorie-Duplikate) | `tests/fixtures/kaufland/uebersicht.html` |
-| Lidl | `lidl.de/q/api/search?...&store=1` (paginiert) | `Accept: application/json` Pflicht (sonst 406); **Lidl-Plus-Angebote** tragen den Preis in `lidlPlus[0].price` statt `price` | bundesweit (synthetischer Markt `LIDL_DE`) | ~450-480 | `tests/fixtures/lidl/search_store1.json` |
+| Lidl (Standard) | `api.marktguru.de/api/v1/offers/search` (paginiert) | **einzige Kette über einen Dritten**; API-/Client-Key aus dem marktguru-HTML gelesen, eingefrorene Keys als Fallback; `advertisers[].uniqueName == "lidl"` filtert Fremdhändler | regional (marktguru-Region zur PLZ) | ~750 (2-3 Wochen) | `tests/fixtures/lidl/marktguru_offers.json` |
+| Lidl (Prospekt) | Store-Finder-Feld `AR` → `lidl.com/flyer/esi-overview` → `endpoints.leaflets.schwarz/v4/flyer?flyer_identifier=<slug>` → `pdfUrl` → `pdftotext -bbox-layout` | kein Key, keine Anmeldung; braucht **poppler-utils**; PDF ~83 MB; Angebotspreis am Stern erkennbar (`2.49*`) | Absatzregion der Filiale (18 Varianten/Woche, 40 Regionscodes) | ~195 (1 Woche) | `tests/fixtures/lidl/prospekt_bbox_layout.xml`, `tests/fixtures/lidl/prospekt_flyer.json` |
 | EDEKA | `edeka.de/api/marketsearch/markets?searchstring=<PLZ>`, Markt-ID via 308-Redirect der Legacy-URL, Angebote aus `/maerkte/<id>/angebote/`-HTML | Akamai-Bot-Schutz → System-`curl` (util.rs); Preis maschinenlesbar im `sr-only`-Div („Festpreis von 3.99 €" / „App-Preis von …") | filialspezifisch | ~200 | `tests/fixtures/edeka/angebote.html` |
 | Netto | Intershop-Filialsuche (JSON) + `/filialangebote/{1,2,4,5}`-HTML | Akamai → System-`curl`; Filiale über Cookie `netto_user_stores_id` | filialspezifisch | ~300 | `tests/fixtures/netto/filialangebote_1.html` |
 | ALDI Nord | `aldi-nord.de/angebote.html`, Daten im `__NEXT_DATA__`-JSON (`OFFER_GET.res.algoliaDataMap`) | plain reqwest | bundesweit (`ALDI_NORD_DE`) | ~230 | `tests/fixtures/aldi_nord/angebote.html` |
@@ -21,10 +22,149 @@ Angebotszahlen schwanken je Woche und Region.
 - **EDEKA (~20-25/Woche): echt.** „Tagespreis"-Kacheln und reine
   PAYBACK-Extra-Punkte-Kacheln tragen weder in der Kachel noch im
   zugehörigen Dialog einen Preis. Sie kommen bewusst mit `price = NULL` an.
-- **Lidl (~7/Woche): war ein Parser-Bug, gefixt.** Lidl-Plus-exklusive
-  Angebote haben in `gridbox.data.price` nur eine leere Hülle; der Preis
-  steht in `gridbox.data.lidlPlus[0].price`. Seit dem Fix wird er von dort
-  gelesen (Regressionstest in `tests/scrapers.rs`).
+- **Lidl: erledigt mit dem Quellenwechsel.** Die alten ~7 NULL-Preise/Woche
+  stammten aus der `lidl.de/q/api/search`-Quelle, in der Lidl-Plus-Angebote
+  den Preis in `lidlPlus[0].price` statt in `price` trugen. Diese Quelle gibt
+  es nicht mehr (seit 2026-07 marktguru). Im Prospekt-Weg sind
+  Lidl-Plus-Preise ganz normale Sternpreise und im Untertitel als „nur mit
+  Lidl Plus" gekennzeichnet.
+
+## Lidl: zwei Quellen, umschaltbar
+
+Lidl ist die einzige Kette, die ihre Angebote über einen Dritten bezieht, und
+mit rund 30 % aller Zeilen zugleich die größte. `LIDL_SOURCE=prospekt`
+schaltet auf Lidls eigenen Wochenprospekt um (`src/scrapers/lidl_prospekt.rs`),
+alles andere bleibt bei marktguru. Beides läuft nebeneinander, damit sich die
+Quellen über ein paar Wochen vergleichen lassen.
+
+```sh
+LIDL_SOURCE=prospekt smartshop fetch --store lidl --zip 01219 --dry-run
+```
+
+Was der Prospekt besser kann:
+
+- **regionsgenau** — der Prospekt gilt für die Absatzregion der Filiale,
+  marktguru nur ungefähr regional;
+- **Streichpreise** — `UVP` / `Normalpreis` stehen im Prospekt, marktguru
+  liefert für Lidl gar kein `regular_price`;
+- **seitengenaue Laufzeiten** — Donnerstag-Angebote tragen im Seitenkopf
+  („Ab Do. 23.7. bis Sa. 25.7.") eine kürzere Gültigkeit als der Prospekt.
+
+### Wie vollständig ist der Prospekt-Weg?
+
+Gemessen gegen marktguru, weil das die Messlatte ist. marktguru bezieht seine
+Lidl-Daten aus **demselben Prospekt** — die API gruppiert Angebote nach
+`leafletFlightId`, und für die Woche 20.–25.07.2026 hängen alle 375 Zeilen an
+genau einem Flight. Es gibt also keine geheime Zusatzquelle.
+
+Stand 2026-07-25 für PLZ 01219:
+
+| | marktguru | `prospekt` | `prospekt-llm` |
+|---|---:|---:|---:|
+| Angebote der Woche | 375 | **382** | **420** |
+| marktguru-Preis abgedeckt | — | 96,3 % | **97,9 %** |
+| Preis **und** passender Name | — | 76,5 % | **89,6 %** |
+
+Beide Wege decken die Preise ab; der Unterschied liegt bei den **Namen**. Genau
+das ist der Grund, warum es den LLM-Weg gibt — für den Warenkorb-Abgleich nützt
+ein Preis nichts, dessen Produktname nicht zum Listeneintrag passt.
+
+Die zweite Zeile ist die eigentliche Aussage: 361 der 375 marktguru-Preise
+kommen auch hier heraus. Die 14 Fehlenden sind Randfälle (Artikel, deren Preis
+im Prospekt nur im Fließtext steht).
+
+Zwei Funde haben den Weg dorthin gebracht:
+
+1. **Die Daten sind vollständig im PDF.** 365 der 375 marktguru-Angebote
+   stehen mit ihrem Preis in der Textebene, 357 davon als Sternpreis. Es fehlte
+   nie eine Quelle, nur die Extraktion.
+2. **Die restlichen zehn stehen im `products`-Feld des Prospekt-JSON** — alles
+   Onlineshop-Möbel und -Großgeräte. Die kommen jetzt aus dem JSON dazu
+   (`products_as_offers`), sauber strukturiert und mit Bild und Kategorie, die
+   der PDF-Weg gar nicht liefern kann.
+
+Drei Fallen, die beim Bauen Zeit gekostet haben:
+
+1. **Das `products`-Feld des Prospekt-JSON ist eine Sackgasse.** Es enthält
+   ausschließlich Onlineshop-Artikel (138 Einträge, null Lebensmittel);
+   dasselbe gilt für `pages[].links`. Die Lebensmittel stehen nur in der
+   Textebene der PDF. Ein erster Anlauf (Tag
+   `archiv/lidl-prospekt-llm-pipeline`) hat daraus geschlossen, der Weg
+   brauche ein Vision-LLM — er hat die Textebene nie geprüft.
+2. **`pdftotext -bbox-layout` liefert kein wohlgeformtes XML.** In einem
+   Wochenprospekt stecken einzelne C0-Steuerzeichen mitten in `<word>`; jeder
+   echte XML-Parser bricht daran ab. Deshalb der Zeilenparser samt
+   Vorab-Filter.
+3. **Preis und Produktname stehen nicht in derselben Textzeile.** Sie hängen
+   an ihrer Position auf der Seite, also werden Kacheln über Abstände gebildet
+   und Produkt und Preis einander zugeordnet.
+
+**Rechenprobe als Wächter.** Der Prospekt nennt Packungsgröße *und*
+Grundpreis, also muss `Menge × Grundpreis ≈ Preis` gelten. Kacheln, bei denen
+das nicht aufgeht, sind falsch zusammengesetzt und werden verworfen (typisch
+~15 je Prospekt). In einer Preisvergleichs-App ist ein falscher Preis
+schlimmer als ein fehlendes Produkt.
+
+Bekannte Grenze: Vereinzelt landet eine Werbezeile als Produktname in den
+Daten („Woche", „Kernarm") — rund 2 % der Zeilen. Die Preise dieser Zeilen
+sind korrekt, nur der Name taugt nicht zum Matchen.
+
+### Dritter Weg: `LIDL_SOURCE=prospekt-llm` (Zusatz, nicht Ersatz)
+
+**Der Standard bleibt der Weg ohne Modell.** `LIDL_SOURCE=prospekt` erreicht
+96 % Preisabdeckung ohne Token, ohne Netzabhängigkeit zu einem weiteren
+Anbieter und ohne Ratenlimit — es gibt keinen Grund, dafür ein Modell zu
+bemühen. Der LLM-Weg existiert nur für den Rest: Kacheln ohne saubere
+Marke-Name-Struktur (Obst, Gemüse, Non-Food) und die rund 2 % Zeilen, deren
+Titel eine Werbezeile ist.
+
+Läuft über **GitHub Models** (`src/scrapers/lidl_llm.rs`), weil das im
+GitHub-Student-Paket enthalten ist — ein Zusatz darf keine laufenden Kosten
+verursachen. Der Token kommt aus `GITHUB_MODELS_TOKEN`, sonst `GITHUB_TOKEN`,
+sonst aus `gh auth token`; lokal ist damit nichts einzurichten, wenn `gh`
+angemeldet ist.
+
+Die Halluzinationsfrage ist die einzige, die hier zählt, und sie ist
+mechanisch beantwortet, nicht durch Zureden im Prompt:
+
+1. Jeder Preis muss **wörtlich im Seitentext stehen** (`price_is_grounded`).
+2. Wo Packungsgröße und Grundpreis vorliegen, muss dieselbe **Rechenprobe**
+   aufgehen wie im geometrischen Weg.
+
+Das Modell kann also Zeilen übersehen, aber keine erfinden. Beim ersten
+Livelauf hat genau das gegriffen: Für ARLA Kaergarden kamen 2,49 € *und* der
+Nachbarpreis 3,99 € zurück — 400 g zu 6,23 €/kg sind 2,49 €, also flog der
+zweite raus. Über den ganzen Prospekt: **293 Vorschläge, 9 verworfen** (3 %).
+
+Was der Weg konkret dazugewinnt, sieht man an den Zeilen, die der
+geometrische Weg gar nicht erst als Produkt erkennt — Obst und Gemüse ohne
+Marke: „Galiamelone", „Heidelbeeren", „Rote Paprika", „Rote Äpfel". Dort gibt
+es keine Marke-Name-Beschreibung-Struktur, an der sich eine Kachelbildung
+festhalten könnte.
+
+Ratenlimit und Dauer: Die Freistufe erlaubt rund 15 Anfragen pro Minute,
+deshalb laufen die Seiten **nacheinander** mit 4 Sekunden Mindestabstand statt
+parallel. Der Abstand ist aber nicht das Nadelöhr — eine Prospektseite braucht
+beim Modell selbst rund 30 Sekunden, sodass ein Wochenprospekt (46 von 69
+Seiten tragen Sternpreise) etwa **20 Minuten** läuft. Für einen wöchentlichen
+Lauf unerheblich, für interaktives Ausprobieren zu langsam. Seiten ohne
+Sternpreis gehen gar nicht erst ans Modell.
+
+Erwartbare Aussetzer im Livebetrieb, beide mit einem zweiten Versuch
+abgefangen: Ratenlimit-Antworten (429) und abgerissene Verbindungen
+(„Connection reset by peer", beim ersten 46-Seiten-Lauf einmal aufgetreten).
+Eine Seite, die auch dann scheitert, wird übersprungen — sie darf nicht den
+ganzen Prospekt kippen.
+
+```sh
+LIDL_SOURCE=prospekt-llm smartshop fetch --store lidl --zip 01219 --dry-run
+```
+
+Modell über `LIDL_LLM_MODEL` austauschbar (Standard `openai/gpt-4.1-mini`).
+
+Falls der Weg je im nightly laufen soll: In GitHub Actions gibt es `GITHUB_TOKEN`
+von Haus aus, der Job braucht dafür aber `permissions: models: read` — ohne das
+antwortet GitHub Models mit 401, obwohl ein Token gesetzt ist.
 
 ## Gemeinsame Infrastruktur (`src/scrapers/util.rs`)
 

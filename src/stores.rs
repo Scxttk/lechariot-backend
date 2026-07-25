@@ -63,6 +63,40 @@ impl Store {
     }
 }
 
+/// Quelle der Lidl-Angebote.
+///
+/// Lidl ist die einzige Kette, die ihre Angebote über einen Dritten
+/// (api.marktguru.de) bezieht, und mit rund 30 % aller Zeilen zugleich die
+/// größte. Beide Alternativen lesen Lidls eigenen Wochenprospekt und
+/// unterscheiden sich nur darin, wie sie Preis und Produktname zusammen-
+/// bringen. `LIDL_SOURCE` entscheidet:
+///
+/// * `prospekt` — Kachelbildung über Wortkoordinaten
+///   (`scrapers::lidl_prospekt`). Braucht `pdftotext`, sonst nichts.
+/// * `prospekt-llm` — dieselbe Textebene, seitenweise durch ein Sprachmodell
+///   (`scrapers::lidl_llm`). Braucht zusätzlich `ANTHROPIC_API_KEY`, liest
+///   dafür auch Kacheln ohne saubere Marke-Name-Struktur (Obst, Gemüse,
+///   Non-Food), an denen die Geometrie scheitert.
+/// * alles andere oder nicht gesetzt — marktguru (Stand heute der Standard)
+///
+/// Der Schalter ist bewusst eine Umgebungsvariable und kein CLI-Flag: So
+/// lässt sich ein einzelner nightly-Lauf umstellen, ohne die Aufrufe in
+/// `sync_region` und `fetch_all` anzufassen.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum LidlSource {
+    Marktguru,
+    Prospekt,
+    ProspektLlm,
+}
+
+pub fn lidl_source() -> LidlSource {
+    match std::env::var("LIDL_SOURCE") {
+        Ok(v) if v.eq_ignore_ascii_case("prospekt") => LidlSource::Prospekt,
+        Ok(v) if v.eq_ignore_ascii_case("prospekt-llm") => LidlSource::ProspektLlm,
+        _ => LidlSource::Marktguru,
+    }
+}
+
 /// None: die Kette hat laut Store-Finder keine Filiale im Umkreis der PLZ
 /// (nur bei Lidl/ALDI möglich — die übrigen Finder scheitern dann mit Err).
 pub fn scrape_store(
@@ -123,7 +157,13 @@ pub fn fetch_offers(
         Store::Rewe => scrapers::rewe::fetch_offers(market, cert, key)?,
         Store::Penny => scrapers::penny::fetch_offers(market)?,
         Store::Kaufland => scrapers::kaufland::fetch_offers(market)?,
-        Store::Lidl => scrapers::lidl::fetch_offers(market, zip)?,
+        // `LIDL_SOURCE` wählt die Quelle — dieselbe Filiale, anderer Weg
+        // (siehe lidl_source).
+        Store::Lidl => match lidl_source() {
+            LidlSource::Prospekt => scrapers::lidl_prospekt::fetch_offers(market, zip)?,
+            LidlSource::ProspektLlm => scrapers::lidl_llm::fetch_offers(market, zip)?,
+            LidlSource::Marktguru => scrapers::lidl::fetch_offers(market, zip)?,
+        },
         Store::Netto => scrapers::netto::fetch_offers(market)?,
         Store::AldiNord => scrapers::aldi_nord::fetch_offers(market)?,
         Store::AldiSued => scrapers::aldi_sued::fetch_offers(market)?,

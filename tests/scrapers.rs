@@ -455,3 +455,125 @@ fn store_finder_resolve_falls_back_to_national_on_error() {
     let fallback = resolve("Lidl", Err(anyhow::anyhow!("Netz weg")), national()).unwrap();
     assert_eq!(fallback.id, "LIDL_DE");
 }
+
+// ------------------------------------------------- Lidl-Prospekt (eigene Quelle)
+
+// Zweiter, von marktguru unabhängiger Weg für Lidl: Lidls eigener
+// Wochenprospekt als PDF mit Textebene. Die Fixture ist die gekürzte
+// `pdftotext -bbox-layout`-Ausgabe der oberen Hälfte von Seite 15 des
+// Prospekts vom 2026-07-20 (Absatzregion 20, Dresden) — echte
+// Wortkoordinaten, damit die Kachelbildung getestet wird und nicht ein
+// nachgebautes Idealbild.
+
+#[test]
+fn lidl_prospekt_builds_tiles_from_word_coordinates() {
+    let offers = scrapers::lidl_prospekt::extract_offers(
+        include_str!("fixtures/lidl/prospekt_bbox_layout.xml"),
+        "LIDL_1988",
+        Some("2026-07-20"),
+        Some("2026-07-25"),
+    );
+    assert!(offers.len() >= 5, "nur {} Kacheln erkannt", offers.len());
+
+    // Preis und Produktname stehen nicht in derselben Textzeile — genau das
+    // muss die Geometrie zusammenbringen.
+    let leerdammer = offers.iter().find(|o| o.title.contains("LEERDAMMER")).unwrap();
+    assert_eq!(leerdammer.price, Some(2.99));
+    assert_eq!(leerdammer.regular_price, Some(4.99));
+    assert!(leerdammer.subtitle.as_deref().unwrap().contains("1 kg = 13.29"));
+
+    // Rabatt-Reste einer Nachbarkachel gehören nicht in den Namen.
+    let milka = offers.iter().find(|o| o.title.starts_with("MILKA")).unwrap();
+    assert_eq!(milka.price, Some(1.99));
+    assert!(!milka.title.contains('%'), "Rabatt im Titel: {:?}", milka.title);
+
+    // Weicher Trennstrich im Satz: "CELE\u{ad}BRATIONS" ist ein Wort.
+    assert!(
+        offers.iter().any(|o| o.title.contains("CELEBRATIONS")),
+        "weicher Trennstrich nicht zusammengezogen: {:?}",
+        offers.iter().map(|o| &o.title).collect::<Vec<_>>()
+    );
+
+    for o in &offers {
+        assert!(o.price.is_some(), "Preis fehlt bei {}", o.title);
+        assert_eq!(o.valid_from.as_deref(), Some("2026-07-20"));
+        assert_eq!(o.valid_until.as_deref(), Some("2026-07-25"));
+        assert!(o.flyer_page.is_some(), "Seitenzahl fehlt bei {}", o.title);
+        // Streichpreis muss über dem Angebotspreis liegen, sonst hat die
+        // Kachel den Grundpreis eingesammelt.
+        if let (Some(p), Some(r)) = (o.price, o.regular_price) {
+            assert!(r > p, "Streichpreis {r} <= Preis {p} bei {}", o.title);
+        }
+    }
+}
+
+#[test]
+fn lidl_prospekt_marks_loyalty_prices_as_such() {
+    let offers = scrapers::lidl_prospekt::extract_offers(
+        include_str!("fixtures/lidl/prospekt_bbox_layout.xml"),
+        "LIDL_1988",
+        Some("2026-07-20"),
+        Some("2026-07-25"),
+    );
+    // "Mit Lidl Plus"-Preise gibt es nur mit Kundenkarte. Sie wandern mit,
+    // müssen aber gekennzeichnet sein, damit die Einkaufsplan-Karte nicht mit
+    // einem Preis rechnet, den man an der Kasse ohne App nicht bekommt.
+    let plus: Vec<_> =
+        offers.iter().filter(|o| o.subtitle.as_deref().is_some_and(|s| s.contains("Lidl Plus"))).collect();
+    assert!(!plus.is_empty(), "kein einziger Lidl-Plus-Preis gekennzeichnet");
+}
+
+#[test]
+fn lidl_prospekt_reads_validity_and_regions_from_the_flyer_json() {
+    let raw: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/lidl/prospekt_flyer.json")).unwrap();
+    let flyer = scrapers::lidl_prospekt::parse_flyer(&raw).unwrap();
+    // Die Laufzeit steht im JSON, nicht im Bild.
+    assert_eq!(flyer.offer_start_date.as_deref(), Some("2026-07-20"));
+    assert_eq!(flyer.offer_end_date.as_deref(), Some("2026-07-25"));
+    // Absatzregion: der Schlüssel, über den die Variante zur PLZ passt.
+    assert_eq!(flyer.regions.iter().map(|r| r.code.as_str()).collect::<Vec<_>>(), vec!["440"]);
+    assert!(flyer.pdf_url.as_deref().unwrap().ends_with(".pdf"));
+}
+
+#[test]
+fn store_finder_reads_the_absatzregion_as_number_or_string() {
+    let number = serde_json::json!({"d": {"results": [{"EntityID": "1988", "AR": 20}]}});
+    assert_eq!(scrapers::store_finder::parse_region_code(&number).as_deref(), Some("20"));
+    let text = serde_json::json!({"d": {"results": [{"EntityID": "1988", "AR": "446"}]}});
+    assert_eq!(scrapers::store_finder::parse_region_code(&text).as_deref(), Some("446"));
+    // Ohne AR bleibt es None — der Prospekt fällt dann auf eine
+    // überregionale Variante zurück statt zu scheitern.
+    let missing = serde_json::json!({"d": {"results": [{"EntityID": "1988"}]}});
+    assert_eq!(scrapers::store_finder::parse_region_code(&missing), None);
+    let empty = serde_json::json!({"d": {"results": []}});
+    assert_eq!(scrapers::store_finder::parse_region_code(&empty), None);
+}
+
+// Die zehn marktguru-Angebote, deren Preis nirgends im Prospekttext steht,
+// waren am 2026-07-25 ausnahmslos Onlineshop-Möbel. Genau die stehen sauber
+// strukturiert im `products`-Feld des Prospekt-JSON — inklusive Bild und
+// Kategorie, die der PDF-Weg gar nicht liefern kann.
+#[test]
+fn lidl_prospekt_takes_online_shop_articles_from_the_flyer_json() {
+    let raw: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/lidl/prospekt_flyer.json")).unwrap();
+    let flyer = scrapers::lidl_prospekt::parse_flyer(&raw).unwrap();
+    let offers = scrapers::lidl_prospekt::products_as_offers(
+        &flyer,
+        "LIDL_1988",
+        Some("2026-07-20"),
+        Some("2026-07-25"),
+    );
+
+    let bettwaesche = offers.iter().find(|o| o.title.contains("Wendebettwäsche")).unwrap();
+    // `price` kommt im JSON als String — muss trotzdem als Zahl ankommen.
+    assert_eq!(bettwaesche.price, Some(9.99));
+    // Vom Kategoriepfad bleibt das letzte, aussagekräftigste Glied.
+    assert_eq!(bettwaesche.category.as_deref(), Some("Kinderbettwäsche"));
+    assert_eq!(bettwaesche.images.len(), 1);
+    assert_eq!(bettwaesche.subtitle.as_deref(), Some("Onlineshop"));
+
+    // Beim Zusammenführen darf nichts doppelt gezählt werden.
+    assert!(scrapers::lidl_prospekt::merge_products(&flyer, "LIDL_1988", &offers).is_empty());
+}
