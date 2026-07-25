@@ -480,15 +480,7 @@ fn main() -> Result<()> {
                     })
                     .collect()
             };
-            // Filial-Lookup für die Vorab-Kopie der nationalen Ketten:
-            // find_market macht nur den Store-Finder-Check, kein Angebots-Fetch.
-            let finder = |chain: &str, plz: &str| match chain {
-                "Lidl" => smartshop::scrapers::lidl::find_market(plz),
-                "ALDI Nord" => smartshop::scrapers::aldi_nord::find_market(plz),
-                "ALDI SÜD" => smartshop::scrapers::aldi_sued::find_market(plz),
-                other => anyhow::bail!("Kein Filial-Lookup für Kette '{other}'"),
-            };
-            smartshop::sync::run(&opts, None, &fetcher, &finder, &national)
+            smartshop::sync::run(&opts, None, &fetcher, &national)
         }
         Command::BranchesSync {
             area,
