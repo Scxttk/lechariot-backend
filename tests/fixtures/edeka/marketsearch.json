@@ -1,0 +1,37 @@
+{
+ "totalCount": 13,
+ "limit": 10,
+ "offset": 0,
+ "markets": [
+  {
+   "id": 10004808,
+   "name": "E center Peltzer",
+   "distributionChannelName": "E center",
+   "contact": {
+    "address": {
+     "city": { "name": "Dresden", "zipCode": "01239" },
+     "street": "Dohnaer Straße 168",
+     "federalState": "Sachsen"
+    },
+    "phoneNumber": "+4935126636970"
+   },
+   "coordinates": { "lat": "51.00879", "lon": "13.78459" },
+   "url": "https://www.edeka.de/eh/nordbayern-sachsen-th%C3%BCringen/e-center-peltzer-dohnaer-stra%C3%9Fe-168/index.jsp"
+  },
+  {
+   "id": 8001288,
+   "name": "EDEKA Dresden-Prohlis",
+   "distributionChannelName": "EDEKA",
+   "contact": {
+    "address": {
+     "city": { "name": "Dresden", "zipCode": "01239" },
+     "street": "Jacob-Winter-Platz 13",
+     "federalState": "Sachsen"
+    },
+    "phoneNumber": "+493512879758"
+   },
+   "coordinates": { "lat": "51.0063408", "lon": "13.7964647" },
+   "url": "https://www.edeka.de/maerkte/022745/"
+  }
+ ]
+}

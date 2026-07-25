@@ -2,7 +2,7 @@ use anyhow::{Context, Result, bail};
 use std::path::Path;
 use std::process::Command;
 
-use crate::models::{Market, Offer};
+use crate::models::{Branch, Market, Offer};
 
 // Calls the `rewerse` Go CLI (https://github.com/ByteSizedMarius/rewerse-engineering)
 // Requires: cert.pem and private.key in the working directory (extracted once from Rewe APK)
@@ -31,25 +31,75 @@ pub fn find_market(zip: &str, cert: &str, key: &str) -> Result<Market> {
     let raw: serde_json::Value = serde_json::from_slice(&output.stdout)
         .context("[REWE] Markt-Lookup JSON parsen fehlgeschlagen (rewerse markets search)")?;
 
+    // Unverändert der erste Treffer — geändert hat sich nur, dass die
+    // Koordinaten nicht mehr verlorengehen: die Antwort trägt sie in
+    // `location`, gelesen wurden bisher nur wwIdent und name.
+    let branch = parse_branches(&raw)?
+        .into_iter()
+        .next()
+        .context("Kein Markt für diese PLZ gefunden")?;
+    Ok(branch.as_market())
+}
+
+/// Alle Filialen einer `rewerse markets search`-Antwort.
+///
+/// Die Suche nimmt einen freien Text (PLZ, Stadt) und liefert eine Liste mit
+/// voller Adresse und Koordinaten — für „01219" am 2026-07-25 fünf Filialen,
+/// keine davon in 01219, alle in 01257/01259/01277. Genau daher stammt der
+/// Eintrag „REWE in 01219", den die App bisher anzeigt.
+pub fn find_branches(query: &str, cert: &str, key: &str) -> Result<Vec<Branch>> {
+    check_certs(cert, key)?;
+    let output = rewerse_cmd(cert, key)
+        .args(["-json", "markets", "search", "-query", query])
+        .output()
+        .context("rewerse CLI nicht gefunden — bitte installieren (siehe README)")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // "no markets found" ist eine Antwort, kein Fehler.
+        if stderr.contains("no markets found") {
+            return Ok(Vec::new());
+        }
+        bail!("[REWE] Filialsuche fehlgeschlagen (query {query}):\n{stderr}");
+    }
+
+    let raw: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .context("[REWE] Filialsuche JSON parsen fehlgeschlagen")?;
+    parse_branches(&raw)
+}
+
+pub fn parse_branches(raw: &serde_json::Value) -> Result<Vec<Branch>> {
     let markets = raw
         .as_array()
         .or_else(|| raw.get("markets").and_then(|v| v.as_array()))
         .context("Keine Märkte in der Antwort")?;
 
-    let first = markets.first().context("Kein Markt für diese PLZ gefunden")?;
-    // rewerse v1.2.0 nennt die Markt-ID "wwIdent" (frühere Felder: marketId/id).
-    let id = first
-        .get("wwIdent")
-        .or_else(|| first.get("marketId"))
-        .or_else(|| first.get("id"))
-        .and_then(|v| v.as_str())
-        .context("wwIdent fehlt")?;
-    let name = first
-        .get("name")
-        .and_then(|v| v.as_str())
-        .unwrap_or("REWE");
-
-    Ok(Market::new(id, name))
+    Ok(markets
+        .iter()
+        .filter_map(|market| {
+            // rewerse v1.2.0 nennt die Markt-ID "wwIdent" (früher: marketId/id).
+            let id = ["wwIdent", "marketId", "id"].iter().find_map(|k| {
+                market.get(*k).and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty())
+            })?;
+            let text = |key: &str| {
+                market
+                    .get(key)
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+            };
+            let name = text("name").unwrap_or_else(|| "REWE".to_string());
+            Some(
+                Branch::new(id, "REWE", name, "rewerse")
+                    .with_address(text("street"), text("zipCode"), text("city"))
+                    .with_geo(
+                        market.pointer("/location/latitude").and_then(|v| v.as_f64()),
+                        market.pointer("/location/longitude").and_then(|v| v.as_f64()),
+                    ),
+            )
+        })
+        .collect())
 }
 
 pub fn fetch_offers(market: &Market, cert: &str, key: &str) -> Result<Vec<Offer>> {

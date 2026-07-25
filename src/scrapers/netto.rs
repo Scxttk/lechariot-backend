@@ -4,7 +4,7 @@ use crate::scrapers::util::{self, curl_get};
 use scraper::{ElementRef, Html, Selector};
 use std::collections::HashSet;
 
-use crate::models::{Market, Offer};
+use crate::models::{Branch, Market, Offer};
 
 // Netto Marken-Discount über netto-online.de (Intershop, Akamai-geschützt).
 //
@@ -30,42 +30,83 @@ const STORE_FINDER_PATH: &str =
     "/INTERSHOP/web/WFS/Plus-NettoDE-Site/de_DE/-/EUR/ViewMMPStoreFinder-GetStoreByPostcode";
 const OFFER_PAGES: &[u32] = &[1, 2, 4, 5];
 
+/// Header-Satz der Filialsuche — ohne den vollständigen XHR-Satz antwortet
+/// Akamai mit 403.
+const STORE_FINDER_HEADERS: &[(&str, &str)] = &[
+    ("Accept", "application/json, text/javascript, */*; q=0.01"),
+    ("X-Requested-With", "XMLHttpRequest"),
+    ("Referer", "https://www.netto-online.de/filialangebote/"),
+    ("Sec-Fetch-Site", "same-origin"),
+    ("Sec-Fetch-Mode", "cors"),
+    ("Sec-Fetch-Dest", "empty"),
+];
+
 pub fn find_market(zip: &str) -> Result<Market> {
     let url = format!("{BASE}{STORE_FINDER_PATH}?postalcode={zip}&searchradius=25");
-    let body = curl_get(
-        &url,
-        &[
-            ("Accept", "application/json, text/javascript, */*; q=0.01"),
-            ("X-Requested-With", "XMLHttpRequest"),
-            ("Referer", "https://www.netto-online.de/filialangebote/"),
-            ("Sec-Fetch-Site", "same-origin"),
-            ("Sec-Fetch-Mode", "cors"),
-            ("Sec-Fetch-Dest", "empty"),
-        ],
-    )
-    .with_context(|| util::ctx("Netto", "Markt-Lookup", &url))?;
+    let body = curl_get(&url, STORE_FINDER_HEADERS)
+        .with_context(|| util::ctx("Netto", "Markt-Lookup", &url))?;
 
-    let stores: Vec<serde_json::Value> = serde_json::from_str(&body)
+    let raw: serde_json::Value = serde_json::from_str(&body)
         .with_context(|| util::ctx("Netto", "Markt-Lookup JSON parsen", &url))?;
 
-    let store = stores
-        .first()
+    // Wie bisher der erste Treffer; neu ist nur, dass Adresse und
+    // Koordinaten nicht mehr verlorengehen. Für 01219 liefert der Finder
+    // vier Filialen — bisher sah die App davon genau eine.
+    let branch = parse_branches(&raw)?
+        .into_iter()
+        .next()
         .with_context(|| format!("Keine Netto-Filiale für PLZ {zip} gefunden"))?;
+    Ok(branch.as_market())
+}
 
-    let id = store
-        .get("store_id")
-        .and_then(|v| v.as_str())
-        .context("store_id fehlt in der Filialsuche-Antwort")?;
-    let name = match (
-        store.get("store_name").and_then(|v| v.as_str()),
-        store.get("city").and_then(|v| v.as_str()),
-    ) {
-        (Some(n), Some(c)) => format!("{n} {c}"),
-        (Some(n), None) => n.to_string(),
-        _ => "Netto Marken-Discount".to_string(),
-    };
+/// Alle Filialen im Umkreis der PLZ, für das Verzeichnis.
+pub fn find_branches(zip: &str, radius_km: u32) -> Result<Vec<Branch>> {
+    let url = format!("{BASE}{STORE_FINDER_PATH}?postalcode={zip}&searchradius={radius_km}");
+    let body = curl_get(&url, STORE_FINDER_HEADERS)
+        .with_context(|| util::ctx("Netto", "Filialverzeichnis", &url))?;
+    let raw: serde_json::Value = serde_json::from_str(&body)
+        .with_context(|| util::ctx("Netto", "Filialverzeichnis JSON parsen", &url))?;
+    parse_branches(&raw)
+}
 
-    Ok(Market::new(id, name))
+/// Filialsuche-Antwort als Verzeichniszeilen.
+///
+/// Geschlossene Filialen (`is_closed`) fallen raus — sie stehen in der
+/// Antwort, haben aber keine Angebote und wären im Onboarding eine
+/// Einladung, den falschen Markt zu wählen.
+pub fn parse_branches(raw: &serde_json::Value) -> Result<Vec<Branch>> {
+    let stores = raw.as_array().context("Netto-Filialsuche ist kein JSON-Array")?;
+
+    Ok(stores
+        .iter()
+        .filter(|store| store.get("is_closed").and_then(|v| v.as_bool()) != Some(true))
+        .filter_map(|store| {
+            let id = store.get("store_id").and_then(|v| v.as_str())?;
+            let text = |key: &str| {
+                store
+                    .get(key)
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+            };
+            let coord =
+                |key: &str| store.get(key).and_then(|v| v.as_str()).and_then(|s| s.parse().ok());
+            let city = text("city");
+            // store_name ist bei jeder Filiale "Netto Marken-Discount" — erst
+            // der Ort macht daraus einen unterscheidbaren Namen.
+            let name = match (text("store_name"), &city) {
+                (Some(n), Some(c)) => format!("{n} {c}"),
+                (Some(n), None) => n,
+                _ => "Netto Marken-Discount".to_string(),
+            };
+            Some(
+                Branch::new(id, "Netto", name, "netto-storefinder")
+                    .with_address(text("street"), text("post_code"), city)
+                    .with_geo(coord("coord_latitude"), coord("coord_longitude")),
+            )
+        })
+        .collect())
 }
 
 pub fn fetch_offers(market: &Market) -> Result<Vec<Offer>> {

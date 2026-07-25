@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
 use std::collections::HashSet;
 
-use crate::models::{Market, Offer};
+use crate::models::{Branch, Market, Offer};
 use crate::scrapers::util;
 
 // Penny-Angebote über die öffentlichen JSON-Endpoints von penny.de.
@@ -44,6 +44,46 @@ pub fn find_market(zip: &str) -> Result<Market> {
         let coord = |k: &str| market.get(k).and_then(|v| v.as_str()).and_then(|s| s.parse().ok());
         Ok(Market::new(id, name).with_geo(coord("latitude"), coord("longitude")))
     })
+}
+
+/// Das komplette deutsche Penny-Verzeichnis — ein einziger Request.
+///
+/// `/.rest/market` liefert ohnehin alle Märkte auf einmal (2120 am
+/// 2026-07-25), `find_market` filtert davon nur clientseitig nach PLZ. Für
+/// das Verzeichnis nehmen wir dieselbe Liste unverkürzt.
+pub fn fetch_branches() -> Result<Vec<Branch>> {
+    block_on(async {
+        let client = build_client()?;
+        let markets = fetch_markets(&client).await?;
+        Ok(parse_branches(&markets))
+    })
+}
+
+/// Marktliste als Verzeichniszeilen. Koordinaten kommen als Strings
+/// ("53.03672"); fehlend oder kaputt -> None.
+pub fn parse_branches(markets: &[serde_json::Value]) -> Vec<Branch> {
+    markets
+        .iter()
+        .filter_map(|market| {
+            let id = market.get("wwIdent").and_then(|v| v.as_str())?;
+            let text = |key: &str| {
+                market
+                    .get(key)
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+            };
+            let coord =
+                |key: &str| market.get(key).and_then(|v| v.as_str()).and_then(|s| s.parse().ok());
+            let name = text("marketName").unwrap_or_else(|| "PENNY".to_string());
+            Some(
+                Branch::new(id, "Penny", name, "penny-rest")
+                    .with_address(text("streetWithHouseNumber"), text("zipCode"), text("city"))
+                    .with_geo(coord("latitude"), coord("longitude")),
+            )
+        })
+        .collect()
 }
 
 pub fn fetch_offers(market: &Market) -> Result<Vec<Offer>> {

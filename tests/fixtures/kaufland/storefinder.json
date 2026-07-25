@@ -1,0 +1,52 @@
+[
+ {
+  "n": "DE1300",
+  "slf": "BakingFresh,Echarging,Barrier-freeWC,Tchibo,WCWomen,WCMen,MobilePayment,LoyaltyProgram,LoyaltyPointsProgram,LoyaltyCoupons,AdBanner,PartnerBenefits,Xtra",
+  "lat": "52.0660227",
+  "lng": "6.9650751",
+  "cn": "Kaufland Ahaus",
+  "p": "02561/98360",
+  "pc": "48683",
+  "sn": "Andreasstraße 3-5",
+  "t": "Ahaus",
+  "opd": "2003-08-04T00:00:00.000Z",
+  "wod": [
+   "Monday|07:00|22:00",
+   "Tuesday|07:00|22:00",
+   "Wednesday|07:00|22:00",
+   "Thursday|07:00|22:00",
+   "Friday|07:00|22:00",
+   "Saturday|07:00|22:00",
+   "Sunday|00:00|00:00"
+  ],
+  "friendlyUrl": "ahaus-1300",
+  "eod": ""
+ },
+ {
+  "n": "DE7380",
+  "slf": "BakingFresh,MeatSpecialChest,Tchibo,MobilePayment,LoyaltyProgram,LoyaltyPointsProgram,LoyaltyCoupons,AdBanner,PartnerBenefits,Xtra",
+  "lat": "51.0194994",
+  "lng": "13.7799029",
+  "cn": "Kaufland Dresden-Strehlen, O.D.C.",
+  "p": "0351/287940",
+  "pc": "01219",
+  "sn": "Reicker Straße 60",
+  "t": "Dresden",
+  "opd": "2001-07-02T00:00:00.000Z",
+  "wod": [
+   "Monday|07:00|22:00",
+   "Tuesday|07:00|22:00",
+   "Wednesday|07:00|22:00",
+   "Thursday|07:00|22:00",
+   "Friday|07:00|22:00",
+   "Saturday|07:00|22:00",
+   "Sunday|00:00|00:00"
+  ],
+  "f": {
+   "from": "2026-02-09",
+   "to": "2026-07-31"
+  },
+  "friendlyUrl": "dresden-strehlen-o-d-c--7380",
+  "eod": ""
+ }
+]
