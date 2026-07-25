@@ -135,13 +135,15 @@ fn upsert_markets(cfg: &PushConfig, rows: &[serde_json::Value]) -> Result<()> {
 /// Eine Region komplett syncen: Ketten scrapen, Märkte upserten, Angebote
 /// pushen. Die lokale offers-Tabelle wird vorher geleert, damit `push` nur
 /// Angebote dieser Region hochlädt.
+/// Liefert die Filial-IDs, die dieser Lauf behandelt hat — der Filial-Durchgang
+/// danach überspringt sie, statt dieselbe Filiale zweimal zu scrapen.
 fn sync_region(
     opts: &SyncOptions,
     cfg: &PushConfig,
     fetcher: &Fetcher,
     plz: &str,
     defer_mirror: bool,
-) -> Result<()> {
+) -> Result<Vec<String>> {
     {
         let conn = db::open(&opts.db_path)?;
         conn.execute("DELETE FROM offers", [])
@@ -275,6 +277,11 @@ fn sync_region(
         }
     }
 
+    let handled: Vec<String> = market_rows
+        .iter()
+        .filter_map(|m| m["market_id"].as_str().map(String::from))
+        .collect();
+
     push::run(
         &PushOptions {
             db_path: opts.db_path.clone(),
@@ -287,7 +294,8 @@ fn sync_region(
             defer_mirror,
         },
         Some(cfg),
-    )
+    )?;
+    Ok(handled)
 }
 
 /// Angebots-Abruf für genau eine Filiale — ohne Store-Finder, die ID steht
@@ -472,6 +480,57 @@ pub fn sync_national(
     )
 }
 
+/// Die Filialen, die jemand tatsächlich benutzt — aus zwei Quellen:
+///
+/// * `branch_requests` (aktiv): die ausdrückliche Warteschlange. Wer im Picker
+///   eine Filiale wählt, die das Backend nie geholt hat, landet hier.
+/// * `user_profiles.branch_ids`: die Filialen der Einwilligenden. Genau dafür
+///   ist die Spalte da (Migration v15) — ohne sie ließe sich nicht sagen,
+///   welche Läden überhaupt gebraucht werden.
+///
+/// Der Filial-Sync bediente bis hierher nur die Anforderung selbst und lief
+/// über `workflow_dispatch`. Eine so geholte Filiale wurde also **nie wieder**
+/// aufgefrischt; nach Ablauf ihrer Woche stand sie leer da, ohne dass
+/// irgendwo etwas fehlgeschlagen wäre.
+///
+/// Fehler einer der beiden Quellen (Tabelle fehlt, Recht fehlt) sind kein
+/// Grund abzubrechen — dann fehlt eben diese Hälfte.
+pub fn fetch_chosen_branches(cfg: &PushConfig) -> Result<Vec<String>> {
+    let client = reqwest::blocking::Client::new();
+    let mut ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+
+    let resp = auth(cfg, client.get(format!("{}/rest/v1/branch_requests", cfg.base_url)))
+        .query(&[("select", "market_id"), ("active", "eq.true")])
+        .send()
+        .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
+    if resp.status().is_success() {
+        let rows: Vec<serde_json::Value> =
+            resp.json().context("branch_requests: Antwort ist kein gültiges JSON")?;
+        ids.extend(
+            rows.iter().filter_map(|r| r.get("market_id")?.as_str().map(String::from)),
+        );
+    } else {
+        eprintln!("WARNUNG: branch_requests nicht lesbar (HTTP {})", resp.status());
+    }
+
+    let resp = auth(cfg, client.get(format!("{}/rest/v1/user_profiles", cfg.base_url)))
+        .query(&[("select", "branch_ids")])
+        .send()
+        .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
+    if resp.status().is_success() {
+        let rows: Vec<serde_json::Value> =
+            resp.json().context("user_profiles: Antwort ist kein gültiges JSON")?;
+        for row in &rows {
+            let Some(list) = row.get("branch_ids").and_then(|v| v.as_array()) else { continue };
+            ids.extend(list.iter().filter_map(|v| v.as_str().map(String::from)));
+        }
+    } else {
+        eprintln!("WARNUNG: user_profiles nicht lesbar (HTTP {})", resp.status());
+    }
+
+    Ok(ids.into_iter().collect())
+}
+
 /// Eine PLZ in `regions` registrieren, falls sie noch fehlt (409 = schon da).
 fn register_region(cfg: &PushConfig, plz: &str) -> Result<()> {
     let client = reqwest::blocking::Client::new();
@@ -494,6 +553,7 @@ pub fn run(
     opts: &SyncOptions,
     cfg: Option<&PushConfig>,
     fetcher: &Fetcher,
+    branch_scraper: &BranchScraper,
     national: &NationalScraper,
 ) -> Result<()> {
     let cfg = match cfg {
@@ -506,8 +566,9 @@ pub fn run(
             register_region(cfg, plz)?;
         }
         println!("On-Demand-Sync: nur Region {plz}");
-        return sync_region(opts, cfg, fetcher, plz, true)
-            .with_context(|| format!("Region {plz} fehlgeschlagen"));
+        sync_region(opts, cfg, fetcher, plz, true)
+            .with_context(|| format!("Region {plz} fehlgeschlagen"))?;
+        return Ok(());
     }
 
     // Zuerst die bundesweiten Ketten — sie hängen an keiner Region und
@@ -545,11 +606,42 @@ pub fn run(
     );
 
     let mut failures: Vec<(String, String)> = Vec::new();
+    let mut handled: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for region in selected {
         println!("\n=== Region {} ===", region.plz);
-        if let Err(e) = sync_region(opts, cfg, fetcher, &region.plz, false) {
-            eprintln!("Region {} fehlgeschlagen: {e:#}", region.plz);
-            failures.push((region.plz.clone(), format!("{e:#}")));
+        match sync_region(opts, cfg, fetcher, &region.plz, false) {
+            Ok(ids) => handled.extend(ids),
+            Err(e) => {
+                eprintln!("Region {} fehlgeschlagen: {e:#}", region.plz);
+                failures.push((region.plz.clone(), format!("{e:#}")));
+            }
+        }
+    }
+
+    // Die selbst gewählten Filialen hinterher. Der Regions-Lauf holt pro Kette
+    // nur die dem PLZ-Zentrum NÄCHSTE Filiale — wer im Picker eine andere
+    // gewählt hat, bekam sie beim Anfordern genau einmal und danach nie
+    // wieder: Die Anforderung läuft über `workflow_dispatch`, nicht über die
+    // Nightly, und die Angebote dieser Filiale wären nach Ablauf der Woche
+    // stillschweigend verschwunden. Fehler einzelner Filialen warnen nur.
+    if !opts.dry_run {
+        match fetch_chosen_branches(cfg) {
+            Ok(chosen) => {
+                let todo: Vec<String> =
+                    chosen.into_iter().filter(|id| !handled.contains(id)).collect();
+                if todo.is_empty() {
+                    println!("\nKeine zusätzlich gewählten Filialen offen.");
+                } else {
+                    println!("\n=== Gewählte Filialen ({}) ===", todo.len());
+                    for market_id in &todo {
+                        if let Err(e) = run_branch(opts, Some(cfg), branch_scraper, national, market_id)
+                        {
+                            eprintln!("Filiale {market_id} fehlgeschlagen: {e:#}");
+                        }
+                    }
+                }
+            }
+            Err(e) => eprintln!("WARNUNG: Gewählte Filialen nicht ladbar: {e:#}"),
         }
     }
 
