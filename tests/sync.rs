@@ -14,6 +14,12 @@ use smartshop::sync::{self, FetchResult, SyncOptions};
 /// Scraper-Stub für den bundesweiten Lauf: liefert nichts, also pusht
 /// `sync_national` auch nichts. Die Tests hier prüfen den Regions-Weg; der
 /// bundesweite hat eigene Tests weiter unten.
+/// Filial-Scraper-Stub: In den Regions-Tests gibt es keine gewählten Filialen
+/// (der Mock liefert leere Listen), er darf also nie gerufen werden.
+fn no_branch(_branch: &smartshop::models::Branch) -> anyhow::Result<Vec<Offer>> {
+    panic!("Filial-Scraper unerwartet gerufen")
+}
+
 fn no_national(
     _store: smartshop::stores::Store,
     _market: &Market,
@@ -214,7 +220,7 @@ fn cap_limits_number_of_synced_regions() {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let fetcher = ok_fetcher(calls.clone());
     let db_path = temp_db("cap");
-    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_branch, &no_national).unwrap();
 
     let called = calls.lock().unwrap().clone();
     assert_eq!(called.len(), 10, "nur max_regions Regionen syncen: {called:?}");
@@ -228,7 +234,7 @@ fn markets_upsert_sends_expected_payload() {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let fetcher = ok_fetcher(calls);
     let db_path = temp_db("markets");
-    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_branch, &no_national).unwrap();
 
     let reqs = log.lock().unwrap().clone();
     let markets: Vec<&Req> = reqs
@@ -273,7 +279,7 @@ fn per_region_failure_does_not_abort_run() {
         }
     };
     let db_path = temp_db("isolation");
-    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_branch, &no_national).unwrap();
 
     assert_eq!(calls.lock().unwrap().len(), 2, "beide Regionen versucht");
     let reqs = log.lock().unwrap().clone();
@@ -292,7 +298,7 @@ fn all_regions_failing_returns_error() {
     let fetcher =
         |_plz: &str| -> FetchResult { vec![("REWE".to_string(), Err(anyhow!("Scraper kaputt")))] };
     let db_path = temp_db("allfail");
-    let err = sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap_err();
+    let err = sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_branch, &no_national).unwrap_err();
     assert!(err.to_string().contains("Alle 2 Region(en) fehlgeschlagen"), "Fehler: {err:#}");
 }
 
@@ -301,7 +307,7 @@ fn empty_regions_table_returns_error() {
     let (base_url, _log) = spawn_mock("[]");
     let fetcher = ok_fetcher(Arc::new(Mutex::new(Vec::new())));
     let db_path = temp_db("empty");
-    let err = sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap_err();
+    let err = sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_branch, &no_national).unwrap_err();
     assert!(err.to_string().contains("Keine aktiven Regionen"), "Fehler: {err:#}");
 }
 
@@ -310,7 +316,7 @@ fn unreachable_or_failing_supabase_returns_error() {
     let base_url = spawn_failing_mock(500, "kaputt");
     let fetcher = ok_fetcher(Arc::new(Mutex::new(Vec::new())));
     let db_path = temp_db("unreachable");
-    let err = sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap_err();
+    let err = sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_branch, &no_national).unwrap_err();
     assert!(err.to_string().contains("Regionen laden fehlgeschlagen"), "Fehler: {err:#}");
 }
 
@@ -320,7 +326,7 @@ fn dry_run_only_reads_regions() {
     let fetcher = ok_fetcher(Arc::new(Mutex::new(Vec::new())));
     let db_path = temp_db("dryrun");
     let opts = SyncOptions { db_path, dry_run: true, max_regions: 10, only: None, market_id: None };
-    sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
+    sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &no_branch, &no_national).unwrap();
 
     let reqs = log.lock().unwrap().clone();
     assert_eq!(reqs.len(), 1, "nur der regions-GET erwartet: {reqs:#?}");
@@ -341,7 +347,7 @@ fn only_mode_registers_and_syncs_single_plz_without_region_list() {
         only: Some("04626".to_string()),
         market_id: None,
     };
-    sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
+    sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &no_branch, &no_national).unwrap();
 
     // Genau die eine PLZ wurde gescrapet …
     assert_eq!(calls.lock().unwrap().clone(), vec!["04626"]);
@@ -373,7 +379,7 @@ fn chain_without_nearby_branch_is_skipped_not_failed() {
         result
     };
     let db_path = temp_db("no-branch");
-    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_branch, &no_national).unwrap();
 
     let reqs = log.lock().unwrap().clone();
     let markets: Vec<&Req> = reqs
@@ -426,7 +432,7 @@ fn chain_error_keeps_existing_market_row() {
         result
     };
     let db_path = temp_db("chain-err");
-    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_branch, &no_national).unwrap();
 
     let reqs = log.lock().unwrap().clone();
     assert!(
@@ -531,7 +537,7 @@ fn only_mode_copies_nothing_it_has_not_scraped() {
         market_id: None,
     };
 
-    sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
+    sync::run(&opts, Some(&cfg(&base_url)), &fetcher, &no_branch, &no_national).unwrap();
 
     let reqs = log.lock().unwrap().clone();
     // Keine Suche nach einer Quellregion …
@@ -694,7 +700,7 @@ fn national_chains_are_pushed_once_without_a_region() {
         ])
     };
     let db_path = temp_db("national");
-    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &national).unwrap();
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_branch, &national).unwrap();
 
     let reqs = log.lock().unwrap().clone();
     let national_rows: Vec<serde_json::Value> = reqs
@@ -731,7 +737,7 @@ fn region_sync_reports_the_aldi_branch_but_stores_no_offers_for_it() {
     let (base_url, log) = spawn_mock(r#"[{"plz":"01219"}]"#);
     let fetcher = aldi_fetcher(&CHAINS);
     let db_path = temp_db("aldi-region");
-    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_national).unwrap();
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_branch, &no_national).unwrap();
 
     let reqs = log.lock().unwrap().clone();
     let market = reqs
@@ -772,7 +778,7 @@ fn at_the_aldi_equator_both_catalogues_stand_side_by_side() {
         Ok(vec![offer_for(&market.id, &format!("Katalog {}", market.id), 1.0)])
     };
     let db_path = temp_db("aldi-aequator");
-    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &national).unwrap();
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_branch, &national).unwrap();
 
     let reqs = log.lock().unwrap().clone();
 
@@ -865,4 +871,95 @@ fn a_branch_request_for_aldi_refreshes_the_national_catalogue() {
         .expect("Fertigmeldung an branch_requests fehlt");
     let body: serde_json::Value = serde_json::from_str(&done.body).unwrap();
     assert_eq!(body[0]["market_id"], "ALDI_NORD_4711");
+}
+
+// ------------------------------------ Gewählte Filialen im Voll-Lauf (7a)
+
+/// Die Lücke, die dieser Durchgang schließt: Wer im Picker eine Filiale wählt,
+/// die nicht die dem PLZ-Zentrum nächste ihrer Kette ist, bekam sie beim
+/// Anfordern **genau einmal** — die Anforderung läuft über `workflow_dispatch`,
+/// nicht über die Nightly. Nach Ablauf ihrer Woche stand sie leer da, ohne dass
+/// irgendwo etwas fehlgeschlagen wäre.
+#[test]
+fn the_full_run_also_refreshes_the_branches_people_chose() {
+    static ROUTES: [(&str, &str); 4] = [
+        ("regions", r#"[{"plz":"01067"}]"#),
+        ("branch_requests", r#"[{"market_id":"1763556"}]"#),
+        ("user_profiles", r#"[{"branch_ids":["1766160","1763556"]}]"#),
+        ("branches", BRANCH_POSTPLATZ),
+    ];
+    let (base_url, log) = spawn_routed_mock(&ROUTES);
+    let fetcher = ok_fetcher(Arc::new(Mutex::new(Vec::new())));
+    let seen: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let seen2 = seen.clone();
+    let scraper = move |branch: &smartshop::models::Branch| {
+        seen2.lock().unwrap().push(branch.market_id.clone());
+        let mut o = offer("Coca-Cola", Some(0.75));
+        o.market_id = branch.market_id.clone();
+        Ok(vec![o])
+    };
+    let db_path = temp_db("gewaehlte-filialen");
+
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &scraper, &no_national).unwrap();
+
+    // Beide Quellen zusammengeführt, jede Filiale genau einmal: 1763556 steht
+    // in `branch_requests` UND in einem Profil und darf trotzdem nur einmal
+    // gescrapt werden. (Welche Zeile der Mock aus `branches` zurückgibt, ist
+    // immer dieselbe — die Angefragte steht in der Query, nicht in der
+    // Antwort.)
+    assert_eq!(seen.lock().unwrap().len(), 2, "je Filiale genau ein Scrape");
+
+    let reqs = log.lock().unwrap().clone();
+    let looked_up: Vec<&str> = reqs
+        .iter()
+        .filter(|r| r.method == "GET" && r.target.starts_with("/rest/v1/branches"))
+        .map(|r| r.target.as_str())
+        .collect();
+    assert_eq!(looked_up.len(), 2, "{looked_up:#?}");
+    assert!(looked_up.iter().any(|t| t.contains("market_id=eq.1763556")), "{looked_up:#?}");
+    assert!(looked_up.iter().any(|t| t.contains("market_id=eq.1766160")), "{looked_up:#?}");
+
+    assert!(
+        reqs.iter().any(|r| r.method == "GET" && r.target.starts_with("/rest/v1/branch_requests")),
+        "die Warteschlange wird nicht gelesen: {reqs:#?}"
+    );
+    assert!(
+        reqs.iter().any(|r| r.method == "GET" && r.target.starts_with("/rest/v1/user_profiles")),
+        "die gewählten Filialen der Profile werden nicht gelesen: {reqs:#?}"
+    );
+}
+
+/// Was der Regions-Lauf schon erledigt hat, wird nicht doppelt gescrapt: Der
+/// Fetcher meldet Filiale `m1`, und genau die steht auch im Profil.
+#[test]
+fn a_branch_the_region_run_already_covered_is_not_scraped_twice() {
+    static ROUTES: [(&str, &str); 3] = [
+        ("regions", r#"[{"plz":"01219"}]"#),
+        ("user_profiles", r#"[{"branch_ids":["m1"]}]"#),
+        ("branch_requests", "[]"),
+    ];
+    let (base_url, _log) = spawn_routed_mock(&ROUTES);
+    let fetcher = ok_fetcher(Arc::new(Mutex::new(Vec::new())));
+    let db_path = temp_db("keine-doppelung");
+
+    // `no_branch` schlägt Alarm, sobald der Filial-Scraper doch anspringt.
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &no_branch, &no_national).unwrap();
+}
+
+/// Eine kaputte Filiale darf den Lauf nicht abbrechen — die Regionen sind
+/// längst durch, und die übrigen Filialen haben mit ihr nichts zu tun.
+#[test]
+fn a_failing_branch_does_not_abort_the_run() {
+    static ROUTES: [(&str, &str); 3] = [
+        ("regions", r#"[{"plz":"01067"}]"#),
+        ("user_profiles", r#"[{"branch_ids":["gibt-es-nicht"]}]"#),
+        ("branch_requests", "[]"),
+    ];
+    let (base_url, _log) = spawn_routed_mock(&ROUTES);
+    let fetcher = ok_fetcher(Arc::new(Mutex::new(Vec::new())));
+    let scraper = |_: &smartshop::models::Branch| Ok(Vec::new());
+    let db_path = temp_db("filiale-kaputt");
+
+    // Das Verzeichnis kennt die ID nicht -> run_branch scheitert, run nicht.
+    sync::run(&opts(&db_path), Some(&cfg(&base_url)), &fetcher, &scraper, &no_national).unwrap();
 }

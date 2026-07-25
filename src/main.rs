@@ -438,26 +438,27 @@ fn main() -> Result<()> {
                     None,
                 );
             }
-            if let Some(market_id) = &market_id {
-                // Filial-Sync: Die Filiale steht fest, es gibt nichts zu
-                // suchen — nur die Kette muss auf ihren Scraper zeigen.
-                let scraper = |branch: &smartshop::models::Branch| {
-                    let store = Store::from_chain(&branch.chain).ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "Filiale {} trägt die unbekannte Kette '{}'",
-                            branch.market_id,
-                            branch.chain
-                        )
-                    })?;
-                    let zip = branch.plz.as_deref().unwrap_or_default();
-                    smartshop::stores::fetch_offers(
-                        store,
-                        &branch.as_market().with_chain(&branch.chain),
-                        zip,
-                        &cert,
-                        &key,
+            // Filial-Sync: Die Filiale steht fest, es gibt nichts zu suchen —
+            // nur die Kette muss auf ihren Scraper zeigen. Der Voll-Lauf
+            // benutzt dieselbe Closure für die selbst gewählten Filialen.
+            let scraper = |branch: &smartshop::models::Branch| {
+                let store = Store::from_chain(&branch.chain).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Filiale {} trägt die unbekannte Kette '{}'",
+                        branch.market_id,
+                        branch.chain
                     )
-                };
+                })?;
+                let zip = branch.plz.as_deref().unwrap_or_default();
+                smartshop::stores::fetch_offers(
+                    store,
+                    &branch.as_market().with_chain(&branch.chain),
+                    zip,
+                    &cert,
+                    &key,
+                )
+            };
+            if let Some(market_id) = &market_id {
                 return smartshop::sync::run_branch(&opts, None, &scraper, &national, market_id);
             }
             let fetcher = |plz: &str| {
@@ -480,7 +481,7 @@ fn main() -> Result<()> {
                     })
                     .collect()
             };
-            smartshop::sync::run(&opts, None, &fetcher, &national)
+            smartshop::sync::run(&opts, None, &fetcher, &scraper, &national)
         }
         Command::BranchesSync {
             area,
