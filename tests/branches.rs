@@ -225,7 +225,7 @@ fn lidl_falls_back_to_the_district_when_the_name_is_empty() {
 fn aldi_uberall_yields_branches_within_the_radius() {
     let raw = json(include_str!("fixtures/store_finder/uberall_branches.json"));
     let branches =
-        scrapers::store_finder::parse_uberall_branches(&raw, "ALDI Nord", "ALDI_NORD", 25.0)
+        scrapers::store_finder::parse_uberall_branches(&raw, CENTER, "ALDI Nord", "ALDI_NORD", 25.0)
             .unwrap();
 
     assert_well_formed(&branches);
@@ -241,15 +241,33 @@ fn aldi_uberall_yields_branches_within_the_radius() {
     assert!(branch.lat.is_some());
 }
 
-/// Ein größerer Radius holt die weiter entfernte Filiale mit — der Cutoff
+/// Ein größerer Radius holt die weiter entfernten Filialen mit — der Cutoff
 /// wirkt wirklich über die Entfernung und nicht über die Trefferzahl.
 #[test]
 fn aldi_radius_decides_what_comes_along() {
     let raw = json(include_str!("fixtures/store_finder/uberall_branches.json"));
-    let wide = scrapers::store_finder::parse_uberall_branches(&raw, "ALDI Nord", "ALDI_NORD", 50.0)
+    let wide = scrapers::store_finder::parse_uberall_branches(&raw, CENTER, "ALDI Nord", "ALDI_NORD", 50.0)
         .unwrap();
 
-    assert_eq!(wide.len(), 3);
+    assert_eq!(wide.len(), 4);
+}
+
+/// Uberall liefert `distance` nicht immer, und die Abfrage filtert
+/// serverseitig nicht nach Radius. Ohne das Feld muss die Entfernung aus den
+/// Koordinaten kommen — sonst rutscht eine Chemnitzer Filiale in eine
+/// Dresdner Suche. Dieselbe Rechnung wie in `parse_uberall`, wo derselbe Fall
+/// ALDI Nord in Köln vertreten gemacht hat.
+#[test]
+fn aldi_computes_the_distance_when_uberall_omits_it() {
+    let raw = json(include_str!("fixtures/store_finder/uberall_branches.json"));
+    let branches =
+        scrapers::store_finder::parse_uberall_branches(&raw, CENTER, "ALDI Nord", "ALDI_NORD", 25.0)
+            .unwrap();
+
+    assert!(
+        branches.iter().all(|b| b.market_id != "ALDI_NORD_DE099998"),
+        "eine Filiale ohne distance darf nicht ungeprüft durchrutschen"
+    );
 }
 
 // ---------------------------------------------------------------- Gebiet
@@ -318,7 +336,7 @@ fn nominatim_yields_the_city_for_the_rewe_search() {
 fn aldi_rejects_a_failed_uberall_response() {
     let raw = json(include_str!("fixtures/store_finder/uberall_error.json"));
     assert!(
-        scrapers::store_finder::parse_uberall_branches(&raw, "ALDI Nord", "ALDI_NORD", 25.0)
+        scrapers::store_finder::parse_uberall_branches(&raw, CENTER, "ALDI Nord", "ALDI_NORD", 25.0)
             .is_err()
     );
 }

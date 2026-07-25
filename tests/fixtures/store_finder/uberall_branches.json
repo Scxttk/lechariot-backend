@@ -1,7 +1,7 @@
 {
  "status": "SUCCESS",
  "response": {
-  "count": 3,
+  "count": 4,
   "max": 60,
   "offset": 0,
   "locations": [
@@ -34,6 +34,15 @@
     "lat": 50.83,
     "lng": 12.92,
     "distance": 48310
+   },
+   {
+    "identifier": "DE099998",
+    "name": "ALDI Nord",
+    "streetAndNumber": "Hauptstraße 1",
+    "zip": "01558",
+    "city": "Großenhain",
+    "lat": 51.2938,
+    "lng": 13.5372
    }
   ]
  }
