@@ -8,7 +8,14 @@ use crate::scrapers::util::{self, curl_get, curl_redirect_url};
 // EDEKA über edeka.de (regionale Angebote, Markt über PLZ wie bei Rewe).
 //
 // Marktsuche (öffentliches JSON):
-//   GET https://www.edeka.de/api/marketsearch/markets?searchstring=<PLZ>
+//   GET https://www.edeka.de/api/marketsearch/markets?searchstring=<PLZ>&size=<N>
+//
+// ACHTUNG, Seitengröße: Die Antwort MELDET `limit` und `offset`, nimmt aber
+// `size` (und `page`) entgegen. Wer `limit=50` schickt, bekommt weiter 10
+// Märkte und hält die beiden Felder für kaputt — genau daran hing der
+// Backlog-Punkt „EDEKA-Marktsuche deckelt bei 10 Treffern". Gemessen am
+// 2026-07-25 für 50667 Köln: ohne Parameter 10 von 17, mit `limit=50`
+// ebenfalls 10, mit `size=50` alle 17.
 // Die Antwort trägt noch die alte Markt-URL (/eh/<region>/<slug>/index.jsp);
 // deren 308-Redirect zeigt auf die neue Seite /maerkte/<id>/ — diese ID
 // braucht die Angebotsseite. (Die alte /api/offers-Schnittstelle ist tot
@@ -90,8 +97,19 @@ pub fn find_branches(zip: &str) -> Result<Vec<Branch>> {
     Ok(branches)
 }
 
+/// Seitengröße der Marktsuche. Großzügig, aber nicht unbegrenzt: Der größte
+/// gemessene Wert war 17 (Köln), und eine Suche nach einem Stadtnamen darf
+/// nicht zur Volltextabfrage des halben Landes werden.
+const MARKET_SEARCH_SIZE: usize = 100;
+
+/// Die URL der Marktsuche — als eigene Funktion, damit ein Test die
+/// Seitengröße festnagelt, ohne ans Netz zu gehen.
+pub fn market_search_url(zip: &str) -> String {
+    format!("{BASE}/api/marketsearch/markets?searchstring={zip}&size={MARKET_SEARCH_SIZE}")
+}
+
 fn market_search(zip: &str) -> Result<serde_json::Value> {
-    let url = format!("{BASE}/api/marketsearch/markets?searchstring={zip}");
+    let url = market_search_url(zip);
     let body = curl_get(&url, MARKET_SEARCH_HEADERS)
         .with_context(|| util::ctx("EDEKA", "Markt-Lookup", &url))?;
     serde_json::from_str(&body)
@@ -355,6 +373,19 @@ fn find_date_after(text: &str, marker: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Die Marktsuche nimmt `size`, nicht `limit` — und meldet in der Antwort
+    /// trotzdem `limit` und `offset`. Genau diese Verwechslung hat sieben
+    /// Kölner EDEKA-Märkte unsichtbar gemacht: gemessen am 2026-07-25 liefert
+    /// `limit=50` weiterhin 10 von 17, `size=50` alle 17.
+    #[test]
+    fn market_search_asks_for_more_than_one_page() {
+        let url = market_search_url("50667");
+        assert!(url.contains("searchstring=50667"), "{url}");
+        assert!(url.contains("size="), "ohne size deckelt die API bei 10: {url}");
+        assert!(!url.contains("limit="), "limit wird ignoriert und täuscht nur: {url}");
+        assert!(MARKET_SEARCH_SIZE >= 20, "17 Märkte in Köln sind der bisher größte Fall");
+    }
 
     #[test]
     fn price_parsing() {

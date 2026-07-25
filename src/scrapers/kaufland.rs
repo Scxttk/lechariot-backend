@@ -27,6 +27,12 @@ pub fn find_market(zip: &str) -> Result<Market> {
         .json()
         .with_context(|| util::ctx("Kaufland", "Markt-Lookup JSON parsen", STORE_FINDER_URL))?;
 
+    // Geschlossene Filialen fliegen VOR der Auswahl raus — sonst gewinnt eine
+    // von ihnen als „nächste" und der Scraper läuft gegen eine leere Seite.
+    let today = today();
+    let stores: Vec<serde_json::Value> =
+        stores.into_iter().filter(|s| !is_closed(s, &today)).collect();
+
     // Exakter PLZ-Treffer, sonst nächste Filiale im Umkreis (Großstadt-PLZs
     // wie 80331 haben selten eine Filiale mit genau dieser PLZ)
     let store = match stores.iter().find(|s| s.get("pc").and_then(|v| v.as_str()) == Some(zip)) {
@@ -72,9 +78,42 @@ pub fn fetch_branches() -> Result<Vec<Branch>> {
 ///
 /// Die Feldnamen sind Kürzel: `n` Filial-ID, `cn` Name, `sn` Straße,
 /// `pc` PLZ, `t` Ort, `lat`/`lng` als Strings.
+/// Ist diese Filiale dauerhaft zu?
+///
+/// Das Feld `f` trägt ein Zeitfenster. Über alle 787 Filialen gemessen
+/// (2026-07-25): 500 ohne `f`, 285 mit `to`, und **2 mit `from` ohne `to`**.
+/// Genau diese beiden — DE4180 Dresden-Räcknitz und DE5363
+/// Leverkusen-Manfort — liefern auf kaufland.de eine leere Angebotsseite
+/// (23 kB Hülle statt 350 kB) und haben auch keine Filialseite mehr (404).
+///
+/// Das war die Ursache des Backlog-Punkts „Kaufland-Scraper scheitert an zwei
+/// Filialen": Der Store-Finder meldete DE4180 als nächste Filiale zu 01069
+/// und 01217, und der Scraper lief gegen eine Seite, die es nicht mehr gibt.
+/// Kein Parser-Fehler — eine geschlossene Filiale.
+///
+/// **Nur das offene Fenster zählt.** Was ein Fenster MIT `to` bedeutet, ist
+/// nicht geklärt und wird bewusst ignoriert: DE7380 Dresden-Strehlen trägt
+/// `{from: 2026-02-09, to: 2026-07-31}`, liegt heute mitten darin und
+/// liefert trotzdem 776 Angebote. Wer das als Schließung läse, würde eine
+/// funktionierende Filiale wegwerfen — und das ist der teurere Fehler.
+pub fn is_closed(store: &serde_json::Value, today: &str) -> bool {
+    let Some(window) = store.get("f").and_then(|v| v.as_object()) else { return false };
+    let Some(from) = window.get("from").and_then(|v| v.as_str()) else { return false };
+    window.get("to").is_none() && from <= today
+}
+
+fn today() -> String {
+    chrono::Utc::now()
+        .with_timezone(&chrono_tz::Europe::Berlin)
+        .format("%Y-%m-%d")
+        .to_string()
+}
+
 pub fn parse_branches(stores: &[serde_json::Value]) -> Vec<Branch> {
+    let today = today();
     stores
         .iter()
+        .filter(|store| !is_closed(store, &today))
         .filter_map(|store| {
             let id = store.get("n").and_then(|v| v.as_str())?;
             let text = |key: &str| {
@@ -270,6 +309,44 @@ fn parse_date_range(s: &str) -> Option<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Der Fund hinter „Kaufland-Scraper scheitert an zwei Filialen": `f`
+    /// markiert eine Schließung, und ein Fenster **ohne** `to` heißt „seit
+    /// dann zu, Ende offen". Gemessen am 2026-07-25: DE4180 Dresden-Räcknitz
+    /// und DE5363 Leverkusen-Manfort sind die einzigen zwei von 787, und
+    /// beide liefern eine leere Angebotsseite.
+    #[test]
+    fn closed_stores_are_recognised() {
+        let open_ended = serde_json::json!({"n": "DE4180", "f": {"from": "2026-06-28"}});
+        assert!(is_closed(&open_ended, "2026-07-25"));
+        // Vor Beginn der Schließung ist die Filiale offen.
+        assert!(!is_closed(&open_ended, "2026-06-01"));
+
+        // Ein Fenster MIT `to` heißt nachweislich nicht „geschlossen":
+        // DE7380 liegt heute mitten darin und liefert 776 Angebote.
+        let bounded =
+            serde_json::json!({"n": "DE7380", "f": {"from": "2026-02-09", "to": "2026-07-31"}});
+        assert!(!is_closed(&bounded, "2026-07-25"));
+        assert!(!is_closed(&bounded, "2026-08-01"));
+
+        // Kein Fenster, kein Problem (500 der 787).
+        assert!(!is_closed(&serde_json::json!({"n": "DE3413"}), "2026-07-25"));
+    }
+
+    /// Eine geschlossene Filiale gehört auch nicht ins Verzeichnis — sonst
+    /// steht sie im Picker und der Nutzer wählt einen Laden, der nichts liefert.
+    #[test]
+    fn closed_stores_stay_out_of_the_directory() {
+        let stores = vec![
+            serde_json::json!({"n": "DE3413", "cn": "Dresden-Nickern", "pc": "01239"}),
+            serde_json::json!({
+                "n": "DE4180", "cn": "Dresden-Räcknitz", "pc": "01189",
+                "f": {"from": "2020-01-01"}
+            }),
+        ];
+        let ids: Vec<String> = parse_branches(&stores).into_iter().map(|b| b.market_id).collect();
+        assert_eq!(ids, vec!["DE3413".to_string()]);
+    }
 
     #[test]
     fn date_range_parsing() {
