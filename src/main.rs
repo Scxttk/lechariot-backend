@@ -187,6 +187,13 @@ enum Command {
         #[arg(long, value_name = "ID", conflicts_with = "only")]
         market_id: Option<String>,
 
+        /// Nur die bundesweiten Ketten (ALDI Nord, ALDI SÜD) syncen und
+        /// danach aufhören. Deren Katalog hängt an keiner Region — dieser
+        /// Lauf braucht weder Regionsliste noch Store-Finder und ist in
+        /// Sekunden durch.
+        #[arg(long, default_value_t = false, conflicts_with_all = ["only", "market_id"])]
+        national_only: bool,
+
         /// Pfad zum Rewe TLS-Zertifikat (PEM)
         #[arg(long, default_value = "cert.pem")]
         cert: String,
@@ -399,7 +406,16 @@ fn main() -> Result<()> {
             };
             smartshop::push::run(&opts, None)
         }
-        Command::SyncRegions { max_regions, only, market_id, cert, key, dry_run, db } => {
+        Command::SyncRegions {
+            max_regions,
+            only,
+            market_id,
+            national_only,
+            cert,
+            key,
+            dry_run,
+            db,
+        } => {
             let opts = smartshop::sync::SyncOptions {
                 db_path: db,
                 dry_run,
@@ -412,6 +428,16 @@ fn main() -> Result<()> {
             let national = |store: Store, market: &smartshop::models::Market| {
                 smartshop::stores::fetch_offers(store, market, "", &cert, &key)
             };
+            if national_only {
+                let cfg = smartshop::push::config_from_env()?;
+                return smartshop::sync::sync_national(
+                    &opts,
+                    &cfg,
+                    &national,
+                    &smartshop::sync::national_stores(),
+                    None,
+                );
+            }
             if let Some(market_id) = &market_id {
                 // Filial-Sync: Die Filiale steht fest, es gibt nichts zu
                 // suchen — nur die Kette muss auf ihren Scraper zeigen.
