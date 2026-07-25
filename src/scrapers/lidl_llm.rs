@@ -21,10 +21,17 @@
 //! Was das nicht besteht, fliegt raus. Ein erfundener Preis ist in einer
 //! Preisvergleichs-App schlimmer als ein fehlendes Produkt.
 //!
-//! Kosten: Ein Wochenprospekt sind rund 35.000 Tokens Text. Der Systemprompt
-//! ist über alle Seiten identisch und wird zwischengespeichert
-//! (`cache_control`), sodass ab der zweiten Seite nur noch der Seitentext
-//! neu berechnet wird.
+//! **Warum GitHub Models?** Der Weg ist ein Zusatz, kein Fundament — der
+//! deterministische Extraktor deckt bereits 96 % der marktguru-Preise ab.
+//! Ein Zusatz darf keine laufenden Kosten verursachen, und GitHub Models ist
+//! im GitHub-Student-Paket enthalten. Der Preis dafür sind harte
+//! Ratenlimits (Freistufe: rund 15 Anfragen pro Minute), weshalb die Seiten
+//! nacheinander statt parallel laufen — ein Wochenprospekt braucht damit
+//! wenige Minuten. Für einen wöchentlichen Lauf ist das egal.
+//!
+//! Der Token kommt aus `GITHUB_MODELS_TOKEN`, sonst `GITHUB_TOKEN`, sonst
+//! aus `gh auth token` — lokal ist also nichts einzurichten, wenn die
+//! GitHub-CLI ohnehin angemeldet ist.
 
 use std::collections::HashSet;
 use std::sync::LazyLock;
@@ -36,14 +43,16 @@ use serde::Deserialize;
 use crate::models::{Market, Offer};
 use crate::scrapers::lidl_prospekt;
 
-const API_URL: &str = "https://api.anthropic.com/v1/messages";
-const API_VERSION: &str = "2023-06-01";
-/// Bewusst das stärkste Modell: Der Lauf ist einmal pro Woche und Region, und
-/// ein falsch zugeordneter Preis kostet mehr als die Tokens.
-const MODEL: &str = "claude-opus-5";
-const MAX_TOKENS: u32 = 16_000;
-/// Wie viele Seiten gleichzeitig unterwegs sind.
-const CONCURRENCY: usize = 4;
+const API_URL: &str = "https://models.github.ai/inference/chat/completions";
+/// Über `LIDL_LLM_MODEL` austauschbar, falls der Katalog sich ändert.
+const DEFAULT_MODEL: &str = "openai/gpt-4.1-mini";
+const MAX_TOKENS: u32 = 8_000;
+/// Mindestabstand zwischen zwei Anfragen. Die Freistufe erlaubt rund 15 pro
+/// Minute; 4 Sekunden halten sicheren Abstand, ohne dass ein Prospekt
+/// unzumutbar lange braucht.
+const REQUEST_INTERVAL: std::time::Duration = std::time::Duration::from_secs(4);
+/// Nach einem 429 einmal deutlich länger warten und den Versuch wiederholen.
+const RETRY_PAUSE: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Seiten ohne Sternpreis tragen keine Angebote — Titelbild, Imageseiten,
 /// Rechtstext. Die spart der Vorfilter, bevor ein Request entsteht.
@@ -71,9 +80,13 @@ Regeln:
 Preise aus und rate nie. Wenn du unsicher bist, lass das Angebot weg.
 2. Der Angebotspreis ist der Preis mit Stern. Streichpreis und Grundpreis sind \
 NICHT der Angebotspreis.
-3. Der Titel ist Marke plus Produktname, ohne Rabattangaben, ohne Preise, ohne \
-\"Mit Lidl Plus\". Bei Obst und Gemüse ohne Marke reicht die Sortenbezeichnung \
-(\"Rote Äpfel\", \"Zucchini\", \"Heidelbeeren\").
+3. Der Titel ist NUR Marke plus Produktname — hoechstens fuenf Woerter. Er \
+enthaelt KEINE Beschreibung, KEINE Mengenangabe, KEINEN Grundpreis, KEINEN \
+Rabatt, KEINEN Preis und NICHT \"Mit Lidl Plus\". Aus \"ARLA Kaergarden XXL \
+Versch. Sorten. Gekuehlt. Je 400 g 1 kg = 6.23\" wird also der Titel \"ARLA \
+Kaergarden XXL\"; Menge und Grundpreis gehoeren in die Felder quantity und \
+base_price. Bei Obst und Gemuese ohne Marke reicht die Sortenbezeichnung \
+(\"Rote Aepfel\", \"Zucchini\", \"Heidelbeeren\").
 4. Überspringe alles, was kein kaufbarer Artikel ist: Werbeclaims, Fußnoten, \
 Rechtstexte, Öffnungszeiten, Druckkennungen wie \"LHZ – 30/2026 – BE/BY\", \
 Seitenzahlen, Hinweise auf die Lidl-App oder den Onlineshop.
@@ -139,27 +152,26 @@ fn response_schema() -> serde_json::Value {
 }
 
 fn request_body(page_text: &str) -> serde_json::Value {
+    let model = std::env::var("LIDL_LLM_MODEL").unwrap_or_else(|_| DEFAULT_MODEL.to_string());
     serde_json::json!({
-        "model": MODEL,
+        "model": model,
         "max_tokens": MAX_TOKENS,
-        // Der Systemprompt ist für alle Seiten identisch — zwischenspeichern,
-        // dann kostet ab Seite zwei nur noch der Seitentext.
-        "system": [{
-            "type": "text",
-            "text": SYSTEM_PROMPT,
-            "cache_control": {"type": "ephemeral"}
-        }],
-        "output_config": {
-            // Reine Auslesearbeit; tiefes Nachdenken bringt hier nichts und
-            // kostet Tokens. Denken bleibt an (auf Opus 5 der Standard) —
-            // ganz abschalten hat auf diesem Modell eigene Fallstricke.
-            "effort": "low",
-            "format": {"type": "json_schema", "schema": response_schema()}
+        // Auslesearbeit, keine Kreativaufgabe.
+        "temperature": 0,
+        // `strict` erzwingt gültiges JSON nach Schema — erspart einen Parser
+        // für halb ausgegebene Antworten.
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "lidl_offers",
+                "strict": true,
+                "schema": response_schema()
+            }
         },
-        "messages": [{
-            "role": "user",
-            "content": format!("{USER_PREFIX}{page_text}")
-        }]
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": format!("{USER_PREFIX}{page_text}")}
+        ]
     })
 }
 
@@ -178,6 +190,37 @@ pub fn price_is_grounded(price: f64, page_text: &str) -> bool {
     page_text.contains(&dot)
         || page_text.contains(&comma)
         || dash.is_some_and(|d| page_text.contains(&d))
+}
+
+/// Beschreibung abschneiden, falls das Modell sie trotz Anweisung in den
+/// Titel gezogen hat. Live beobachtet am 2026-07-25: „ARLA Kaergarden XXL
+/// Gekühlt. Je 400 g 1 kg = 6.23" statt „ARLA Kaergarden XXL".
+fn clean_title(title: &str) -> String {
+    const CUTS: &[&str] = &[
+        "Versch.",
+        "Gekühlt",
+        "Tiefgefroren",
+        " Je ",
+        "1 kg =",
+        "1 l =",
+        "1 Stk =",
+        "zzgl.",
+        "Mit Lidl Plus",
+        "UVP",
+        "Normalpreis",
+    ];
+    let mut end = title.len();
+    for cut in CUTS {
+        if let Some(at) = title.find(cut)
+            && at > 0
+            && at < end
+        {
+            end = at;
+        }
+    }
+    title[..end]
+        .trim_matches(|c: char| c.is_whitespace() || c == ',' || c == '.' || c == '-')
+        .to_string()
 }
 
 /// Titel, die kein Produkt benennen — dieselbe Filterliste wie im
@@ -199,7 +242,8 @@ fn build_offer(
     if !(0.10..=10_000.0).contains(&raw.price) || !price_is_grounded(raw.price, page_text) {
         return None;
     }
-    if !title_is_usable(&raw.title) {
+    let title = clean_title(&raw.title);
+    if !title_is_usable(&title) {
         return None;
     }
 
@@ -210,7 +254,7 @@ fn build_offer(
         "{} {} {}",
         raw.quantity.as_deref().unwrap_or(""),
         raw.base_price.as_deref().unwrap_or(""),
-        raw.title
+        title
     );
     if lidl_prospekt::arithmetic_check(&context, raw.price) == Some(false) {
         return None;
@@ -237,8 +281,6 @@ fn build_offer(
     if raw.lidl_plus {
         parts.push("nur mit Lidl Plus".to_string());
     }
-    let title = raw.title.trim().to_string();
-
     Some(Offer {
         id: Offer::build_id(market_id, &format!("{title}_{:.2}", raw.price), valid_from),
         market_id: market_id.to_string(),
@@ -259,58 +301,107 @@ fn build_offer(
 
 // ------------------------------------------------------------------ Netzwerk
 
+/// Token für GitHub Models: erst die Umgebung, dann die angemeldete
+/// GitHub-CLI. Letzteres macht den lokalen Lauf voraussetzungsfrei, solange
+/// `gh auth login` einmal gelaufen ist.
 fn api_key() -> Result<String> {
-    std::env::var("ANTHROPIC_API_KEY")
-        .context("ANTHROPIC_API_KEY nicht gesetzt — wird für LIDL_SOURCE=prospekt-llm benötigt")
+    for var in ["GITHUB_MODELS_TOKEN", "GITHUB_TOKEN"] {
+        if let Ok(token) = std::env::var(var)
+            && !token.trim().is_empty()
+        {
+            return Ok(token);
+        }
+    }
+    let out = std::process::Command::new("gh")
+        .args(["auth", "token"])
+        .output()
+        .context(
+            "Kein GITHUB_MODELS_TOKEN/GITHUB_TOKEN gesetzt und `gh` nicht gefunden — \
+             für LIDL_SOURCE=prospekt-llm wird eines von beiden benötigt",
+        )?;
+    let token = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if !out.status.success() || token.is_empty() {
+        bail!(
+            "`gh auth token` lieferte kein Token — bitte `gh auth login` ausführen \
+             oder GITHUB_MODELS_TOKEN setzen"
+        );
+    }
+    Ok(token)
 }
 
+/// Eine Seite auslesen.
+///
+/// Zwei Versuche, und zwar für beide Sorten Fehlschlag: das Ratenlimit (429)
+/// und abgerissene Verbindungen. Letzteres ist kein theoretischer Fall — beim
+/// ersten Lauf über 46 Seiten kam auf Seite 44 ein „Connection reset by peer".
+/// Ohne Wiederholung verliert man dafür eine ganze Prospektseite.
 async fn extract_page(
     client: &reqwest::Client,
-    key: &str,
+    token: &str,
     page_text: &str,
 ) -> Result<Vec<LlmOffer>> {
-    let resp = client
-        .post(API_URL)
-        .header("x-api-key", key)
-        .header("anthropic-version", API_VERSION)
-        .header("content-type", "application/json")
-        .json(&request_body(page_text))
-        .send()
-        .await
-        .context("Anfrage an die Claude-API fehlgeschlagen")?;
+    for attempt in 0..2 {
+        let sent = client
+            .post(API_URL)
+            .bearer_auth(token)
+            .header("content-type", "application/json")
+            .json(&request_body(page_text))
+            .send()
+            .await;
+        let resp = match sent {
+            Ok(resp) => resp,
+            Err(e) if attempt == 0 => {
+                eprintln!("  Verbindung abgerissen ({e}) — neuer Versuch in 5s");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                continue;
+            }
+            Err(e) => return Err(e).context("Anfrage an GitHub Models fehlgeschlagen"),
+        };
 
-    let status = resp.status();
-    let body: serde_json::Value = resp.json().await.context("Antwort war kein JSON")?;
-    if !status.is_success() {
-        let message = body
-            .pointer("/error/message")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unbekannter Fehler");
-        bail!("Claude-API antwortete mit HTTP {status}: {message}");
+        let status = resp.status();
+        if status.as_u16() == 429 && attempt == 0 {
+            eprintln!("  Ratenlimit erreicht — warte {}s", RETRY_PAUSE.as_secs());
+            tokio::time::sleep(RETRY_PAUSE).await;
+            continue;
+        }
+        // Erst als Text lesen, dann parsen: Fehlerantworten der Freistufe
+        // kommen mitunter als Klartext oder leer, und `resp.json()` würde
+        // daraus ein nichtssagendes „expected value at line 1 column 1"
+        // machen — ohne zu verraten, was tatsächlich zurückkam.
+        let raw = resp
+            .text()
+            .await
+            .context("Antwort von GitHub Models konnte nicht gelesen werden")?;
+        if !status.is_success() {
+            let snippet: String = raw.chars().take(200).collect();
+            bail!("GitHub Models antwortete mit HTTP {status}: {snippet}");
+        }
+        let body: serde_json::Value = serde_json::from_str(&raw).with_context(|| {
+            format!(
+                "Antwort war kein JSON (HTTP {status}): {}",
+                raw.chars().take(200).collect::<String>()
+            )
+        })?;
+
+        // Der Inhaltsfilter kann eine Seite ablehnen — dann liefert sie eben
+        // nichts, statt den ganzen Prospekt zu kippen.
+        if body
+            .pointer("/choices/0/message/refusal")
+            .is_some_and(|v| !v.is_null())
+        {
+            eprintln!("WARNUNG [Lidl] Seite vom Inhaltsfilter abgelehnt — übersprungen.");
+            return Ok(Vec::new());
+        }
+
+        let text = body
+            .pointer("/choices/0/message/content")
+            .and_then(|t| t.as_str())
+            .context("Antwort ohne Inhalt")?;
+        let page: LlmPage =
+            serde_json::from_str(text).context("Antwort war kein gültiges Angebots-JSON")?;
+        return Ok(page.offers);
     }
-
-    // Bei einer Ablehnung ist `content` leer — kein Grund, den ganzen Lauf
-    // abzubrechen, die Seite liefert dann eben nichts.
-    if body.get("stop_reason").and_then(|v| v.as_str()) == Some("refusal") {
-        eprintln!("WARNUNG [Lidl] Seite abgelehnt (stop_reason=refusal) — übersprungen.");
-        return Ok(Vec::new());
-    }
-
-    let text = body
-        .pointer("/content")
-        .and_then(|c| c.as_array())
-        .and_then(|blocks| {
-            blocks
-                .iter()
-                .find(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"))
-        })
-        .and_then(|b| b.get("text"))
-        .and_then(|t| t.as_str())
-        .context("Antwort ohne Textblock")?;
-
-    let page: LlmPage =
-        serde_json::from_str(text).context("Antwort war kein gültiges Angebots-JSON")?;
-    Ok(page.offers)
+    bail!("Ratenlimit auch nach Wartezeit nicht frei")
 }
 
 /// Alle Seiten mit Sternpreisen durch das Modell schicken und die Ergebnisse
@@ -342,29 +433,26 @@ pub fn extract_offers(
         .build()
         .context("Tokio-Runtime konnte nicht gestartet werden")?;
 
+    // Nacheinander mit festem Abstand: Die Freistufe von GitHub Models
+    // erlaubt nur wenige Anfragen pro Minute, und ein wöchentlicher Lauf darf
+    // ruhig ein paar Minuten dauern.
     let results: Vec<(usize, String, Vec<LlmOffer>)> = runtime.block_on(async {
         let mut out = Vec::new();
-        for chunk in candidates.chunks(CONCURRENCY) {
-            let mut set = tokio::task::JoinSet::new();
-            for (page, text) in chunk.iter().cloned() {
-                let client = client.clone();
-                let key = key.clone();
-                set.spawn(async move {
-                    let parsed = extract_page(&client, &key, &text).await;
-                    (page, text, parsed)
-                });
+        for (index, (page, text)) in candidates.iter().enumerate() {
+            if index > 0 {
+                tokio::time::sleep(REQUEST_INTERVAL).await;
             }
-            while let Some(joined) = set.join_next().await {
-                let (page, text, parsed) = joined.context("Task abgebrochen")?;
-                match parsed {
-                    Ok(offers) => out.push((page, text, offers)),
-                    // Eine gescheiterte Seite darf den Prospekt nicht kippen.
-                    Err(e) => eprintln!("WARNUNG [Lidl] Seite {page} übersprungen: {e:#}"),
+            match extract_page(&client, &key, text).await {
+                Ok(offers) => {
+                    println!("  Seite {page}: {} Angebote", offers.len());
+                    out.push((*page, text.clone(), offers));
                 }
+                // Eine gescheiterte Seite darf den Prospekt nicht kippen.
+                Err(e) => eprintln!("WARNUNG [Lidl] Seite {page} übersprungen: {e:#}"),
             }
         }
-        Ok::<_, anyhow::Error>(out)
-    })?;
+        out
+    });
 
     let mut offers = Vec::new();
     let mut seen = HashSet::new();
@@ -427,6 +515,21 @@ mod tests {
         // Genau das ist der Halluzinationsfall: plausibler Preis, steht aber
         // nirgends auf der Seite.
         assert!(!price_is_grounded(3.49, page));
+    }
+
+    #[test]
+    fn the_description_is_cut_off_the_title() {
+        // Live beobachtet: Das Modell zieht die Beschreibung in den Titel.
+        assert_eq!(
+            clean_title("ARLA Kaergarden XXL Gekühlt. Je 400 g 1 kg = 6.23"),
+            "ARLA Kaergarden XXL"
+        );
+        assert_eq!(
+            clean_title("BARESA Pesto Versch. Sorten. Je 190 g"),
+            "BARESA Pesto"
+        );
+        // Ein sauberer Titel bleibt unangetastet.
+        assert_eq!(clean_title("MILBONA Speisequark"), "MILBONA Speisequark");
     }
 
     #[test]

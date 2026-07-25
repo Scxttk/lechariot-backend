@@ -59,11 +59,15 @@ genau einem Flight. Es gibt also keine geheime Zusatzquelle.
 
 Stand 2026-07-25 für PLZ 01219:
 
-| | marktguru | Prospekt-Weg |
-|---|---:|---:|
-| Angebote der Woche | 375 | **382** |
-| Preis in der jeweils anderen Quelle vorhanden | — | **96,3 %** |
-| Preis **und** passender Name | — | **76,5 %** |
+| | marktguru | `prospekt` | `prospekt-llm` |
+|---|---:|---:|---:|
+| Angebote der Woche | 375 | **382** | **420** |
+| marktguru-Preis abgedeckt | — | 96,3 % | **97,9 %** |
+| Preis **und** passender Name | — | 76,5 % | **89,6 %** |
+
+Beide Wege decken die Preise ab; der Unterschied liegt bei den **Namen**. Genau
+das ist der Grund, warum es den LLM-Weg gibt — für den Warenkorb-Abgleich nützt
+ein Preis nichts, dessen Produktname nicht zum Listeneintrag passt.
 
 Die zweite Zeile ist die eigentliche Aussage: 361 der 375 marktguru-Preise
 kommen auch hier heraus. Die 14 Fehlenden sind Randfälle (Artikel, deren Preis
@@ -105,26 +109,62 @@ Bekannte Grenze: Vereinzelt landet eine Werbezeile als Produktname in den
 Daten („Woche", „Kernarm") — rund 2 % der Zeilen. Die Preise dieser Zeilen
 sind korrekt, nur der Name taugt nicht zum Matchen.
 
-### Dritter Weg: `LIDL_SOURCE=prospekt-llm`
+### Dritter Weg: `LIDL_SOURCE=prospekt-llm` (Zusatz, nicht Ersatz)
 
-Dieselbe Textebene, aber seitenweise durch ein Sprachmodell
-(`src/scrapers/lidl_llm.rs`, braucht `ANTHROPIC_API_KEY`). Gedacht für die
-Kacheln, an denen die Geometrie scheitert — Obst und Gemüse ohne Marke,
-Non-Food ohne Marke-Name-Beschreibung-Struktur.
+**Der Standard bleibt der Weg ohne Modell.** `LIDL_SOURCE=prospekt` erreicht
+96 % Preisabdeckung ohne Token, ohne Netzabhängigkeit zu einem weiteren
+Anbieter und ohne Ratenlimit — es gibt keinen Grund, dafür ein Modell zu
+bemühen. Der LLM-Weg existiert nur für den Rest: Kacheln ohne saubere
+Marke-Name-Struktur (Obst, Gemüse, Non-Food) und die rund 2 % Zeilen, deren
+Titel eine Werbezeile ist.
+
+Läuft über **GitHub Models** (`src/scrapers/lidl_llm.rs`), weil das im
+GitHub-Student-Paket enthalten ist — ein Zusatz darf keine laufenden Kosten
+verursachen. Der Token kommt aus `GITHUB_MODELS_TOKEN`, sonst `GITHUB_TOKEN`,
+sonst aus `gh auth token`; lokal ist damit nichts einzurichten, wenn `gh`
+angemeldet ist.
 
 Die Halluzinationsfrage ist die einzige, die hier zählt, und sie ist
-mechanisch beantwortet: Jeder Preis muss **wörtlich im Seitentext stehen**
-(`price_is_grounded`), und wo Packungsgröße und Grundpreis vorliegen, muss
-dieselbe Rechenprobe aufgehen wie im geometrischen Weg. Was das nicht besteht,
-wird verworfen — das Modell kann Zeilen übersehen, aber keine erfinden.
+mechanisch beantwortet, nicht durch Zureden im Prompt:
 
-Kosten: ein Wochenprospekt sind rund 35.000 Tokens; der Systemprompt ist über
-alle Seiten identisch und wird per `cache_control` zwischengespeichert. Seiten
-ohne Sternpreis gehen gar nicht erst ans Modell.
+1. Jeder Preis muss **wörtlich im Seitentext stehen** (`price_is_grounded`).
+2. Wo Packungsgröße und Grundpreis vorliegen, muss dieselbe **Rechenprobe**
+   aufgehen wie im geometrischen Weg.
+
+Das Modell kann also Zeilen übersehen, aber keine erfinden. Beim ersten
+Livelauf hat genau das gegriffen: Für ARLA Kaergarden kamen 2,49 € *und* der
+Nachbarpreis 3,99 € zurück — 400 g zu 6,23 €/kg sind 2,49 €, also flog der
+zweite raus. Über den ganzen Prospekt: **293 Vorschläge, 9 verworfen** (3 %).
+
+Was der Weg konkret dazugewinnt, sieht man an den Zeilen, die der
+geometrische Weg gar nicht erst als Produkt erkennt — Obst und Gemüse ohne
+Marke: „Galiamelone", „Heidelbeeren", „Rote Paprika", „Rote Äpfel". Dort gibt
+es keine Marke-Name-Beschreibung-Struktur, an der sich eine Kachelbildung
+festhalten könnte.
+
+Ratenlimit und Dauer: Die Freistufe erlaubt rund 15 Anfragen pro Minute,
+deshalb laufen die Seiten **nacheinander** mit 4 Sekunden Mindestabstand statt
+parallel. Der Abstand ist aber nicht das Nadelöhr — eine Prospektseite braucht
+beim Modell selbst rund 30 Sekunden, sodass ein Wochenprospekt (46 von 69
+Seiten tragen Sternpreise) etwa **20 Minuten** läuft. Für einen wöchentlichen
+Lauf unerheblich, für interaktives Ausprobieren zu langsam. Seiten ohne
+Sternpreis gehen gar nicht erst ans Modell.
+
+Erwartbare Aussetzer im Livebetrieb, beide mit einem zweiten Versuch
+abgefangen: Ratenlimit-Antworten (429) und abgerissene Verbindungen
+(„Connection reset by peer", beim ersten 46-Seiten-Lauf einmal aufgetreten).
+Eine Seite, die auch dann scheitert, wird übersprungen — sie darf nicht den
+ganzen Prospekt kippen.
 
 ```sh
-ANTHROPIC_API_KEY=... LIDL_SOURCE=prospekt-llm smartshop fetch --store lidl --zip 01219 --dry-run
+LIDL_SOURCE=prospekt-llm smartshop fetch --store lidl --zip 01219 --dry-run
 ```
+
+Modell über `LIDL_LLM_MODEL` austauschbar (Standard `openai/gpt-4.1-mini`).
+
+Falls der Weg je im nightly laufen soll: In GitHub Actions gibt es `GITHUB_TOKEN`
+von Haus aus, der Job braucht dafür aber `permissions: models: read` — ohne das
+antwortet GitHub Models mit 401, obwohl ein Token gesetzt ist.
 
 ## Gemeinsame Infrastruktur (`src/scrapers/util.rs`)
 
