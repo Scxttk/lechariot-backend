@@ -142,6 +142,41 @@ der Policy `auth.role() = 'authenticated'` verlangen und pro Installation
 lässt sich die Distinct-PLZ-Flut fair drosseln, ohne andere Nutzer zu
 treffen.
 
+## On-Demand-Filialen: Trigger auf `branch_requests` (Migration v14)
+
+Seit Migration v13 gehören Angebote der **Filiale**, nicht der Kette in einer
+PLZ. Der Anforderungsweg dafür ist derselbe wie bei Regionen, nur eine Ebene
+genauer: Die App wählt eine Filiale aus dem Verzeichnis (`public.branches`)
+und inserted deren `market_id` in `public.branch_requests`; der Trigger
+`on_branch_request_insert` feuert einen `workflow_dispatch` auf `nightly.yml`
+mit `inputs.market_id`, und der Lauf macht daraus
+`sync-regions --market-id <ID>`.
+
+[`supabase/migration_v14_branch_requests.sql`](../supabase/migration_v14_branch_requests.sql)
+bringt alle Absicherungen aus v11 mit — spaltenweises INSERT-Recht (nur
+`market_id`), validierender With-Check auf die Steuerspalten, Cooldown pro
+`market_id` im Funktionskörper (`public.branch_dispatch_log`) — und **eine
+zusätzliche**:
+
+- **Die `market_id` muss im Verzeichnis stehen.** Bei Regionen kam alles
+  durch, was fünf Ziffern hat; so wurde `94108` zur aktiven Region, obwohl es
+  die PLZ nicht gibt. Eine Filial-ID lässt sich hart prüfen: Entweder ein
+  Store-Finder hat sie geliefert und sie steht in `branches`, oder es gibt
+  sie nicht. Der With-Check macht genau das per `exists`-Unterabfrage
+  (`branches` hat „Public read", der Check greift also auch für anon).
+
+Zwei Details, die leicht zu übersehen sind:
+
+- Der Trigger **steigt aus, wenn `last_synced` gesetzt ist**. Der Sync meldet
+  sich am Ende selbst fertig (`branch_requests.last_synced`, siehe
+  `sync::mark_branch_synced`), und für eine Filiale, die niemand vorher
+  angefordert hatte, ist das ein INSERT — ohne diese Bremse löste jede
+  Fertigmeldung einen neuen Lauf aus, der wieder eine Fertigmeldung schreibt.
+- Die **Distinct-Flut** ist hier deutlich kleiner als bei Regionen: statt
+  ~8.000 gültiger PLZ lässt sich nur anfordern, was im Verzeichnis steht
+  (Stand 2026-07-25: 3.115 Zeilen), und das wächst nur dort, wo jemand die
+  App benutzt. Der empfohlene Folgeschritt bleibt derselbe wie oben.
+
 ## Produktbilder: einmalige Migrationen v5 + v6
 
 Der Push schreibt seit v5 pro Angebot eine Produktbild-URL und spiegelt die

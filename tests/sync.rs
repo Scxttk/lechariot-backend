@@ -740,6 +740,24 @@ fn branch_mode_scrapes_exactly_the_requested_branch() {
         .expect("markets-Upsert fehlt");
     assert!(market.body.contains("1766063"), "{}", market.body);
     assert!(market.body.contains("01067"), "{}", market.body);
+
+    // Zuletzt die Fertigmeldung, sonst pollt die App bis zum Timeout weiter.
+    let done_pos = reqs
+        .iter()
+        .position(|r| r.method == "POST" && r.target.starts_with("/rest/v1/branch_requests"))
+        .expect("Fertigmeldung an branch_requests fehlt");
+    let done = &reqs[done_pos];
+    assert!(done.target.contains("on_conflict=market_id"), "{}", done.target);
+    let body: serde_json::Value = serde_json::from_str(&done.body).unwrap();
+    assert_eq!(body[0]["market_id"], "1766063");
+    assert!(body[0]["last_synced"].as_str().unwrap().starts_with("20"), "{}", done.body);
+    // Erst die Angebote, dann „fertig" — andersherum liest die App eine
+    // Fertigmeldung auf eine noch leere Region.
+    let upsert_pos = reqs
+        .iter()
+        .position(|r| r.method == "POST" && r.target.starts_with("/rest/v1/offers?"))
+        .unwrap();
+    assert!(upsert_pos < done_pos, "Fertigmeldung kam vor den Angeboten: {reqs:#?}");
 }
 
 #[test]
