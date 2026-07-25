@@ -6,7 +6,7 @@ use crate::models::{Market, Offer};
 /// Aktuelle Schema-Version (PRAGMA user_version). Zukünftige Schema-Änderungen
 /// müssen SCHEMA_VERSION erhöhen und in migrate() einen Migrationsschritt
 /// von der Vorversion ergänzen.
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 5;
 
 pub fn open(path: &str) -> Result<Connection> {
     let conn = Connection::open(path)?;
@@ -34,11 +34,22 @@ fn migrate(conn: &Connection) -> Result<()> {
             1 => migrate_v1_to_v2(conn)?,
             2 => migrate_v2_to_v3(conn)?,
             3 => migrate_v3_to_v4(conn)?,
+            4 => migrate_v4_to_v5(conn)?,
             v => bail!("Unbekannte Schema-Version {v} — keine Migration definiert."),
         }
         version += 1;
         conn.execute_batch(&format!("PRAGMA user_version = {version};"))?;
     }
+    Ok(())
+}
+
+// v5: Kette am Markt. Der Push braucht für `offers.market` den kanonischen
+// Kettennamen; ohne diese Spalte musste er ihn aus ID und Filialname raten,
+// was Filialen mit mehrdeutigem Namen falsch zuordnete ("ALDI SÜD
+// Köln-Altstadt-Nord" -> ALDI Nord). Bestandszeilen bleiben NULL und fallen
+// in push::chain_for weiter auf die Heuristik zurück.
+fn migrate_v4_to_v5(conn: &Connection) -> Result<()> {
+    conn.execute_batch("ALTER TABLE markets ADD COLUMN chain TEXT;")?;
     Ok(())
 }
 
@@ -231,17 +242,17 @@ pub fn watch_hits(conn: &Connection, watch: &Watch) -> Result<Vec<Offer>> {
 
 pub fn upsert_market(conn: &Connection, market: &Market) -> Result<()> {
     conn.execute(
-        "INSERT OR REPLACE INTO markets (id, name) VALUES (?1, ?2)",
-        params![market.id, market.name],
+        "INSERT OR REPLACE INTO markets (id, name, chain) VALUES (?1, ?2, ?3)",
+        params![market.id, market.name, market.chain],
     )?;
     Ok(())
 }
 
 pub fn markets(conn: &Connection) -> Result<Vec<Market>> {
-    let mut stmt = conn.prepare("SELECT id, name FROM markets ORDER BY name")?;
+    let mut stmt = conn.prepare("SELECT id, name, chain FROM markets ORDER BY name")?;
     let rows = stmt.query_map([], |row| {
         // Koordinaten liegen nur im Sync-Speicher, nicht in der lokalen DB.
-        Ok(Market { id: row.get(0)?, name: row.get(1)?, lat: None, lon: None })
+        Ok(Market { id: row.get(0)?, name: row.get(1)?, lat: None, lon: None, chain: row.get(2)? })
     })?;
     Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
 }
@@ -486,4 +497,44 @@ pub fn upsert_offer(conn: &Connection, offer: &Offer) -> Result<()> {
         params![offer.id, offer.market_id, offer.title, offer.price],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn market_chain_survives_roundtrip() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        let koeln = Market::new("ALDI_SUED_B330", "ALDI SÜD Köln-Altstadt-Nord")
+            .with_chain("ALDI SÜD");
+        upsert_market(&conn, &koeln).unwrap();
+
+        let stored = markets(&conn).unwrap();
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].chain.as_deref(), Some("ALDI SÜD"));
+    }
+
+    // Bestands-DBs (Schema < 5) haben keine chain-Spalte: die Migration muss sie
+    // ergänzen, ohne die vorhandenen Markt-Zeilen zu verlieren.
+    #[test]
+    fn legacy_markets_migrate_to_current_schema() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_schema(&conn).unwrap();
+        conn.execute_batch("PRAGMA user_version = 1;").unwrap();
+        conn.execute(
+            "INSERT INTO markets (id, name) VALUES (?1, ?2)",
+            params!["m1", "REWE Christian Koehler oHG"],
+        )
+        .unwrap();
+
+        migrate(&conn).unwrap();
+
+        assert_eq!(schema_version(&conn).unwrap(), SCHEMA_VERSION);
+        let stored = markets(&conn).unwrap();
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].name, "REWE Christian Koehler oHG");
+        assert_eq!(stored[0].chain, None);
+    }
 }

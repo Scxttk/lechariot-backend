@@ -95,6 +95,22 @@ fn delete_market(cfg: &PushConfig, chain: &str, plz: &str) -> Result<()> {
     check_response(&format!("Löschen des Markts {chain} (PLZ {plz})"), resp)
 }
 
+/// Angebote einer Kette für eine Region aus `public.offers` löschen — Gegenstück
+/// zu `delete_market`. Ohne Filiale in der Region hat die Kette dort auch keine
+/// Angebote; der Push räumt sie nicht ab, weil er nur Wochen von Ketten löscht,
+/// die er selbst pusht. Bleiben sie stehen, sind sie für immer verwaist: so
+/// standen in Köln (50667) ALDI-SÜD-Angebote unter `market='ALDI Nord'`.
+/// Ausgelöst wird das nur von einem *erfolgreichen* "keine Filiale"-Lookup —
+/// Finder-Fehler kommen hier nie an.
+fn delete_offers(cfg: &PushConfig, chain: &str, plz: &str) -> Result<()> {
+    let client = reqwest::blocking::Client::new();
+    let resp = auth(cfg, client.delete(format!("{}/rest/v1/offers", cfg.base_url)))
+        .query(&[("market", format!("eq.{chain}")), ("region", format!("eq.{plz}"))])
+        .send()
+        .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
+    check_response(&format!("Löschen der Angebote von {chain} (Region {plz})"), resp)
+}
+
 /// Gefundene Märkte einer Region nach `public.markets` upserten.
 fn upsert_markets(cfg: &PushConfig, rows: &[serde_json::Value]) -> Result<()> {
     let client = reqwest::blocking::Client::new();
@@ -112,9 +128,9 @@ fn upsert_markets(cfg: &PushConfig, rows: &[serde_json::Value]) -> Result<()> {
 ///
 /// 1. Filialcheck VORAB über den Store-Finder (statt Kopieren + späterem
 ///    Cleanup): ohne Filiale gäbe es keine markets-Zeile und die kopierten
-///    Angebote wären für die App unsichtbar, aber niemand würde sie je wieder
-///    aufräumen — der Push löscht nur Wochen von Ketten, die er selbst pusht.
-///    Der Check kostet ~2 Requests pro Kette und vermeidet dieses Leck.
+///    Angebote wären für die App unsichtbar. Aufräumen würde sie erst der
+///    nächste Sync der Region (`delete_offers` in `sync_region`) — der Check
+///    kostet ~2 Requests pro Kette und spart diesen Umweg.
 ///    Finder-Fehler überspringen die Kette nur (kein Kopieren, kein Abbruch) —
 ///    der reguläre Scrape direkt danach hat seinen eigenen Fallback.
 /// 2. ALLE noch gültigen Wochen der Kette kopieren, nicht nur die neueste:
@@ -342,7 +358,10 @@ fn sync_region(
         }
         for chain in &gone_chains {
             delete_market(cfg, chain, plz)?;
-            println!("[{plz}] {chain}: Markt-Zeile entfernt (keine Filiale mehr im Umkreis).");
+            delete_offers(cfg, chain, plz)?;
+            println!(
+                "[{plz}] {chain}: Markt-Zeile und Angebote entfernt (keine Filiale mehr im Umkreis)."
+            );
         }
     }
 

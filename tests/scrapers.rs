@@ -345,12 +345,17 @@ fn store_finder_virtualearth_malformed_is_error_not_absence() {
     assert!(scrapers::store_finder::parse_virtualearth(&raw).is_err());
 }
 
+/// Koordinaten der PLZ 01219 (wie in fixtures/store_finder/nominatim_plz.json),
+/// Ausgangspunkt aller Uberall-Fixtures hier.
+const PLZ_01219: (f64, f64) = (51.0231864, 13.7659125);
+
 #[test]
 fn store_finder_uberall_hit_yields_branch_with_geo() {
     let raw: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/store_finder/uberall_hit.json")).unwrap();
-    let market =
-        scrapers::store_finder::parse_uberall(&raw, "ALDI Nord", "ALDI_NORD").unwrap().unwrap();
+    let market = scrapers::store_finder::parse_uberall(&raw, PLZ_01219, "ALDI Nord", "ALDI_NORD")
+        .unwrap()
+        .unwrap();
     assert_eq!(market.id, "ALDI_NORD_DE036039");
     assert_eq!(market.name, "ALDI Nord Dresden");
     assert_eq!(market.lat, Some(51.019498));
@@ -362,16 +367,56 @@ fn store_finder_uberall_beyond_cutoff_means_no_branch() {
     // Nächste Filiale 48 km entfernt -> Kette in der Region nicht vertreten.
     let raw: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/store_finder/uberall_far.json")).unwrap();
-    assert!(scrapers::store_finder::parse_uberall(&raw, "ALDI Nord", "ALDI_NORD")
+    assert!(scrapers::store_finder::parse_uberall(&raw, PLZ_01219, "ALDI Nord", "ALDI_NORD")
         .unwrap()
         .is_none());
+}
+
+// Ohne `distance` filtert die Abfrage gar nicht mehr nach Umkreis (max=1, kein
+// Radiusparameter) — die Entfernung muss dann aus den Filialkoordinaten kommen,
+// sonst gilt jede Kette überall als vertreten.
+#[test]
+fn store_finder_uberall_without_distance_uses_coordinates() {
+    let raw: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/store_finder/uberall_hit_no_distance.json"))
+            .unwrap();
+    // Chemnitz, ~60 km von 01219 entfernt
+    assert!(
+        scrapers::store_finder::parse_uberall(&raw, PLZ_01219, "ALDI Nord", "ALDI_NORD")
+            .unwrap()
+            .is_none(),
+        "Filiale außerhalb des Cutoffs darf ohne distance-Feld nicht durchrutschen"
+    );
+
+    // Dieselbe Antwort, Filiale direkt vor der Haustür -> Treffer.
+    let mut near = raw.clone();
+    let store = near.pointer_mut("/response/locations/0").unwrap();
+    store["lat"] = serde_json::json!(PLZ_01219.0);
+    store["lng"] = serde_json::json!(PLZ_01219.1);
+    let market = scrapers::store_finder::parse_uberall(&near, PLZ_01219, "ALDI Nord", "ALDI_NORD")
+        .unwrap()
+        .unwrap();
+    assert_eq!(market.id, "ALDI_NORD_DE099999");
+}
+
+#[test]
+fn store_finder_uberall_without_distance_and_coordinates_is_error() {
+    // Weder distance noch lat/lng: Entfernung nicht prüfbar -> Fehler, damit
+    // resolve den nationalen Platzhalter setzt statt still zu raten.
+    let raw = serde_json::json!({
+        "status": "SUCCESS",
+        "response": {"locations": [{"identifier": "DE099999", "city": "Chemnitz"}]}
+    });
+    assert!(
+        scrapers::store_finder::parse_uberall(&raw, PLZ_01219, "ALDI Nord", "ALDI_NORD").is_err()
+    );
 }
 
 #[test]
 fn store_finder_uberall_empty_means_no_branch() {
     let raw: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/store_finder/uberall_empty.json")).unwrap();
-    assert!(scrapers::store_finder::parse_uberall(&raw, "ALDI SÜD", "ALDI_SUED")
+    assert!(scrapers::store_finder::parse_uberall(&raw, PLZ_01219, "ALDI SÜD", "ALDI_SUED")
         .unwrap()
         .is_none());
 }
@@ -380,7 +425,9 @@ fn store_finder_uberall_empty_means_no_branch() {
 fn store_finder_uberall_error_status_is_error() {
     let raw: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/store_finder/uberall_error.json")).unwrap();
-    assert!(scrapers::store_finder::parse_uberall(&raw, "ALDI Nord", "ALDI_NORD").is_err());
+    assert!(
+        scrapers::store_finder::parse_uberall(&raw, PLZ_01219, "ALDI Nord", "ALDI_NORD").is_err()
+    );
 }
 
 #[test]
