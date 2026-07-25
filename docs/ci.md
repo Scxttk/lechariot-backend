@@ -15,6 +15,13 @@ Drei Workflows liegen unter `.github/workflows/`:
   unerreichbar, alle Regionen gescheitert), greift der **Fallback**: der
   alte Einzel-PLZ-Pfad `fetch --all-stores --zip $SMARTSHOP_ZIP` +
   `push --region $SMARTSHOP_ZIP`. Die Pipeline geht also nie dunkel.
+  Zum Schluss räumt der volle Lauf auf (bei On-Demand-Läufen für eine PLZ
+  oder Filiale übersprungen): `prune-images` entfernt verwaiste Bilder aus
+  dem Bucket, `prune-history` beschneidet `public.price_history` auf 26
+  Wochen. Beide Befehle sind ohne `--execute` reine Dry-Runs. Die Historie
+  braucht das, weil sie als einzige Tabelle **nicht** rotiert: Jeder Push
+  legt eine weitere Wochen-Zeile je Produkt und Filiale an, und seit
+  Migration v13 multipliziert sich das mit jeder angeforderten Filiale.
 - **`branches.yml`** — frischt das Filialverzeichnis `public.branches` auf
   (`branches-sync --from-regions`), sonntags 03:15 UTC. Bewusst **nicht** in
   der Nightly: Filialen ändern sich in Monaten, Angebote wöchentlich; täglich

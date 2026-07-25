@@ -243,6 +243,20 @@ jobs:
           ./target/release/smartshop prune-images --execute --min-age-days 1 \
             2>&1 | tee -a "$LOG"
 
+      # Preis-Historie beschneiden: Anders als `offers` rotiert sie nicht —
+      # jeder Push legt eine weitere Wochen-Zeile je Produkt und Filiale an,
+      # gelöscht wurde nie. Mit dem Filial-Schlüssel (v13) multipliziert sich
+      # das zusätzlich mit jeder angeforderten Filiale. Wie beim Bild-Prune
+      # nur im vollen Nightly-Lauf.
+      - name: Prune price history
+        if: inputs.plz == '' && inputs.market_id == ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          ./target/release/smartshop prune-history --execute \
+            2>&1 | tee -a "$LOG"
+
       - name: Upload run log
         if: always()
         uses: actions/upload-artifact@v4

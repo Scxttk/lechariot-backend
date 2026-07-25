@@ -1,3 +1,7 @@
+//! Aufräumen: `prune-images` für den Storage-Bucket, `prune-history` für die
+//! Preis-Historie. Beide folgen derselben Regel — Standard ist Dry-Run,
+//! gelöscht wird erst mit `--execute`.
+//!
 //! `prune-images`: verwaiste Bilder aus dem Storage-Bucket `offer-images`
 //! entfernen. Angebote rotieren wöchentlich (der Push löscht veraltete
 //! offer-Zeilen), ihre gespiegelten Bilder blieben aber bisher für immer im
@@ -302,6 +306,156 @@ fn human_size(bytes: u64) -> String {
     } else {
         format!("{v:.1} {}", UNITS[i])
     }
+}
+
+// ============================ prune-history ============================
+
+/// Standard-Aufbewahrung der Preis-Historie in Wochen. Ein halbes Jahr ist
+/// die kürzeste Spanne, in der ein Preisverlauf noch etwas aussagt — kürzer
+/// und der Chart im Angebots-Sheet zeigt nur Rauschen, länger und die Tabelle
+/// wächst schneller, als sie jemand liest.
+pub const HISTORY_WEEKS: i64 = 26;
+
+pub struct HistoryPruneOptions {
+    /// false = Dry-Run (nur zählen, nichts löschen).
+    pub execute: bool,
+    /// Wochen, die aufbewahrt werden.
+    pub weeks: i64,
+}
+
+/// Alte Wochen aus `public.price_history` löschen.
+///
+/// Anders als `offers` rotiert die Historie nicht: Jeder Push schreibt eine
+/// weitere Wochen-Zeile je Produkt und Filiale, gelöscht wurde nie. Mit dem
+/// Filial-Schlüssel aus v13 multipliziert sich das zusätzlich mit jeder
+/// Filiale, die jemand anfordert — Stand 2026-07-25 stehen dort 62.793 Zeilen
+/// aus wenigen Wochen und 106 Filialen.
+///
+/// Zwei Löschläufe, weil zwei Sorten Zeilen alt sein können:
+///   * die mit `valid_from` vor dem Stichtag — der Normalfall,
+///   * Altbestand ohne `valid_from`, der über `recorded_at` datiert wird.
+/// Ohne den zweiten Lauf bliebe genau der Teil für immer liegen, den niemand
+/// mehr zuordnen kann.
+pub fn run_history(opts: &HistoryPruneOptions, cfg: Option<&PushConfig>) -> Result<()> {
+    let owned;
+    let cfg = match cfg {
+        Some(c) => c,
+        None => {
+            owned = config_from_env()?;
+            &owned
+        }
+    };
+    if opts.weeks < 1 {
+        bail!("--weeks muss mindestens 1 sein (sonst löscht der Lauf die ganze Historie).");
+    }
+    let client = reqwest::blocking::Client::new();
+
+    let cutoff = Utc::now() - Duration::weeks(opts.weeks);
+    let cutoff_date = cutoff.format("%Y-%m-%d").to_string();
+    let cutoff_ts = cutoff.to_rfc3339();
+    let mode = if opts.execute { "LÖSCHEN" } else { "Dry-Run" };
+    println!(
+        "prune-history ({mode}): behalte {} Wochen, Stichtag {cutoff_date}.",
+        opts.weeks
+    );
+
+    let before = count_history(&client, cfg, &[])?;
+    let dated = count_history(&client, cfg, &[("valid_from", format!("lt.{cutoff_date}"))])?;
+    let undated = count_history(
+        &client,
+        cfg,
+        &[("valid_from", "is.null".to_string()), ("recorded_at", format!("lt.{cutoff_ts}"))],
+    )?;
+
+    println!("In der Historie: {before} Zeile(n).");
+    println!("  älter als der Stichtag: {dated}");
+    println!("  ohne valid_from und vor dem Stichtag aufgezeichnet: {undated}");
+
+    if !opts.execute {
+        println!("\nDry-Run — es wird nichts gelöscht. Mit --execute wirklich löschen.");
+        return Ok(());
+    }
+    if dated + undated == 0 {
+        println!("\nNichts zu löschen.");
+        return Ok(());
+    }
+
+    delete_history(&client, cfg, &[("valid_from", format!("lt.{cutoff_date}"))])?;
+    delete_history(
+        &client,
+        cfg,
+        &[("valid_from", "is.null".to_string()), ("recorded_at", format!("lt.{cutoff_ts}"))],
+    )?;
+
+    let after = count_history(&client, cfg, &[])?;
+    println!("\nGelöscht: {} Zeile(n). Historie jetzt: {after}.", before.saturating_sub(after));
+    Ok(())
+}
+
+fn history_request(
+    client: &reqwest::blocking::Client,
+    cfg: &PushConfig,
+    method: reqwest::Method,
+    filters: &[(&str, String)],
+) -> reqwest::blocking::RequestBuilder {
+    let mut req = client
+        .request(method, format!("{}/rest/v1/price_history", cfg.base_url))
+        .header("apikey", &cfg.api_key)
+        .header("Authorization", format!("Bearer {}", cfg.api_key));
+    for (key, value) in filters {
+        req = req.query(&[(*key, value)]);
+    }
+    req
+}
+
+/// Zeilen zählen, ohne sie zu laden: `count=exact` plus ein Ein-Zeilen-Range,
+/// die Zahl steht im `content-range`-Header.
+fn count_history(
+    client: &reqwest::blocking::Client,
+    cfg: &PushConfig,
+    filters: &[(&str, String)],
+) -> Result<usize> {
+    let resp = history_request(client, cfg, reqwest::Method::GET, filters)
+        .query(&[("select", "id")])
+        .header("Prefer", "count=exact")
+        .header("Range", "0-0")
+        .send()
+        .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().unwrap_or_default();
+        let excerpt: String = body.chars().take(300).collect();
+        bail!("Historie zählen fehlgeschlagen (HTTP {status}): {excerpt}");
+    }
+    let header = resp
+        .headers()
+        .get("content-range")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from)
+        .context("Antwort ohne content-range — Zeilenzahl nicht ermittelbar")?;
+    parse_count(&header).with_context(|| format!("content-range unlesbar: {header}"))
+}
+
+/// `0-0/62793` -> 62793. `*/0` (leeres Ergebnis) -> 0.
+fn parse_count(content_range: &str) -> Option<usize> {
+    content_range.rsplit('/').next()?.trim().parse().ok()
+}
+
+fn delete_history(
+    client: &reqwest::blocking::Client,
+    cfg: &PushConfig,
+    filters: &[(&str, String)],
+) -> Result<()> {
+    let resp = history_request(client, cfg, reqwest::Method::DELETE, filters)
+        .send()
+        .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().unwrap_or_default();
+        let excerpt: String = body.chars().take(300).collect();
+        bail!("Historie löschen fehlgeschlagen (HTTP {status}): {excerpt}");
+    }
+    Ok(())
 }
 
 #[cfg(test)]

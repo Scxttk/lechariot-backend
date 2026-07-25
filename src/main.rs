@@ -252,6 +252,20 @@ enum Command {
         #[arg(long, default_value_t = 7)]
         min_age_days: i64,
     },
+    /// Alte Wochen aus `public.price_history` löschen.
+    ///
+    /// Die Historie rotiert nicht von selbst: Jeder Push legt eine weitere
+    /// Wochen-Zeile je Produkt und Filiale an. Mit dem Filial-Schlüssel
+    /// multipliziert sich das mit jeder angeforderten Filiale.
+    PruneHistory {
+        /// Tatsächlich löschen. Ohne dieses Flag nur anzeigen (Dry-Run).
+        #[arg(long, default_value_t = false)]
+        execute: bool,
+
+        /// So viele Wochen aufbewahren.
+        #[arg(long, default_value_t = smartshop::prune::HISTORY_WEEKS)]
+        weeks: i64,
+    },
 }
 
 #[derive(Subcommand)]
@@ -446,6 +460,10 @@ fn main() -> Result<()> {
         Command::PruneImages { execute, min_age_days } => {
             let opts = smartshop::prune::PruneOptions { execute, min_age_days };
             smartshop::prune::run(&opts, None)
+        }
+        Command::PruneHistory { execute, weeks } => {
+            let opts = smartshop::prune::HistoryPruneOptions { execute, weeks };
+            smartshop::prune::run_history(&opts, None)
         }
     }
 }
