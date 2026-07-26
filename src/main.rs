@@ -166,7 +166,9 @@ enum Command {
         #[arg(long, default_value = "smartshop.db")]
         db: String,
     },
-    /// Alle aktiven Regionen aus Supabase abrufen und syncen (fetch + push)
+    /// Bundesweite Ketten und alle gewählten Filialen abrufen und syncen
+    /// (fetch + push). Die Filialen kommen aus `branch_requests` und
+    /// `user_profiles.branch_ids` — der Regionsweg ist mit Migration v16 weg.
     Sync {
         /// Höchstens so viele Filialen pro Lauf syncen
         #[arg(long, default_value_t = 25)]
