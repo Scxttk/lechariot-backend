@@ -34,7 +34,7 @@ fn offer(title: &str, price: Option<f64>) -> Offer {
 fn map_basic_fields() {
     let mut o = offer("Gouda", Some(1.99));
     o.regular_price = Some(2.79);
-    let row = map_offer(&o, "REWE", Some("01219")).unwrap();
+    let row = map_offer(&o, "REWE", false).unwrap();
     assert_eq!(row.market, "REWE");
     assert_eq!(row.product, "Gouda");
     assert_eq!(row.price, 1.99);
@@ -48,7 +48,7 @@ fn map_basic_fields() {
     assert_eq!(row.brand, None);
     assert_eq!(row.ean, None);
     assert_eq!(row.source, "smartshop-rust");
-    assert_eq!(row.region.as_deref(), Some("01219"));
+    assert!(!row.nationwide);
 }
 
 #[test]
@@ -60,19 +60,19 @@ fn map_takes_first_image_and_keeps_emoji_fallback() {
         "https://cdn.example/gouda-450.jpg".to_string(),
         "https://cdn.example/gouda-900.jpg".to_string(),
     ];
-    let row = map_offer(&o, "REWE", None).unwrap();
+    let row = map_offer(&o, "REWE", false).unwrap();
     assert_eq!(row.image_url.as_deref(), Some("https://cdn.example/gouda-450.jpg"));
     assert_eq!(row.emoji.as_deref(), Some("🧀"));
 
     // Ohne Bild: image_url None, Emoji trägt weiterhin die Anzeige.
-    let row = map_offer(&offer("Gouda", Some(1.99)), "REWE", None).unwrap();
+    let row = map_offer(&offer("Gouda", Some(1.99)), "REWE", false).unwrap();
     assert_eq!(row.image_url, None);
     assert_eq!(row.emoji.as_deref(), Some("🧀"));
 }
 
 #[test]
 fn map_skips_offers_without_price() {
-    assert!(map_offer(&offer("Gouda", None), "REWE", None).is_none());
+    assert!(map_offer(&offer("Gouda", None), "REWE", false).is_none());
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn map_appends_informative_subtitle() {
     // Kaufland-Stil: Marke im Titel, Produkt im Untertitel
     let mut o = offer("K-Classic", Some(0.99));
     o.subtitle = Some("H-Milch 3,5%".to_string());
-    let row = map_offer(&o, "Kaufland", None).unwrap();
+    let row = map_offer(&o, "Kaufland", false).unwrap();
     assert_eq!(row.product, "K-Classic H-Milch 3,5%");
 }
 
@@ -88,7 +88,7 @@ fn map_appends_informative_subtitle() {
 fn map_drops_pure_quantity_subtitle() {
     let mut o = offer("Gouda", Some(1.99));
     o.subtitle = Some("je 250-g-Packg.".to_string());
-    let row = map_offer(&o, "REWE", None).unwrap();
+    let row = map_offer(&o, "REWE", false).unwrap();
     assert_eq!(row.product, "Gouda");
     // …aber die Menge landet im unit-Feld statt "Stück"
     assert_eq!(row.unit, "je 250-g-Packg.");
@@ -98,7 +98,7 @@ fn map_drops_pure_quantity_subtitle() {
 fn map_puts_multipack_quantity_into_unit() {
     let mut o = offer("MILPRIMA Haltbare fettarme Milch", Some(7.8));
     o.subtitle = Some("je 12 x 1 l".to_string());
-    let row = map_offer(&o, "Penny", None).unwrap();
+    let row = map_offer(&o, "Penny", false).unwrap();
     assert_eq!(row.unit, "je 12 x 1 l");
     assert_eq!(row.base_unit.as_deref(), Some("l"));
     assert_eq!(row.base_price, Some(0.65));
@@ -110,7 +110,7 @@ fn map_keeps_subtitle_with_product_name_and_quantity() {
     // bleiben, sonst kollabieren alle Angebote einer Marke beim Dedupe
     let mut o = offer("K-Classic", Some(0.99));
     o.subtitle = Some("Rispentomaten, 500-g-Schale".to_string());
-    let row = map_offer(&o, "Kaufland", None).unwrap();
+    let row = map_offer(&o, "Kaufland", false).unwrap();
     assert_eq!(row.product, "K-Classic Rispentomaten, 500-g-Schale");
 }
 
@@ -118,7 +118,7 @@ fn map_keeps_subtitle_with_product_name_and_quantity() {
 fn map_computes_base_price_from_quantity() {
     let mut o = offer("Wein", Some(3.29));
     o.subtitle = Some("0.75 l".to_string());
-    let row = map_offer(&o, "REWE", None).unwrap();
+    let row = map_offer(&o, "REWE", false).unwrap();
     assert_eq!(row.base_unit.as_deref(), Some("l"));
     // 3.29 / 0.75 = 4.386..., auf Cent gerundet
     assert_eq!(row.base_price, Some(4.39));
@@ -128,7 +128,7 @@ fn map_computes_base_price_from_quantity() {
 fn map_prefers_explicit_base_price() {
     let mut o = offer("Butterkäse", Some(1.79));
     o.overline = Some("je 650-g-Packg. (1 kg = 2.76)".to_string());
-    let row = map_offer(&o, "Penny", None).unwrap();
+    let row = map_offer(&o, "Penny", false).unwrap();
     assert_eq!(row.base_price, Some(2.76));
     assert_eq!(row.base_unit.as_deref(), Some("kg"));
 }
@@ -137,31 +137,33 @@ fn map_prefers_explicit_base_price() {
 fn map_serializes_to_expected_json() {
     let mut o = offer("Gouda", Some(1.99));
     o.images = vec!["https://cdn.example/gouda-450.jpg".to_string()];
-    let row = map_offer(&o, "REWE", Some("01219")).unwrap();
+    let row = map_offer(&o, "REWE", false).unwrap();
     let v = serde_json::to_value(&row).unwrap();
     assert_eq!(v["market"], "REWE");
     assert_eq!(v["price"], 1.99);
     assert_eq!(v["emoji"], "🧀");
     assert_eq!(v["image_url"], "https://cdn.example/gouda-450.jpg");
     assert_eq!(v["source"], "smartshop-rust");
-    assert_eq!(v["region"], "01219");
+    assert_eq!(v["nationwide"], false);
 }
 
 #[test]
 fn dedupe_on_conflict_key() {
-    let a = map_offer(&offer("Gouda", Some(1.99)), "REWE", Some("01219")).unwrap();
-    let b = map_offer(&offer("Gouda", Some(2.49)), "REWE", Some("01219")).unwrap();
+    let a = map_offer(&offer("Gouda", Some(1.99)), "REWE", false).unwrap();
+    let b = map_offer(&offer("Gouda", Some(2.49)), "REWE", false).unwrap();
     let mut c = a.clone();
-    c.region = Some("10115".to_string());
-    let rows = dedupe_rows(vec![a.clone(), b, c.clone()]);
-    // gleicher Schlüssel (market_id, product, valid_from, region): erster
-    // gewinnt; andere Region bleibt erhalten
-    assert_eq!(rows, vec![a, c]);
+    c.nationwide = true;
+    let rows = dedupe_rows(vec![a.clone(), b, c]);
+    // Gleicher Schlüssel (market_id, product, valid_from): der erste gewinnt.
+    // `nationwide` gehört seit Migration v16 NICHT zum Schlüssel — dieselbe
+    // Filiale kann ein Produkt nicht gleichzeitig lokal und bundesweit führen,
+    // und der Unique-Index in der Datenbank ließe das auch nicht zu.
+    assert_eq!(rows, vec![a]);
 }
 
 // Kern von Phase 11: Zwei Filialen derselben Kette in derselben PLZ sind
 // zwei Angebotssätze. Unter dem alten Schlüssel (market, product, valid_from,
-// region) waren sie ununterscheidbar — die zweite Filiale hätte die erste
+// waren sie ununterscheidbar — die zweite Filiale hätte die erste
 // beim Dedupe verschluckt und in Supabase überschrieben.
 #[test]
 fn two_branches_of_one_chain_in_one_plz_stay_apart() {
@@ -170,8 +172,8 @@ fn two_branches_of_one_chain_in_one_plz_stay_apart() {
     let mut postplatz = offer("Gouda", Some(2.49));
     postplatz.market_id = "1766160".to_string();
 
-    let a = map_offer(&strehlen, "REWE", Some("01219")).unwrap();
-    let b = map_offer(&postplatz, "REWE", Some("01219")).unwrap();
+    let a = map_offer(&strehlen, "REWE", false).unwrap();
+    let b = map_offer(&postplatz, "REWE", false).unwrap();
     assert_eq!(a.market_id, "565005");
     assert_eq!(b.market_id, "1766160");
     // Gleiche Kette, gleiche PLZ, gleiches Produkt, gleiche Woche — und
@@ -364,7 +366,7 @@ fn run_push(db_path: &str, base_url: &str) -> anyhow::Result<()> {
     let opts = PushOptions {
         db_path: db_path.to_string(),
         chain: None, branch_id: None,
-        region: Some("01219".to_string()),
+        nationwide: false,
         dry_run: false,
         mirror_images: false,
         defer_mirror: false,
@@ -382,9 +384,10 @@ fn push_batches_deletes_and_upserts() {
     run_push(&db_path, &base_url).unwrap();
 
     let reqs = log.lock().unwrap().clone();
-    // 1x DELETE (stale), 2x POST offers (100 + 50), 2x POST price_history,
-    // 1x POST regions
-    assert_eq!(reqs.len(), 6, "Requests: {reqs:#?}");
+    // 1x DELETE (stale), 2x POST offers (100 + 50), 2x POST price_history.
+    // Der Regions-Upsert, der hier bis Migration v16 als sechster stand, ist
+    // weg — die Tabelle gibt es nicht mehr.
+    assert_eq!(reqs.len(), 5, "Requests: {reqs:#?}");
 
     let del = &reqs[0];
     assert_eq!(del.method, "DELETE");
@@ -393,8 +396,8 @@ fn push_batches_deletes_and_upserts() {
     // räumte der Push der einen REWE-Filiale die Wochen der Nachbarfiliale ab.
     assert!(del.target.contains("market_id=eq.m1"), "{}", del.target);
     assert!(!del.target.contains("market=eq.REWE"), "{}", del.target);
-    // Nur die gepushte Region aufräumen — andere Regionen bleiben unberührt.
-    assert!(del.target.contains("region=eq.01219"), "{}", del.target);
+    // Kein Region-Filter mehr: Seit v16 ist die Filiale der ganze Schlüssel.
+    assert!(!del.target.contains("region"), "{}", del.target);
     // Löscht alte Wochen UND Legacy-Zeilen ohne valid_from (URL-encodiert:
     // or=(valid_from.lt.2026-07-13,valid_from.is.null))
     let decoded = del.target.replace("%28", "(").replace("%29", ")").replace("%2C", ",");
@@ -410,8 +413,8 @@ fn push_batches_deletes_and_upserts() {
     for b in [b1, b2] {
         assert_eq!(b.method, "POST");
         assert!(b.target.starts_with("/rest/v1/offers?"), "{}", b.target);
-        assert!(b.target.contains("on_conflict=market_id%2Cproduct%2Cvalid_from%2Cregion")
-                || b.target.contains("on_conflict=market_id,product,valid_from,region"),
+        assert!(b.target.contains("on_conflict=market_id%2Cproduct%2Cvalid_from")
+                || b.target.contains("on_conflict=market_id,product,valid_from"),
                 "{}", b.target);
         assert_eq!(b.header("prefer"), Some("resolution=merge-duplicates"));
     }
@@ -419,15 +422,7 @@ fn push_batches_deletes_and_upserts() {
     let rows2: Vec<SupabaseRow> = parse_rows(&b2.body);
     assert_eq!(rows1.len(), 100);
     assert_eq!(rows2.len(), 50);
-    assert!(rows1.iter().all(|r| r.market == "REWE" && r.region.as_deref() == Some("01219")));
-
-    let reg = &reqs[5];
-    assert_eq!(reg.method, "POST");
-    assert!(reg.target.starts_with("/rest/v1/regions?"), "{}", reg.target);
-    assert!(reg.target.contains("on_conflict=plz"), "{}", reg.target);
-    let v: serde_json::Value = serde_json::from_str(&reg.body).unwrap();
-    assert_eq!(v[0]["plz"], "01219");
-    assert!(v[0]["last_synced"].as_str().unwrap().starts_with("20"));
+    assert!(rows1.iter().all(|r| r.market == "REWE" && !r.nationwide));
 }
 
 // Ende-zu-Ende gegen den Fall aus Köln (50667): der Filialname der ALDI-SÜD-
@@ -497,7 +492,7 @@ fn stale_cleanup_is_per_branch_not_per_chain() {
     // Reihenfolge: nach market_id sortiert (BTreeMap), also "1766160" zuerst.
     for (del, market_id) in deletes.iter().zip(["1766160", "565005"]) {
         assert!(del.target.contains(&format!("market_id=eq.{market_id}")), "{}", del.target);
-        assert!(del.target.contains("region=eq.01219"), "{}", del.target);
+        assert!(!del.target.contains("region"), "{}", del.target);
     }
 
     let rows: Vec<SupabaseRow> = reqs
@@ -534,7 +529,7 @@ fn parse_rows(body: &str) -> Vec<SupabaseRow> {
             brand: None,
             ean: None,
             source: r["source"].as_str().unwrap().to_string(),
-            region: r["region"].as_str().map(String::from),
+            nationwide: r["nationwide"].as_bool().unwrap_or(false),
             match_key: r["match_key"]
                 .as_array()
                 .map(|a| a.iter().filter_map(|s| s.as_str()).map(String::from).collect())
@@ -589,7 +584,7 @@ fn push_fails_with_german_error_on_http_error() {
 /// statt `eq.` — `eq.` trifft NULL nie und ließe jede alte Woche stehen — und
 /// `regions` wird nicht angefasst, denn dieser Push gehört zu keiner PLZ.
 #[test]
-fn push_without_region_stores_nationwide() {
+fn push_nationwide_stores_without_a_branch_filter() {
     let db_path = temp_db("national");
     seed_db(&db_path, 2);
     let (base_url, log) = spawn_mock();
@@ -598,7 +593,7 @@ fn push_without_region_stores_nationwide() {
         db_path,
         chain: None,
         branch_id: None,
-        region: None,
+        nationwide: true,
         dry_run: false,
         mirror_images: false,
         defer_mirror: false,
@@ -610,21 +605,16 @@ fn push_without_region_stores_nationwide() {
     let deletes: Vec<&Req> = log.iter().filter(|r| r.method == "DELETE").collect();
     assert!(!deletes.is_empty(), "kein Aufräumen alter Wochen");
     for req in &deletes {
-        assert!(req.target.contains("region=is.null"), "{}", req.target);
-        assert!(!req.target.contains("region=eq."), "{}", req.target);
+        assert!(req.target.contains("market_id=eq."), "{}", req.target);
+        assert!(!req.target.contains("region"), "{}", req.target);
     }
 
     let posts: Vec<&Req> = log.iter().filter(|r| r.method == "POST").collect();
     let offers: Vec<&&Req> = posts.iter().filter(|r| r.target.starts_with("/rest/v1/offers")).collect();
     assert!(!offers.is_empty(), "keine Angebote hochgeladen");
     for req in &offers {
-        assert!(req.body.contains("\"region\":null"), "{}", req.body);
+        assert!(req.body.contains("\"nationwide\":true"), "{}", req.body);
     }
-
-    assert!(
-        !posts.iter().any(|r| r.target.starts_with("/rest/v1/regions")),
-        "bundesweiter Push darf keine Region als frisch melden"
-    );
 }
 
 #[test]
@@ -632,7 +622,7 @@ fn dry_run_makes_no_requests() {
     let db_path = temp_db("dry");
     seed_db(&db_path, 3);
     let (_base_url, log) = spawn_mock();
-    let opts = PushOptions { db_path, chain: None, branch_id: None, region: None, dry_run: true, mirror_images: true, defer_mirror: false };
+    let opts = PushOptions { db_path, chain: None, branch_id: None, nationwide: false, dry_run: true, mirror_images: true, defer_mirror: false };
     // cfg: None — Dry-Run braucht weder Env noch Netzwerk (auch nicht fürs Spiegeln)
     push::run(&opts, None).unwrap();
     assert!(log.lock().unwrap().is_empty());
@@ -660,7 +650,7 @@ fn push_skips_unsafe_image_url_but_uses_cached_bucket_url() {
     let opts = PushOptions {
         db_path: db_path.clone(),
         chain: None, branch_id: None,
-        region: Some("01219".to_string()),
+        nationwide: false,
         dry_run: false,
         mirror_images: true,
         defer_mirror: false,
@@ -728,7 +718,7 @@ fn chain_filter_limits_push() {
         db_path,
         chain: Some("Lidl".to_string()), // DB enthält nur REWE
         branch_id: None,
-        region: Some("01219".to_string()),
+        nationwide: false,
         dry_run: false,
         mirror_images: false,
         defer_mirror: false,
@@ -838,7 +828,7 @@ fn push_sends_history_rows() {
     assert_eq!(rows.len(), 150);
     let first = &rows[0];
     assert_eq!(first["market"], "REWE");
-    assert_eq!(first["region"], "01219");
+    assert_eq!(first["nationwide"], false);
     assert_eq!(first["valid_from"], "2026-07-13");
     assert!(first["price"].is_number());
     // Nur die Historien-Spalten — keine Anzeige-Felder wie image_url/emoji
@@ -860,8 +850,8 @@ fn history_upsert_headers() {
     assert_eq!(hist.len(), 1);
     let h = hist[0];
     assert!(
-        h.target.contains("on_conflict=market_id%2Cproduct%2Cvalid_from%2Cregion")
-            || h.target.contains("on_conflict=market_id,product,valid_from,region"),
+        h.target.contains("on_conflict=market_id%2Cproduct%2Cvalid_from")
+            || h.target.contains("on_conflict=market_id,product,valid_from"),
         "{}",
         h.target
     );
@@ -899,9 +889,9 @@ fn history_failure_does_not_fail_push() {
     let reqs = log.lock().unwrap().clone();
     // … der Historie-Request wurde versucht …
     assert_eq!(history_posts(&reqs).len(), 1, "{reqs:#?}");
-    // … und der Regions-Upsert danach fand trotzdem statt.
+    // … und die Angebote gingen trotzdem hoch.
     assert!(
-        reqs.iter().any(|r| r.method == "POST" && r.target.starts_with("/rest/v1/regions")),
+        reqs.iter().any(|r| r.method == "POST" && r.target.starts_with("/rest/v1/offers")),
         "{reqs:#?}"
     );
 }
@@ -935,7 +925,7 @@ fn deferred_mirror_upserts_offers_before_mirroring() {
         chain: None,
         // Filial-Sync: Die Fertigmeldung muss VOR dem Spiegeln stehen.
         branch_id: Some("1763556".to_string()),
-        region: Some("01219".to_string()),
+        nationwide: false,
         dry_run: false,
         mirror_images: true,
         defer_mirror: true,
@@ -972,8 +962,8 @@ fn deferred_mirror_upserts_offers_before_mirroring() {
     assert!(first_upsert < patch_pos, "Nachtrag muss nach Phase 1 kommen: {reqs:#?}");
     let patch = &reqs[patch_pos];
     assert!(
-        patch.target.contains("on_conflict=market_id%2Cproduct%2Cvalid_from%2Cregion")
-            || patch.target.contains("on_conflict=market_id,product,valid_from,region"),
+        patch.target.contains("on_conflict=market_id%2Cproduct%2Cvalid_from")
+            || patch.target.contains("on_conflict=market_id,product,valid_from"),
         "{}",
         patch.target
     );

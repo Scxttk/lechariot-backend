@@ -6,19 +6,14 @@ on:
     - cron: "30 4 * * *"
   workflow_dispatch:
     inputs:
-      plz:
-        description: "Nur diese PLZ syncen (On-Demand-Trigger); leer = Voll-Sync"
-        required: false
-        default: ""
       market_id:
-        description: "Nur diese Filiale syncen (ID aus public.branches); schlägt plz"
+        description: "Nur diese Filiale syncen (ID aus public.branches); leer = Voll-Sync"
         required: false
         default: ""
 
 concurrency:
-  # On-Demand-Läufe für verschiedene PLZs bzw. Filialen dürfen parallel zum
-  # Voll-Sync laufen.
-  group: nightly-${{ inputs.market_id || inputs.plz || 'all' }}
+  # On-Demand-Läufe für einzelne Filialen dürfen parallel zum Voll-Sync laufen.
+  group: nightly-${{ inputs.market_id || 'all' }}
   cancel-in-progress: false
 
 env:
@@ -60,7 +55,7 @@ jobs:
       # Build, wenn (noch) kein Artefakt existiert oder es abgelaufen ist.
       - name: Download prebuilt binary (on-demand)
         id: prebuilt
-        if: inputs.plz != '' || inputs.market_id != ''
+        if: inputs.market_id != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -147,37 +142,33 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           REWE_CERT: ${{ steps.rewe.outputs.cert }}
           REWE_KEY: ${{ steps.rewe.outputs.key }}
-          ONLY_PLZ: ${{ inputs.plz }}
           ONLY_MARKET: ${{ inputs.market_id }}
         run: |
           set -o pipefail
           CERT_ARGS=()
           [ -n "${REWE_CERT:-}" ] && [ -f "$REWE_CERT" ] && CERT_ARGS+=(--cert "$REWE_CERT")
           [ -n "${REWE_KEY:-}" ] && [ -f "$REWE_KEY" ] && CERT_ARGS+=(--key "$REWE_KEY")
-          # On-Demand-Trigger: nur die angeforderte Filiale (branch_requests)
-          # bzw. die neue PLZ (regions) syncen. Die Filiale schlägt die PLZ —
-          # sie ist der genauere Wunsch, und beide zugleich lehnt die CLI ab.
+          # On-Demand-Trigger: nur die angeforderte Filiale (branch_requests).
+          # Der PLZ-Weg ist mit Migration v16 weg — die App fordert Filialen an.
           ONLY_ARGS=()
           if [ -n "${ONLY_MARKET:-}" ]; then
             ONLY_ARGS+=(--market-id "$ONLY_MARKET")
-          elif [ -n "${ONLY_PLZ:-}" ]; then
-            ONLY_ARGS+=(--only "$ONLY_PLZ")
           fi
-          if ./target/release/smartshop sync-regions --db "$DB" \
+          if ./target/release/smartshop sync --db "$DB" \
               ${ONLY_ARGS[@]+"${ONLY_ARGS[@]}"} \
               ${CERT_ARGS[@]+"${CERT_ARGS[@]}"} 2>&1 | tee "$LOG"; then
             echo "sync_failed=false" >> "$GITHUB_OUTPUT"
           else
             echo "sync_failed=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::sync-regions fehlgeschlagen — Fallback auf Einzel-PLZ $SMARTSHOP_ZIP."
+            echo "::warning::sync fehlgeschlagen — Fallback auf Einzel-PLZ $SMARTSHOP_ZIP."
           fi
 
-      # Bootstrap-Fallback: alter Einzel-PLZ-Pfad mit SMARTSHOP_ZIP, damit die
-      # Pipeline nie dunkel geht. Bei On-Demand-Läufen (plz oder market_id)
-      # wäre der Fallback die falsche PLZ — dort übernimmt der nächtliche
-      # Voll-Sync.
+      # Bootstrap-Fallback: Solange noch niemand eine Filiale gewählt hat
+      # (frische Datenbank), holt SMARTSHOP_ZIP wenigstens eine Gegend, damit
+      # die Pipeline nie dunkel geht. Bei On-Demand-Läufen wäre der Fallback
+      # die falsche Filiale — dort übernimmt der nächtliche Voll-Sync.
       - name: Fallback fetch+push (single ZIP)
-        if: steps.sync.outputs.sync_failed == 'true' && inputs.plz == '' && inputs.market_id == ''
+        if: steps.sync.outputs.sync_failed == 'true' && inputs.market_id == ''
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -191,7 +182,7 @@ jobs:
           ./target/release/smartshop fetch --all-stores \
             --zip "$SMARTSHOP_ZIP" --db "$DB" \
             ${CERT_ARGS[@]+"${CERT_ARGS[@]}"} 2>&1 | tee -a "$LOG"
-          ./target/release/smartshop push --region "$SMARTSHOP_ZIP" --db "$DB" \
+          ./target/release/smartshop push --db "$DB" \
             2>&1 | tee -a "$LOG"
 
       - name: Store summary + zero-offer check
@@ -239,7 +230,7 @@ jobs:
       # 1 Tag: das schützt frisch Gespiegeltes gegen parallel laufende
       # On-Demand-Läufe, die ihre Bilder noch nicht in offers.image_url haben.
       - name: Prune orphaned bucket images
-        if: inputs.plz == '' && inputs.market_id == ''
+        if: inputs.market_id == ''
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -253,7 +244,7 @@ jobs:
       # das zusätzlich mit jeder angeforderten Filiale. Wie beim Bild-Prune
       # nur im vollen Nightly-Lauf.
       - name: Prune price history
-        if: inputs.plz == '' && inputs.market_id == ''
+        if: inputs.market_id == ''
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

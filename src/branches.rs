@@ -269,9 +269,27 @@ pub fn fetch_branch(cfg: &PushConfig, market_id: &str) -> Result<Branch> {
     })
 }
 
-/// Aktive Regionen als Gebiete — das Verzeichnis wächst dort, wo jemand die
-/// App tatsächlich benutzt.
-pub fn areas_from_regions(cfg: &PushConfig) -> Result<Vec<String>> {
-    let regions = crate::sync::fetch_regions(cfg).context("Aktive Regionen laden")?;
-    Ok(regions.into_iter().map(|r| r.plz).collect())
+/// Die PLZ der Filialen, die jemand gewählt hat — das Verzeichnis wächst
+/// dort, wo die App tatsächlich benutzt wird.
+///
+/// Bis Migration v16 kam diese Liste aus `regions`. Die Tabelle gibt es nicht
+/// mehr; die Frage „wo wird die App benutzt" beantworten jetzt die gewählten
+/// Filialen selbst. Das ist sogar genauer: Eine Region galt als aktiv,
+/// sobald irgendwer sie einmal eingetragen hatte.
+pub fn areas_from_chosen_branches(cfg: &PushConfig) -> Result<Vec<String>> {
+    let ids = crate::sync::fetch_chosen_branches(cfg).context("Gewählte Filialen laden")?;
+    let mut areas: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for market_id in ids {
+        match fetch_branch(cfg, &market_id) {
+            Ok(branch) => {
+                if let Some(plz) = branch.plz {
+                    areas.insert(plz);
+                }
+            }
+            // Eine Filiale, die das Verzeichnis nicht kennt, ist kein Grund,
+            // die übrigen Gebiete fallen zu lassen.
+            Err(e) => eprintln!("WARNUNG: Gebiet zu Filiale {market_id} unklar: {e:#}"),
+        }
+    }
+    Ok(areas.into_iter().collect())
 }
