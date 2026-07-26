@@ -1,14 +1,14 @@
 # Nächtliche Automatisierung mit launchd (macOS)
 
-Der launchd-Agent `de.smartshop.nightly` ruft jede Nacht um **06:30** die
+Der launchd-Agent `de.lechariot.nightly` ruft jede Nacht um **06:30** die
 Angebote aller Ketten ab (`fetch --all-stores`), lädt sie nach Supabase hoch
 (`push --region`) und prüft danach die Watchlist. Herzstück ist
 `scripts/nightly.sh`; das plist ruft nur dieses Skript auf.
 
 ## 1. Voraussetzungen
 
-- `smartshop` installiert, z. B. mit `cargo install --path .`
-  (Binary landet in `~/.cargo/bin/smartshop` — das Skript findet es dort
+- `lechariot` installiert, z. B. mit `cargo install --path .`
+  (Binary landet in `~/.cargo/bin/lechariot` — das Skript findet es dort
   automatisch).
 - Supabase-Projekt mit Tabelle `public.offers` und Service-Role-Key.
 - Optional: Rewe-Zertifikat (siehe [rewe-cert.md](rewe-cert.md)).
@@ -16,17 +16,17 @@ Angebote aller Ketten ab (`fetch --all-stores`), lädt sie nach Supabase hoch
 ## 2. Konfigurationsdatei anlegen
 
 Alle Einstellungen — inklusive der Secrets — liegen in
-`~/.config/smartshop/env`. **Diese Datei niemals einchecken.**
+`~/.config/lechariot/env`. **Diese Datei niemals einchecken.**
 
 ```sh
-mkdir -p ~/.config/smartshop
-cp scripts/env.example ~/.config/smartshop/env
-chmod 600 ~/.config/smartshop/env
-$EDITOR ~/.config/smartshop/env
+mkdir -p ~/.config/lechariot
+cp scripts/env.example ~/.config/lechariot/env
+chmod 600 ~/.config/lechariot/env
+$EDITOR ~/.config/lechariot/env
 ```
 
 Pflichtwerte: `ZIP`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`.
-Optional: `DB`, `SMARTSHOP_BIN`, `REWE_CERT`/`REWE_KEY`, `NTFY_TOPIC`
+Optional: `DB`, `LECHARIOT_BIN`, `REWE_CERT`/`REWE_KEY`, `NTFY_TOPIC`
 (alle in `scripts/env.example` erklärt).
 
 ## 3. Testlauf ohne Upload
@@ -46,21 +46,21 @@ scripts/install-launchd.sh
 ```
 
 Das Skript rendert das plist (mit den richtigen Pfaden) nach
-`~/Library/LaunchAgents/de.smartshop.nightly.plist`, prüft es mit
+`~/Library/LaunchAgents/de.lechariot.nightly.plist`, prüft es mit
 `plutil -lint` und aktiviert es per `launchctl bootstrap`. Sofort testen:
 
 ```sh
-launchctl kickstart gui/$(id -u)/de.smartshop.nightly
+launchctl kickstart gui/$(id -u)/de.lechariot.nightly
 ```
 
 ## 5. Logs prüfen
 
 Jeder Lauf schreibt eine eigene Logdatei mit Zeitstempeln nach
-`~/Library/Logs/smartshop/` (die letzten 14 Läufe werden aufbewahrt):
+`~/Library/Logs/lechariot/` (die letzten 14 Läufe werden aufbewahrt):
 
 ```sh
-ls -lt ~/Library/Logs/smartshop/
-tail -f ~/Library/Logs/smartshop/nightly-*.log
+ls -lt ~/Library/Logs/lechariot/
+tail -f ~/Library/Logs/lechariot/nightly-*.log
 ```
 
 `launchd.out.log` / `launchd.err.log` im selben Ordner fangen nur Fehler ab,
@@ -93,15 +93,15 @@ Stoppt den Agent und löscht das plist. Logs und Datenbank bleiben liegen.
   startet dann kurz nachdem der Mac wieder wach ist. (Ist der Mac komplett
   ausgeschaltet, entfällt der Lauf ersatzlos.)
 - **„Konfigurationsdatei fehlt“ im Log:** Schritt 2 vergessen —
-  `~/.config/smartshop/env` anlegen.
-- **„smartshop-Binary nicht gefunden“:** `cargo install --path .` ausführen
-  oder `SMARTSHOP_BIN` in der Env-Datei auf das Binary zeigen lassen
+  `~/.config/lechariot/env` anlegen.
+- **„lechariot-Binary nicht gefunden“:** `cargo install --path .` ausführen
+  oder `LECHARIOT_BIN` in der Env-Datei auf das Binary zeigen lassen
   (launchd startet mit minimalem `PATH`).
 - **Rewe/Kaufland/EDEKA als FEHLER in der Zusammenfassung:** einzelne
   Ketten-Fehler brechen den Lauf nicht ab; Rewe braucht ein Zertifikat,
   Kaufland eine Filiale in PLZ-Nähe.
 - **Läuft der Agent überhaupt?**
-  `launchctl print gui/$(id -u)/de.smartshop.nightly` zeigt Status und
+  `launchctl print gui/$(id -u)/de.lechariot.nightly` zeigt Status und
   letzten Exit-Code.
 - **Push schlägt fehl:** `SUPABASE_URL`/`SUPABASE_SERVICE_KEY` prüfen
   (Service-Role-Key, nicht der anon key) — Details stehen im Lauf-Log.

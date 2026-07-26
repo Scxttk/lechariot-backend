@@ -1,6 +1,6 @@
 //! Tests für die deterministische Produkt-Anreicherung (Kategorie + Emoji).
 
-use smartshop::enrich::{self, CATEGORIES, FALLBACK_CATEGORY};
+use lechariot::enrich::{self, CATEGORIES, FALLBACK_CATEGORY};
 
 #[test]
 fn kategorien_sind_stabil() {
@@ -87,7 +87,7 @@ fn fallback_verhalten() {
 fn enrich_liefert_nur_bekannte_kategorien() {
     // Auch quer durch die Regel-Tabelle darf nichts außerhalb des Enums landen.
     for title in ["Milch", "Bohrhammer", "Weißwein trocken", "Hundefutter", "irgendwas"] {
-        let e = smartshop::enrich::enrich(title, None, None);
+        let e = lechariot::enrich::enrich(title, None, None);
         assert!(CATEGORIES.contains(&e.category), "{title} → {}", e.category);
     }
 }

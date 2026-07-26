@@ -3,7 +3,7 @@
 // vom 2026-07-17 (KW 29, PLZ 01219 Dresden). Laufen ohne Netz bei jedem
 // `cargo test`.
 
-use smartshop::scrapers;
+use lechariot::scrapers;
 
 // ---------------------------------------------------------------- REWE
 
@@ -42,7 +42,7 @@ fn rewe_fixture_parses_discounts() {
 fn netto_fixture_parses_tiles_with_period() {
     let mut offers = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    smartshop::scrapers::netto::parse_page(
+    lechariot::scrapers::netto::parse_page(
         include_str!("fixtures/netto/filialangebote_1.html"),
         "4816",
         &mut offers,
@@ -67,7 +67,7 @@ fn netto_fixture_parses_tiles_with_period() {
 
 #[test]
 fn aldi_nord_fixture_parses_next_data() {
-    let offers = smartshop::scrapers::aldi_nord::parse_offers(
+    let offers = lechariot::scrapers::aldi_nord::parse_offers(
         include_str!("fixtures/aldi_nord/angebote.html"),
         "ALDI_NORD_DE",
     )
@@ -94,7 +94,7 @@ fn aldi_sued_fixture_parses_products_with_cent_prices() {
 
     let offers: Vec<_> = items
         .iter()
-        .filter_map(|it| smartshop::scrapers::aldi_sued::parse_product(it, "ALDI_SUED_DE"))
+        .filter_map(|it| lechariot::scrapers::aldi_sued::parse_product(it, "ALDI_SUED_DE"))
         .collect();
     assert_eq!(offers.len(), 4);
 
@@ -442,8 +442,8 @@ fn store_finder_nominatim_parses_plz_coordinates() {
 
 #[test]
 fn store_finder_resolve_falls_back_to_national_on_error() {
-    use smartshop::models::Market;
-    use smartshop::scrapers::store_finder::resolve;
+    use lechariot::models::Market;
+    use lechariot::scrapers::store_finder::resolve;
 
     let national = || Market::new("LIDL_DE", "Lidl Deutschland");
     // Treffer gewinnt

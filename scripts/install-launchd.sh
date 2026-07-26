@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # install-launchd.sh — installiert oder entfernt den nächtlichen
-# smartshop-launchd-Agent (de.smartshop.nightly, täglich 06:30).
+# lechariot-launchd-Agent (de.lechariot.nightly, täglich 06:30).
 #
 #   scripts/install-launchd.sh              installieren + aktivieren
 #   scripts/install-launchd.sh uninstall    deaktivieren + entfernen
 #
-# Voraussetzung: ~/.config/smartshop/env existiert (siehe scripts/env.example).
+# Voraussetzung: ~/.config/lechariot/env existiert (siehe scripts/env.example).
 
 set -euo pipefail
 
-LABEL="de.smartshop.nightly"
+LABEL="de.lechariot.nightly"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE="$SCRIPT_DIR/$LABEL.plist"
 TARGET="$HOME/Library/LaunchAgents/$LABEL.plist"
-LOG_DIR="$HOME/Library/Logs/smartshop"
+LOG_DIR="$HOME/Library/Logs/lechariot"
 DOMAIN="gui/$(id -u)"
 
 uninstall() {
@@ -29,8 +29,8 @@ uninstall() {
 
 install() {
     [ -f "$TEMPLATE" ] || { echo "Vorlage fehlt: $TEMPLATE" >&2; exit 1; }
-    if [ ! -f "$HOME/.config/smartshop/env" ]; then
-        echo "WARNUNG: ~/.config/smartshop/env fehlt — der nächtliche Lauf wird" >&2
+    if [ ! -f "$HOME/.config/lechariot/env" ]; then
+        echo "WARNUNG: ~/.config/lechariot/env fehlt — der nächtliche Lauf wird" >&2
         echo "fehlschlagen. Vorlage: $SCRIPT_DIR/env.example" >&2
     fi
 

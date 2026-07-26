@@ -5,8 +5,8 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 
-use smartshop::prune::{HistoryPruneOptions, run_history};
-use smartshop::push::PushConfig;
+use lechariot::prune::{HistoryPruneOptions, run_history};
+use lechariot::push::PushConfig;
 
 #[derive(Debug, Clone)]
 struct Req {

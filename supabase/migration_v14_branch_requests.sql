@@ -12,7 +12,7 @@
 --                      GitHub workflow_dispatch (nightly.yml, inputs.market_id)
 --                                 │
 --                                 ▼
---                 smartshop sync-regions --market-id <ID>
+--                 lechariot sync-regions --market-id <ID>
 --                                 │
 --                                 ▼
 --             offers + branch_requests.last_synced  ◀──poll── App
@@ -25,7 +25,7 @@
 --   **Die market_id muss im Verzeichnis stehen.** Bei Regionen kam alles
 --   durch, was fünf Ziffern hat — so wurde 94108 zur aktiven Region, obwohl
 --   es die PLZ nicht gibt, und sammelte eine Woche lang 1.890 Angebote aus
---   Nachbarregionen ein (siehe [[Smartshop Geschäftslogik]]). Eine Filial-ID
+--   Nachbarregionen ein (siehe [[Le Chariot Geschäftslogik]]). Eine Filial-ID
 --   lässt sich dagegen hart prüfen: Entweder der Store-Finder der Kette hat
 --   sie geliefert und sie steht in `branches`, oder es gibt sie nicht.
 --
@@ -146,12 +146,12 @@ begin
   end if;
 
   perform net.http_post(
-    url := 'https://api.github.com/repos/Scxttk/smartshop-backend/actions/workflows/nightly.yml/dispatches',
+    url := 'https://api.github.com/repos/Scxttk/lechariot-backend/actions/workflows/nightly.yml/dispatches',
     headers := jsonb_build_object(
       'Authorization', 'Bearer ' || pat,
       'Accept', 'application/vnd.github+json',
       'X-GitHub-Api-Version', '2022-11-28',
-      'User-Agent', 'smartshop-supabase-trigger',
+      'User-Agent', 'lechariot-supabase-trigger',
       'Content-Type', 'application/json'
     ),
     body := jsonb_build_object(

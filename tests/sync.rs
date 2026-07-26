@@ -6,9 +6,9 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 
-use smartshop::models::{Market, Offer};
-use smartshop::push::PushConfig;
-use smartshop::sync::{self, SyncOptions};
+use lechariot::models::{Market, Offer};
+use lechariot::push::PushConfig;
+use lechariot::sync::{self, SyncOptions};
 
 fn offer(title: &str, price: Option<f64>) -> Offer {
     Offer {
@@ -139,7 +139,7 @@ fn spawn_failing_mock(status: u16, body: &'static str) -> String {
 }
 
 fn temp_db(name: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("smartshop-sync-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("lechariot-sync-{name}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("test.db").to_string_lossy().into_owned();
     let _ = std::fs::remove_file(&path);
@@ -162,14 +162,14 @@ fn opts(db_path: &str) -> SyncOptions {
 /// Scraper-Stub für den bundesweiten Lauf: liefert nichts, also pusht
 /// `sync_national` auch nichts.
 fn no_national(
-    _store: smartshop::stores::Store,
+    _store: lechariot::stores::Store,
     _market: &Market,
 ) -> anyhow::Result<Vec<Offer>> {
     Ok(Vec::new())
 }
 
 /// Filial-Scraper-Stub, der Alarm schlägt, wenn er unerwartet gerufen wird.
-fn no_branch(_branch: &smartshop::models::Branch) -> anyhow::Result<Vec<Offer>> {
+fn no_branch(_branch: &lechariot::models::Branch) -> anyhow::Result<Vec<Offer>> {
     panic!("Filial-Scraper unerwartet gerufen")
 }
 
@@ -221,7 +221,7 @@ fn the_full_run_syncs_the_branches_people_chose() {
     let (base_url, log) = spawn_routed_mock(&ROUTES);
     let seen: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
     let seen2 = seen.clone();
-    let scraper = move |branch: &smartshop::models::Branch| {
+    let scraper = move |branch: &lechariot::models::Branch| {
         seen2.lock().unwrap().push(branch.market_id.clone());
         let mut o = offer("Coca-Cola", Some(0.75));
         o.market_id = branch.market_id.clone();
@@ -282,7 +282,7 @@ fn the_branch_cap_limits_one_run() {
     let (base_url, _log) = spawn_routed_mock(&ROUTES);
     let calls = Arc::new(Mutex::new(0usize));
     let calls2 = calls.clone();
-    let scraper = move |branch: &smartshop::models::Branch| {
+    let scraper = move |branch: &lechariot::models::Branch| {
         *calls2.lock().unwrap() += 1;
         let mut o = offer("Coca-Cola", Some(0.75));
         o.market_id = branch.market_id.clone();
@@ -309,7 +309,7 @@ fn a_failing_branch_does_not_abort_the_run() {
     let (base_url, _log) = spawn_routed_mock(&ROUTES);
     let calls = Arc::new(Mutex::new(0usize));
     let calls2 = calls.clone();
-    let scraper = move |branch: &smartshop::models::Branch| {
+    let scraper = move |branch: &lechariot::models::Branch| {
         *calls2.lock().unwrap() += 1;
         if *calls2.lock().unwrap() == 1 {
             anyhow::bail!("Scraper kaputt");
@@ -333,7 +333,7 @@ fn branch_mode_scrapes_exactly_the_requested_branch() {
     let (base_url, log) = spawn_routed_mock(&ROUTES);
     let seen: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
     let seen2 = seen.clone();
-    let scraper = move |branch: &smartshop::models::Branch| {
+    let scraper = move |branch: &lechariot::models::Branch| {
         seen2.lock().unwrap().push(branch.market_id.clone());
         let mut o = offer("Coca-Cola", Some(0.75));
         o.market_id = branch.market_id.clone();
@@ -393,7 +393,7 @@ fn branch_mode_scrapes_exactly_the_requested_branch() {
 fn branch_mode_fails_loudly_on_unknown_market_id() {
     static ROUTES: [(&str, &str); 1] = [("branches", "[]")];
     let (base_url, _log) = spawn_routed_mock(&ROUTES);
-    let scraper = |_: &smartshop::models::Branch| Ok(Vec::new());
+    let scraper = |_: &lechariot::models::Branch| Ok(Vec::new());
     let db_path = temp_db("filiale-unbekannt");
     let opts = opts(&db_path);
 
@@ -414,7 +414,7 @@ fn national_chains_are_pushed_once_and_marked_nationwide() {
     static ROUTES: [(&str, &str); 2] =
         [("branch_requests", "[]"), ("user_profiles", "[]")];
     let (base_url, log) = spawn_routed_mock(&ROUTES);
-    let national = |store: smartshop::stores::Store, market: &Market| {
+    let national = |store: lechariot::stores::Store, market: &Market| {
         assert!(store.stores_nationally(), "{} ist nicht bundesweit", store.chain());
         Ok(vec![
             offer_for(&market.id, "Ofenkäse", 2.22),
@@ -454,7 +454,7 @@ fn at_the_aldi_equator_both_catalogues_stand_side_by_side() {
     static ROUTES: [(&str, &str); 2] =
         [("branch_requests", "[]"), ("user_profiles", "[]")];
     let (base_url, log) = spawn_routed_mock(&ROUTES);
-    let national = |_: smartshop::stores::Store, market: &Market| {
+    let national = |_: lechariot::stores::Store, market: &Market| {
         Ok(vec![offer_for(&market.id, &format!("Katalog {}", market.id), 1.0)])
     };
     let db_path = temp_db("aldi-aequator");
@@ -499,7 +499,7 @@ fn a_branch_request_for_aldi_refreshes_the_national_catalogue() {
     static ROUTES: [(&str, &str); 1] = [("branches", BRANCH)];
     let (base_url, log) = spawn_routed_mock(&ROUTES);
     let national =
-        |_: smartshop::stores::Store, market: &Market| Ok(vec![offer_for(&market.id, "Ofenkäse", 2.22)]);
+        |_: lechariot::stores::Store, market: &Market| Ok(vec![offer_for(&market.id, "Ofenkäse", 2.22)]);
     let db_path = temp_db("aldi-anforderung");
     let mut opts = opts(&db_path);
     opts.market_id = Some("ALDI_NORD_4711".to_string());

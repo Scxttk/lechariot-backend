@@ -33,12 +33,12 @@ begin
   -- Async fire-and-forget; result appears later in net._http_response.
   -- GitHub rejects requests without a User-Agent header.
   perform net.http_post(
-    url := 'https://api.github.com/repos/Scxttk/smartshop-backend/actions/workflows/nightly.yml/dispatches',
+    url := 'https://api.github.com/repos/Scxttk/lechariot-backend/actions/workflows/nightly.yml/dispatches',
     headers := jsonb_build_object(
       'Authorization', 'Bearer ' || pat,
       'Accept', 'application/vnd.github+json',
       'X-GitHub-Api-Version', '2022-11-28',
-      'User-Agent', 'smartshop-supabase-trigger',
+      'User-Agent', 'lechariot-supabase-trigger',
       'Content-Type', 'application/json'
     ),
     body := jsonb_build_object(

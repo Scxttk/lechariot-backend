@@ -109,7 +109,7 @@ pub fn run_branch(
     let plz = branch.plz.clone().with_context(|| {
         format!(
             "Filiale {market_id} ({}) hat keine PLZ im Verzeichnis — \
-             `smartshop branches-sync` für dieses Gebiet neu laufen lassen.",
+             `lechariot branches-sync` für dieses Gebiet neu laufen lassen.",
             branch.name
         )
     })?;

@@ -5,9 +5,9 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 
-use smartshop::models::{Market, Offer};
-use smartshop::push::{self, PushConfig, PushOptions, SupabaseRow, chain_for, dedupe_rows, map_offer};
-use smartshop::{db, storage, units};
+use lechariot::models::{Market, Offer};
+use lechariot::push::{self, PushConfig, PushOptions, SupabaseRow, chain_for, dedupe_rows, map_offer};
+use lechariot::{db, storage, units};
 
 fn offer(title: &str, price: Option<f64>) -> Offer {
     Offer {
@@ -47,7 +47,7 @@ fn map_basic_fields() {
     assert_eq!(row.valid_until.as_deref(), Some("2026-07-19"));
     assert_eq!(row.brand, None);
     assert_eq!(row.ean, None);
-    assert_eq!(row.source, "smartshop-rust");
+    assert_eq!(row.source, "lechariot-rust");
     assert!(!row.nationwide);
 }
 
@@ -143,7 +143,7 @@ fn map_serializes_to_expected_json() {
     assert_eq!(v["price"], 1.99);
     assert_eq!(v["emoji"], "🧀");
     assert_eq!(v["image_url"], "https://cdn.example/gouda-450.jpg");
-    assert_eq!(v["source"], "smartshop-rust");
+    assert_eq!(v["source"], "lechariot-rust");
     assert_eq!(v["nationwide"], false);
 }
 
@@ -221,7 +221,7 @@ fn chain_for_matches_store_chain_for_every_store() {
     // markets.chain (sync: Store::chain()) und offers.market (push: chain_for)
     // müssen exakt denselben String tragen — die App filtert mit market=in.(…)
     // aus der markets-Tabelle, jede Abweichung macht Angebote unsichtbar.
-    use smartshop::stores::Store;
+    use lechariot::stores::Store;
     for store in Store::ALL {
         let canonical = store.chain();
         let market = Market::new(canonical, &format!("{canonical} Testfiliale"));
@@ -343,7 +343,7 @@ fn spawn_failing_mock(status: u16, body: &'static str) -> String {
 }
 
 fn temp_db(name: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("smartshop-push-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("lechariot-push-{name}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     dir.join("test.db").to_string_lossy().into_owned()
 }

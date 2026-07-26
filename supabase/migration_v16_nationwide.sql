@@ -26,7 +26,7 @@
 -- längst beantwortet: `nationwide boolean`.
 --
 -- Begründung und die beiden verworfenen Alternativen stehen in
--- `04-projekte/smartshop/Smartshop Entscheidungen.md`, Abschnitt
+-- `04-projekte/lechariot/Le Chariot Entscheidungen.md`, Abschnitt
 -- „`region` wird zu `nationwide`".
 --
 -- ------------------------------------------------------------

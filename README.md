@@ -1,4 +1,4 @@
-# smartshop
+# lechariot
 
 A CLI tool that scrapes offers from German supermarkets, stores them in a
 SQLite database, and makes them searchable, comparable, and watchable.
@@ -11,7 +11,7 @@ Rust (edition 2024) is required:
 
 ```sh
 cargo build --release
-# Binary: target/release/smartshop
+# Binary: target/release/lechariot
 ```
 
 The Rewe scrapers additionally need the `rewerse` CLI and a client
@@ -19,7 +19,7 @@ certificate — see [docs/rewe-cert.md](docs/rewe-cert.md). Netto, ALDI Süd, an
 EDEKA shell out to the system `curl` (Akamai blocks reqwest), so `curl` must be
 on the `PATH`.
 
-Every command takes `--db <path>` (default `smartshop.db` in the working
+Every command takes `--db <path>` (default `lechariot.db` in the working
 directory). The database is created and migrated on demand.
 
 ## Quick start
@@ -27,19 +27,19 @@ directory). The database is created and migrated on demand.
 Fetch and store offers:
 
 ```sh
-smartshop fetch --store lidl --zip 50667
+lechariot fetch --store lidl --zip 50667
 # Suche Lidl-Markt für PLZ 50667...
 # Markt gefunden: Lidl Deutschland (ID: LIDL_DE)
 # Lade Angebote...
 # 470 Angebote gefunden.
-# 470 Angebote in 'smartshop.db' gespeichert.
+# 470 Angebote in 'lechariot.db' gespeichert.
 ```
 
 All chains at once (`--all-stores`, with a per-chain summary; individual
 failures don't abort the run):
 
 ```sh
-smartshop fetch --all-stores --zip 50667
+lechariot fetch --all-stores --zip 50667
 ```
 
 `--dry-run` only prints without storing; `--notify` checks the watchlist after
@@ -50,7 +50,7 @@ the fetch.
 ### search — search offers by title
 
 ```sh
-smartshop search Butter
+lechariot search Butter
 #   [Wochen-Angebote] Butter (250-g-Packung) — 1.29 €  [2026-07-13 – 2026-07-18]
 #   ...
 ```
@@ -60,7 +60,7 @@ Optionally `--max-price <euro>`.
 ### compare — price of a product across all markets
 
 ```sh
-smartshop compare Milch
+lechariot compare Milch
 # MÜLLER Reine Buttermilch*
 #   Penny Am Eigelstein    0.66 €  (1.32 €/kg) (je 500 g)
 #   ...
@@ -72,7 +72,7 @@ where derivable.
 ### stats — per-market statistics + top discounts
 
 ```sh
-smartshop stats
+lechariot stats
 # Angebote pro Markt:
 #   Filiale                      Angebote  Gültigkeit              Ø Rabatt
 #   Penny Am Eigelstein               542  2026-07-13 – 2026-07-26 33 %
@@ -84,7 +84,7 @@ smartshop stats
 ### history — price history of a product
 
 ```sh
-smartshop history Butter
+lechariot history Butter
 ```
 
 Shows, per title/market, the prices seen over time (from `price_history`).
@@ -92,18 +92,18 @@ Shows, per title/market, the prices seen over time (from `price_history`).
 ### deals — price drops
 
 ```sh
-smartshop deals            # all recorded drops
-smartshop deals --since 7  # only the last 7 days
+lechariot deals            # all recorded drops
+lechariot deals --since 7  # only the last 7 days
 ```
 
 ### watch — watchlist (cron-friendly)
 
 ```sh
-smartshop watch add Kaffee --max-price 5
+lechariot watch add Kaffee --max-price 5
 # Watch #1 angelegt: 'Kaffee' (bis 5.00 €)
-smartshop watch list
-smartshop watch check   # prints hits, exit code 1 if there are any
-smartshop watch remove 1
+lechariot watch list
+lechariot watch check   # prints hits, exit code 1 if there are any
+lechariot watch remove 1
 ```
 
 `watch check` exits with **exit code 1** as soon as at least one watch matches
@@ -112,12 +112,12 @@ smartshop watch remove 1
 ### list — shopping list
 
 ```sh
-smartshop list add Butter
-smartshop list show
-smartshop list suggest
+lechariot list add Butter
+lechariot list show
+lechariot list suggest
 # Butter                   0.66 € bei Penny Am Eigelstein — MÜLLER Reine Buttermilch*  (1.32 €/kg)
-smartshop list remove Butter
-smartshop list clear
+lechariot list remove Butter
+lechariot list clear
 ```
 
 `suggest` finds the cheapest matching offer per item across all markets.
@@ -125,8 +125,8 @@ smartshop list clear
 ### export — JSON or CSV
 
 ```sh
-smartshop export --format csv --query Butter > butter.csv
-smartshop export --format json --out angebote.json
+lechariot export --format csv --query Butter > butter.csv
+lechariot export --format json --out angebote.json
 ```
 
 Without `--out` the output goes to stdout; `--query` filters by title/subtitle.
@@ -134,8 +134,8 @@ Without `--out` the output goes to stdout; `--query` filters by title/subtitle.
 ### serve — web dashboard + read-only JSON API
 
 ```sh
-smartshop serve --port 8080
-# Web-UI läuft auf http://0.0.0.0:8080, JSON-API auf http://0.0.0.0:8080/api (DB: smartshop.db)
+lechariot serve --port 8080
+# Web-UI läuft auf http://0.0.0.0:8080, JSON-API auf http://0.0.0.0:8080/api (DB: lechariot.db)
 ```
 
 The web dashboard lives at `/`, the JSON endpoints under `/api/*`
@@ -154,9 +154,9 @@ Offers without a price are skipped.
 export SUPABASE_URL="https://xyz.supabase.co"
 export SUPABASE_SERVICE_KEY="…"   # service role key, not the anon key
 
-smartshop push --region 01219                  # all markets
-smartshop push --store lidl --region 01219     # a single chain
-smartshop push --dry-run                       # print only, no network
+lechariot push --region 01219                  # all markets
+lechariot push --store lidl --region 01219     # a single chain
+lechariot push --dry-run                       # print only, no network
 ```
 
 `--region <ZIP>` is required (except with `--dry-run`). For the weekly sync
@@ -207,9 +207,9 @@ so that no offers from other regions get pushed along.
 export SUPABASE_URL="https://xyz.supabase.co"
 export SUPABASE_SERVICE_KEY="…"
 
-smartshop sync-regions                          # up to 10 regions
-smartshop sync-regions --max-regions 3          # change the limit
-smartshop sync-regions --dry-run                # no Supabase writes
+lechariot sync-regions                          # up to 10 regions
+lechariot sync-regions --max-regions 3          # change the limit
+lechariot sync-regions --dry-run                # no Supabase writes
 ```
 
 Failures of individual regions don't abort the run; exit code ≠ 0 only if all
@@ -220,7 +220,7 @@ editor (see [docs/ci.md](docs/ci.md)).
 #### `--market-id` — sync a single store
 
 ```sh
-smartshop sync-regions --market-id 1766063      # REWE am Postplatz, 01067
+lechariot sync-regions --market-id 1766063      # REWE am Postplatz, 01067
 ```
 
 The ZIP path asks the store finder which store is *nearest* and takes the
@@ -253,10 +253,10 @@ the directory grows where the app is actually used.
 export SUPABASE_URL="https://xyz.supabase.co"
 export SUPABASE_SERVICE_KEY="…"
 
-smartshop branches-sync                            # Kaufland + Penny, nationwide
-smartshop branches-sync --area 01219               # plus every chain around one ZIP
-smartshop branches-sync --from-regions             # areas = active regions
-smartshop branches-sync --area 01219 --dry-run     # no Supabase writes
+lechariot branches-sync                            # Kaufland + Penny, nationwide
+lechariot branches-sync --area 01219               # plus every chain around one ZIP
+lechariot branches-sync --from-regions             # areas = active regions
+lechariot branches-sync --area 01219 --dry-run     # no Supabase writes
 ```
 
 For an area, REWE is searched twice — once by ZIP (the neighbourhood) and once
@@ -319,7 +319,7 @@ and Kaufland deliver their store coordinates anyway — `markets.lat/lon`
 ## HTTP API endpoints
 
 All endpoints are `GET` and return JSON; errors as `{"error": "..."}` with
-status 400 (missing/invalid parameter) or 500. Via `smartshop serve` they are
+status 400 (missing/invalid parameter) or 500. Via `lechariot serve` they are
 reachable under the **`/api`** prefix (e.g. `/api/offers?q=Butter`); the root
 paths belong to the web dashboard.
 
@@ -341,7 +341,7 @@ network.
 
 ## Web dashboard
 
-`smartshop serve` additionally delivers a server-rendered HTML dashboard —
+`lechariot serve` additionally delivers a server-rendered HTML dashboard —
 entirely without JavaScript, CSS embedded, no external assets.
 
 | Page | Content |

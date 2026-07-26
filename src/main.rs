@@ -1,12 +1,12 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 
-use smartshop::models::Offer;
-use smartshop::stores::{Store, save_offers, scrape_store};
-use smartshop::{db, units};
+use lechariot::models::Offer;
+use lechariot::stores::{Store, save_offers, scrape_store};
+use lechariot::{db, units};
 
 #[derive(Parser)]
-#[command(name = "smartshop", about = "Supermarkt-Angebote scrapen und speichern")]
+#[command(name = "lechariot", about = "Supermarkt-Angebote scrapen und speichern")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -51,7 +51,7 @@ enum Command {
         notify: bool,
 
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Gespeicherte Angebote nach Titel durchsuchen
@@ -64,7 +64,7 @@ enum Command {
         max_price: Option<f64>,
 
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Preise eines Produkts über alle gespeicherten Märkte vergleichen
@@ -73,7 +73,7 @@ enum Command {
         query: String,
 
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Gespeicherte Angebote als JSON oder CSV exportieren
@@ -91,13 +91,13 @@ enum Command {
         out: Option<String>,
 
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Statistiken über die gespeicherten Angebote anzeigen
     Stats {
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Watchlist verwalten: Produkte beobachten und Treffer finden
@@ -117,7 +117,7 @@ enum Command {
         since: Option<i64>,
 
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Lokales Web-Dashboard und HTTP-API für die gespeicherten Angebote starten
@@ -134,7 +134,7 @@ enum Command {
         host: String,
 
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Gespeicherte Angebote nach Supabase hochladen (public.offers)
@@ -163,7 +163,7 @@ enum Command {
         no_mirror_images: bool,
 
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Bundesweite Ketten und alle gewählten Filialen abrufen und syncen
@@ -198,7 +198,7 @@ enum Command {
         dry_run: bool,
 
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Filialverzeichnis (`public.branches`) befüllen.
@@ -221,7 +221,7 @@ enum Command {
         skip_national: bool,
 
         /// Umkreis der Gebietssuche in km
-        #[arg(long, default_value_t = smartshop::branches::AREA_RADIUS_KM)]
+        #[arg(long, default_value_t = lechariot::branches::AREA_RADIUS_KM)]
         radius_km: f64,
 
         /// Pfad zum Rewe TLS-Zertifikat (PEM)
@@ -242,7 +242,7 @@ enum Command {
         query: String,
 
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Verwaiste Bilder aus dem Storage-Bucket `offer-images` entfernen.
@@ -269,7 +269,7 @@ enum Command {
         execute: bool,
 
         /// So viele Wochen aufbewahren.
-        #[arg(long, default_value_t = smartshop::prune::HISTORY_WEEKS)]
+        #[arg(long, default_value_t = lechariot::prune::HISTORY_WEEKS)]
         weeks: i64,
     },
 }
@@ -286,19 +286,19 @@ enum WatchAction {
         max_price: Option<f64>,
 
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Alle Watchlist-Einträge anzeigen
     List {
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Watchlist gegen die gespeicherten Angebote prüfen (Exit-Code 1 bei Treffern)
     Check {
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Eintrag aus der Watchlist entfernen
@@ -307,7 +307,7 @@ enum WatchAction {
         id: i64,
 
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
 }
@@ -320,7 +320,7 @@ enum ListAction {
         item: String,
 
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Artikel von der Einkaufsliste entfernen
@@ -329,25 +329,25 @@ enum ListAction {
         item: String,
 
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Einkaufsliste anzeigen
     Show {
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Einkaufsliste leeren
     Clear {
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
     /// Für jeden Artikel zeigen, wo er diese Woche am günstigsten ist
     Suggest {
         /// Pfad zur SQLite-Datenbank
-        #[arg(long, default_value = "smartshop.db")]
+        #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
 }
@@ -372,9 +372,9 @@ fn main() -> Result<()> {
         Command::Watch { action } => watch(action),
         Command::List { action } => shopping_list(action),
         Command::Deals { since, db } => deals(since, db),
-        Command::Serve { port, host, db } => smartshop::api::serve(&host, port, db),
+        Command::Serve { port, host, db } => lechariot::api::serve(&host, port, db),
         Command::Push { store, all_stores: _, national, dry_run, no_mirror_images, db } => {
-            let opts = smartshop::push::PushOptions {
+            let opts = lechariot::push::PushOptions {
                 db_path: db,
                 chain: store.map(|s| s.chain().to_string()),
                 // Der Push von Hand bedient keine Filial-Anforderung.
@@ -384,7 +384,7 @@ fn main() -> Result<()> {
                 mirror_images: !no_mirror_images,
                 defer_mirror: false,
             };
-            smartshop::push::run(&opts, None)
+            lechariot::push::run(&opts, None)
         }
         Command::Sync {
             max_branches,
@@ -395,7 +395,7 @@ fn main() -> Result<()> {
             dry_run,
             db,
         } => {
-            let opts = smartshop::sync::SyncOptions {
+            let opts = lechariot::sync::SyncOptions {
                 db_path: db,
                 dry_run,
                 max_branches,
@@ -403,23 +403,23 @@ fn main() -> Result<()> {
             };
             // Bundesweite Ketten: Der National-Markt steht fest, es gibt
             // nichts zu suchen — nur den Katalog zu holen.
-            let national = |store: Store, market: &smartshop::models::Market| {
-                smartshop::stores::fetch_offers(store, market, "", &cert, &key)
+            let national = |store: Store, market: &lechariot::models::Market| {
+                lechariot::stores::fetch_offers(store, market, "", &cert, &key)
             };
             if national_only {
-                let cfg = smartshop::push::config_from_env()?;
-                return smartshop::sync::sync_national(
+                let cfg = lechariot::push::config_from_env()?;
+                return lechariot::sync::sync_national(
                     &opts,
                     &cfg,
                     &national,
-                    &smartshop::sync::national_stores(),
+                    &lechariot::sync::national_stores(),
                     None,
                 );
             }
             // Filial-Sync: Die Filiale steht fest, es gibt nichts zu suchen —
             // nur die Kette muss auf ihren Scraper zeigen. Der Voll-Lauf
             // benutzt dieselbe Closure für die selbst gewählten Filialen.
-            let scraper = |branch: &smartshop::models::Branch| {
+            let scraper = |branch: &lechariot::models::Branch| {
                 let store = Store::from_chain(&branch.chain).ok_or_else(|| {
                     anyhow::anyhow!(
                         "Filiale {} trägt die unbekannte Kette '{}'",
@@ -428,7 +428,7 @@ fn main() -> Result<()> {
                     )
                 })?;
                 let zip = branch.plz.as_deref().unwrap_or_default();
-                smartshop::stores::fetch_offers(
+                lechariot::stores::fetch_offers(
                     store,
                     &branch.as_market().with_chain(&branch.chain),
                     zip,
@@ -437,9 +437,9 @@ fn main() -> Result<()> {
                 )
             };
             if let Some(market_id) = &market_id {
-                return smartshop::sync::run_branch(&opts, None, &scraper, &national, market_id);
+                return lechariot::sync::run_branch(&opts, None, &scraper, &national, market_id);
             }
-            smartshop::sync::run(&opts, None, &scraper, &national)
+            lechariot::sync::run(&opts, None, &scraper, &national)
         }
         Command::BranchesSync {
             area,
@@ -450,16 +450,16 @@ fn main() -> Result<()> {
             key,
             dry_run,
         } => {
-            let cfg = smartshop::push::config_from_env()?;
+            let cfg = lechariot::push::config_from_env()?;
             let mut areas = area;
             if from_branches {
-                let from_db = smartshop::branches::areas_from_chosen_branches(&cfg)?;
+                let from_db = lechariot::branches::areas_from_chosen_branches(&cfg)?;
                 println!("{} Gebiet(e) aus den gewählten Filialen.", from_db.len());
                 areas.extend(from_db);
             }
             areas.sort();
             areas.dedup();
-            let opts = smartshop::branches::DirectoryOptions {
+            let opts = lechariot::branches::DirectoryOptions {
                 areas,
                 national: !skip_national,
                 radius_km,
@@ -467,16 +467,16 @@ fn main() -> Result<()> {
                 key,
                 dry_run,
             };
-            smartshop::branches::sync(&cfg, &opts).map(|_| ())
+            lechariot::branches::sync(&cfg, &opts).map(|_| ())
         }
         Command::History { query, db } => history(query, db),
         Command::PruneImages { execute, min_age_days } => {
-            let opts = smartshop::prune::PruneOptions { execute, min_age_days };
-            smartshop::prune::run(&opts, None)
+            let opts = lechariot::prune::PruneOptions { execute, min_age_days };
+            lechariot::prune::run(&opts, None)
         }
         Command::PruneHistory { execute, weeks } => {
-            let opts = smartshop::prune::HistoryPruneOptions { execute, weeks };
-            smartshop::prune::run_history(&opts, None)
+            let opts = lechariot::prune::HistoryPruneOptions { execute, weeks };
+            lechariot::prune::run_history(&opts, None)
         }
     }
 }
@@ -486,7 +486,7 @@ fn main() -> Result<()> {
 fn print_watch_hits(conn: &rusqlite::Connection) -> Result<bool> {
     let watches = db::watches(conn)?;
     if watches.is_empty() {
-        println!("Watchlist ist leer. Mit `smartshop watch add <Suchbegriff>` anlegen.");
+        println!("Watchlist ist leer. Mit `lechariot watch add <Suchbegriff>` anlegen.");
         return Ok(false);
     }
     let mut any = false;
@@ -533,7 +533,7 @@ fn shopping_list(action: ListAction) -> Result<()> {
             let conn = db::open(&db)?;
             let items = db::list_items(&conn)?;
             if items.is_empty() {
-                println!("Einkaufsliste ist leer. Mit `smartshop list add <Artikel>` befüllen.");
+                println!("Einkaufsliste ist leer. Mit `lechariot list add <Artikel>` befüllen.");
                 return Ok(());
             }
             println!("Einkaufsliste ({} Artikel):", items.len());
@@ -558,7 +558,7 @@ fn suggest(db: &str) -> Result<()> {
     let conn = db::open(db)?;
     let items = db::list_items(&conn)?;
     if items.is_empty() {
-        println!("Einkaufsliste ist leer. Mit `smartshop list add <Artikel>` befüllen.");
+        println!("Einkaufsliste ist leer. Mit `lechariot list add <Artikel>` befüllen.");
         return Ok(());
     }
     let market_names: std::collections::HashMap<String, String> = db::markets(&conn)?
@@ -629,7 +629,7 @@ fn watch(action: WatchAction) -> Result<()> {
             let conn = db::open(&db)?;
             let watches = db::watches(&conn)?;
             if watches.is_empty() {
-                println!("Watchlist ist leer. Mit `smartshop watch add <Suchbegriff>` anlegen.");
+                println!("Watchlist ist leer. Mit `lechariot watch add <Suchbegriff>` anlegen.");
                 return Ok(());
             }
             println!("  {:>4}  {:<30} {:>10}  {}", "ID", "Suchbegriff", "Max-Preis", "Angelegt");

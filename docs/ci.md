@@ -13,8 +13,8 @@ Drei Workflows liegen unter `.github/workflows/`:
   gefundenen Filialen nach `public.markets` und pusht die Angebote mit
   `--region <PLZ>`. Schlägt der ganze Sync fehl (Tabelle leer oder
   unerreichbar, alle Regionen gescheitert), greift der **Fallback**: der
-  alte Einzel-PLZ-Pfad `fetch --all-stores --zip $SMARTSHOP_ZIP` +
-  `push --region $SMARTSHOP_ZIP`. Die Pipeline geht also nie dunkel.
+  alte Einzel-PLZ-Pfad `fetch --all-stores --zip $LECHARIOT_ZIP` +
+  `push --region $LECHARIOT_ZIP`. Die Pipeline geht also nie dunkel.
   Zum Schluss räumt der volle Lauf auf (bei On-Demand-Läufen für eine PLZ
   oder Filiale übersprungen): `prune-images` entfernt verwaiste Bilder aus
   dem Bucket, `prune-history` beschneidet `public.price_history` auf 26
@@ -63,7 +63,7 @@ asynchronen HTTP-Call (pg_net) an GitHubs `workflow_dispatch`-API für
 `nightly.yml`. Einrichtung:
 
 1. **Fine-grained PAT erstellen** (github.com → Settings → Developer
-   settings → Fine-grained tokens): nur Repo `Scxttk/smartshop-backend`,
+   settings → Fine-grained tokens): nur Repo `Scxttk/lechariot-backend`,
    Permission **Actions: Read and write**, sonst nichts.
 2. **PAT im Supabase Vault ablegen** (SQL-Editor):
 
@@ -236,14 +236,14 @@ Unter **Settings → Secrets and variables → Actions** im Repo:
 
 | Name | Inhalt |
 |---|---|
-| `SMARTSHOP_ZIP` | Fallback-Postleitzahl, falls der Regionen-Sync scheitert, z. B. `01219` |
+| `LECHARIOT_ZIP` | Fallback-Postleitzahl, falls der Regionen-Sync scheitert, z. B. `01219` |
 
 Oder per CLI:
 
 ```sh
 gh secret set SUPABASE_URL
 gh secret set SUPABASE_SERVICE_KEY
-gh variable set SMARTSHOP_ZIP --body 01219
+gh variable set LECHARIOT_ZIP --body 01219
 ```
 
 ## Manuell starten

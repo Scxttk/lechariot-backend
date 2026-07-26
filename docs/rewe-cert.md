@@ -7,9 +7,9 @@ privatem Schlüssel, die einmalig aus der offiziellen Rewe-Android-App (APK)
 extrahiert werden. Ohne diese beiden Dateien funktioniert **nur** der
 Rewe-Scraper nicht — alle anderen Ketten brauchen keine Authentifizierung.
 
-## Was smartshop erwartet
+## Was lechariot erwartet
 
-`smartshop fetch --store rewe` prüft vor jedem Aufruf:
+`lechariot fetch --store rewe` prüft vor jedem Aufruf:
 
 1. Das Binary `rewerse` ist im `PATH`. Fehlermeldung sonst:
    `rewerse CLI nicht gefunden — bitte installieren (siehe README)`
@@ -18,9 +18,9 @@ Rewe-Scraper nicht — alle anderen Ketten brauchen keine Authentifizierung.
    `--cert <pfad>` und `--key <pfad>`. Fehlermeldungen sonst:
    `Zertifikat nicht gefunden: cert.pem` bzw. `Private Key nicht gefunden: private.key`
 
-Hinweis: `rewerse` selbst nennt seinen Standard `certificate.pem` — smartshop
+Hinweis: `rewerse` selbst nennt seinen Standard `certificate.pem` — lechariot
 übergibt die Pfade aber immer explizit per `-cert`/`-key`, daher zählt nur, was
-du smartshop mitgibst.
+du lechariot mitgibst.
 
 ## Schritt 1: rewerse installieren
 
@@ -103,15 +103,15 @@ openssl x509 -in cert.pem -noout -subject -dates
 openssl pkey -in private.key -noout && echo "Key OK"
 ```
 
-## Schritt 5: Mit smartshop verifizieren
+## Schritt 5: Mit lechariot verifizieren
 
 Beide Dateien ins Arbeitsverzeichnis legen (oder Pfade per Flag übergeben)
 und einen Trockenlauf starten:
 
 ```sh
-smartshop fetch --store rewe --zip 50667 --dry-run
+lechariot fetch --store rewe --zip 50667 --dry-run
 # oder mit expliziten Pfaden:
-smartshop fetch --store rewe --zip 50667 --cert /pfad/cert.pem --key /pfad/private.key --dry-run
+lechariot fetch --store rewe --zip 50667 --cert /pfad/cert.pem --key /pfad/private.key --dry-run
 ```
 
 Erwartete Ausgabe: Marktsuche, gefundener Markt mit ID, dann die Angebotsliste
@@ -124,21 +124,21 @@ rewerse -cert cert.pem -key private.key -json markets search -query 50667
 
 **Stolperstein:** `-json` ist in rewerse v1.2.0 ein *globales* Flag und muss
 **vor** dem Kommando stehen (`-json markets search …`). Steht es dahinter,
-bricht rewerse mit `flag provided but not defined: -json` ab. smartshop
+bricht rewerse mit `flag provided but not defined: -json` ab. lechariot
 übergibt es bereits an der richtigen Stelle.
 
 **Gültigkeitsdaten:** Die discounts-Antwort von rewerse v1.2.0 enthält nur
-noch ein Top-Level `validUntil` (kein Startdatum mehr). smartshop leitet
+noch ein Top-Level `validUntil` (kein Startdatum mehr). lechariot leitet
 `valid_from` deshalb als Montag derselben Woche ab (Rewe-Wochenangebote
 gelten Mo–Sa); fehlt auch `validUntil`, wird auf die laufende Woche in
 Europe/Berlin zurückgefallen.
 
-Liefert das JSON, liegt das Problem bei smartshop; liefert es einen
+Liefert das JSON, liegt das Problem bei lechariot; liefert es einen
 TLS-Fehler, sind Zertifikat/Schlüssel defekt oder veraltet — dann Extraktion
 mit einer aktuellen APK wiederholen.
 
 ## Rechtlicher Hinweis
 
 Zertifikat und Schlüssel stammen aus der offiziellen App und identifizieren
-die App, nicht dich. Nutze die API maßvoll (die eingebauten smartshop-Abrufe
+die App, nicht dich. Nutze die API maßvoll (die eingebauten lechariot-Abrufe
 sind unkritisch) und gib die extrahierten Dateien nicht weiter.

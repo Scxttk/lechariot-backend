@@ -5,9 +5,9 @@
 <dict>
     <!-- Vorlage — nicht direkt kopieren! scripts/install-launchd.sh ersetzt
          __SCRIPT__ und __LOGDIR__ und installiert die fertige Datei nach
-         ~/Library/LaunchAgents/de.smartshop.nightly.plist. -->
+         ~/Library/LaunchAgents/de.lechariot.nightly.plist. -->
     <key>Label</key>
-    <string>de.smartshop.nightly</string>
+    <string>de.lechariot.nightly</string>
 
     <key>ProgramArguments</key>
     <array>

@@ -6,7 +6,7 @@
 --
 -- Prerequisites (one-time, Supabase SQL editor):
 --   1. A fine-grained GitHub PAT with "Actions: read and write" on
---      Scxttk/smartshop-backend (see docs/ci.md).
+--      Scxttk/lechariot-backend (see docs/ci.md).
 --   2. Store it in Vault under the name 'github_pat':
 --        select vault.create_secret('<PAT>', 'github_pat');
 --
@@ -39,12 +39,12 @@ begin
   -- Async fire-and-forget; result appears later in net._http_response.
   -- GitHub rejects requests without a User-Agent header.
   perform net.http_post(
-    url := 'https://api.github.com/repos/Scxttk/smartshop-backend/actions/workflows/nightly.yml/dispatches',
+    url := 'https://api.github.com/repos/Scxttk/lechariot-backend/actions/workflows/nightly.yml/dispatches',
     headers := jsonb_build_object(
       'Authorization', 'Bearer ' || pat,
       'Accept', 'application/vnd.github+json',
       'X-GitHub-Api-Version', '2022-11-28',
-      'User-Agent', 'smartshop-supabase-trigger',
+      'User-Agent', 'lechariot-supabase-trigger',
       'Content-Type', 'application/json'
     ),
     body := jsonb_build_object('ref', 'master')
