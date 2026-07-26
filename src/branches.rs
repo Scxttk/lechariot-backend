@@ -188,7 +188,92 @@ pub fn sync(cfg: &PushConfig, opts: &DirectoryOptions) -> Result<usize> {
 
     crate::push::upsert_branches(cfg, &rows)?;
     println!("\n{} Filialen nach Supabase geschrieben.", rows.len());
+
+    // Fertigmeldung für die Gebiete, die jemand angefordert hat (v19). Sie
+    // ist der einzige Weg, auf dem die App erfährt, dass ihr Ort jetzt
+    // vollständig ist — und weil die Zeile in der Datenbank steht und nicht
+    // im Arbeitsspeicher, überlebt sie einen Neustart der App.
+    //
+    // Nur warnen, nicht abbrechen: Die Filialen sind geschrieben, das ist das
+    // Ergebnis des Laufs. Eine fehlende Fertigmeldung kostet den Hinweis,
+    // nicht die Daten — und der Sonntagslauf holt sie nach.
+    if !opts.areas.is_empty() {
+        match mark_areas_synced(cfg, &opts.areas) {
+            Ok(n) if n > 0 => println!("{n} Gebiets-Anforderung(en) als erledigt gemeldet."),
+            Ok(_) => {}
+            Err(e) => eprintln!("WARNUNG: Gebiete als erledigt melden fehlgeschlagen: {e:#}"),
+        }
+    }
     Ok(rows.len())
+}
+
+/// Meldet die angeforderten Gebiete als erledigt (`area_requests.last_synced`).
+///
+/// Über die **PLZ**, nicht über die Ankerfiliale: Zwei Nutzer desselben Ortes
+/// wählen verschiedene Anker und meinen dasselbe Gebiet — ein Lauf bedient
+/// beide, also müssen auch beide Zeilen ihre Meldung bekommen.
+///
+/// Liefert die Zahl der gemeldeten Zeilen.
+pub fn mark_areas_synced(cfg: &PushConfig, areas: &[String]) -> Result<usize> {
+    let client = reqwest::blocking::Client::new();
+    let list = areas.join(",");
+    let resp = client
+        .patch(format!("{}/rest/v1/area_requests", cfg.base_url))
+        .header("apikey", &cfg.api_key)
+        .header("Authorization", format!("Bearer {}", cfg.api_key))
+        .header("Content-Type", "application/json")
+        // `return=representation`, damit hier steht, wie viele Zeilen wirklich
+        // getroffen wurden — ohne das antwortet PostgREST mit 204 und die
+        // Meldung „0 Gebiete" wäre von „alle Gebiete" nicht zu unterscheiden.
+        .header("Prefer", "return=representation")
+        .query(&[("plz", format!("in.({list})"))])
+        .json(&serde_json::json!({
+            "last_synced": chrono::Utc::now().to_rfc3339(),
+        }))
+        .send()
+        .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
+    let status = resp.status();
+    let body = resp.text().unwrap_or_default();
+    if !status.is_success() {
+        let excerpt: String = body.chars().take(300).collect();
+        anyhow::bail!("Gebiete als erledigt melden fehlgeschlagen (HTTP {status}): {excerpt}");
+    }
+    let updated: Vec<serde_json::Value> =
+        serde_json::from_str(&body).unwrap_or_default();
+    Ok(updated.len())
+}
+
+/// Die Gebiete, auf die jemand gerade wartet (`area_requests` ohne
+/// `last_synced`).
+///
+/// Sicherheitsnetz für den Sonntagslauf: Der Trigger stößt bei jeder
+/// Anforderung sofort einen Lauf an, aber er fängt seine eigenen Fehler ab
+/// (sonst scheiterte die Anforderung am Dispatch). Geht ein Dispatch verloren,
+/// bliebe die Zeile sonst für immer offen und der Nutzer wartete auf einen
+/// Lauf, den niemand startet — genau der Fehler, der am 2026-07-25 schon
+/// einmal bei den Filialen steckte.
+pub fn areas_from_open_requests(cfg: &PushConfig) -> Result<Vec<String>> {
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .get(format!("{}/rest/v1/area_requests", cfg.base_url))
+        .header("apikey", &cfg.api_key)
+        .header("Authorization", format!("Bearer {}", cfg.api_key))
+        .query(&[
+            ("select", "plz"),
+            ("last_synced", "is.null"),
+            ("active", "eq.true"),
+            ("plz", "not.is.null"),
+        ])
+        .send()
+        .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
+    if !resp.status().is_success() {
+        anyhow::bail!("Offene Gebiets-Anforderungen laden fehlgeschlagen (HTTP {})", resp.status());
+    }
+    let rows: Vec<serde_json::Value> =
+        resp.json().context("area_requests: Antwort ist kein gültiges JSON")?;
+    let mut areas: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    areas.extend(rows.iter().filter_map(|r| r.get("plz")?.as_str().map(String::from)));
+    Ok(areas.into_iter().collect())
 }
 
 fn describe(branch: &Branch) -> String {
