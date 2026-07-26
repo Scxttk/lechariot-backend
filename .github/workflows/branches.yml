@@ -96,7 +96,11 @@ jobs:
           if [ -n "${ONLY_AREA:-}" ]; then
             ARGS+=(--area "$ONLY_AREA")
           else
-            ARGS+=(--from-branches)
+            # Sonntagslauf: die Gebiete der gewählten Filialen — plus alles,
+            # worauf noch jemand wartet. Der Trigger aus v19 stößt bei jeder
+            # Anforderung sofort einen Lauf an, fängt seine Fehler aber ab;
+            # ohne dieses Netz bliebe ein verlorener Dispatch für immer offen.
+            ARGS+=(--from-branches --from-area-requests)
           fi
           [ "${SKIP_NATIONAL:-false}" = "true" ] && ARGS+=(--skip-national)
           ./target/release/lechariot branches-sync "${ARGS[@]}" 2>&1 | tee branches.log

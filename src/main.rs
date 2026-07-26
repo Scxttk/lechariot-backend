@@ -216,6 +216,10 @@ enum Command {
         #[arg(long, default_value_t = false)]
         from_branches: bool,
 
+        /// Offene Gebiets-Anforderungen aus `area_requests` mitnehmen
+        #[arg(long, default_value_t = false)]
+        from_area_requests: bool,
+
         /// Kaufland und Penny nicht mitziehen
         #[arg(long, default_value_t = false)]
         skip_national: bool,
@@ -444,6 +448,7 @@ fn main() -> Result<()> {
         Command::BranchesSync {
             area,
             from_branches,
+            from_area_requests,
             skip_national,
             radius_km,
             cert,
@@ -456,6 +461,17 @@ fn main() -> Result<()> {
                 let from_db = lechariot::branches::areas_from_chosen_branches(&cfg)?;
                 println!("{} Gebiet(e) aus den gewählten Filialen.", from_db.len());
                 areas.extend(from_db);
+            }
+            if from_area_requests {
+                // Nur warnen: Das Sicherheitsnetz darf den Lauf nicht
+                // verhindern, den es absichern soll.
+                match lechariot::branches::areas_from_open_requests(&cfg) {
+                    Ok(open) => {
+                        println!("{} offene Gebiets-Anforderung(en).", open.len());
+                        areas.extend(open);
+                    }
+                    Err(e) => eprintln!("WARNUNG: offene Gebiets-Anforderungen nicht lesbar: {e:#}"),
+                }
             }
             areas.sort();
             areas.dedup();
