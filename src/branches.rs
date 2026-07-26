@@ -19,7 +19,7 @@
 //!
 //! Deshalb ist das Verzeichnis nicht flächendeckend, sondern bedarfsgesteuert:
 //! landesweit nur, wo es einen Request kostet, sonst für die Gebiete, die
-//! tatsächlich jemand angefragt hat (`--from-regions`).
+//! tatsächlich jemand gewählt hat (`--from-branches`).
 
 use anyhow::{Context, Result};
 

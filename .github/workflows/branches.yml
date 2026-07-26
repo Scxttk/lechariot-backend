@@ -91,12 +91,12 @@ jobs:
           ARGS=()
           [ -n "${REWE_CERT:-}" ] && [ -f "$REWE_CERT" ] && ARGS+=(--cert "$REWE_CERT")
           [ -n "${REWE_KEY:-}" ] && [ -f "$REWE_KEY" ] && ARGS+=(--key "$REWE_KEY")
-          # Ohne explizites Gebiet: die Regionen, die tatsächlich jemand
-          # angefragt hat. Das Verzeichnis wächst dort, wo die App benutzt wird.
+          # Ohne explizites Gebiet: die PLZ der gewählten Filialen. Das
+          # Verzeichnis wächst dort, wo die App benutzt wird.
           if [ -n "${ONLY_AREA:-}" ]; then
             ARGS+=(--area "$ONLY_AREA")
           else
-            ARGS+=(--from-regions)
+            ARGS+=(--from-branches)
           fi
           [ "${SKIP_NATIONAL:-false}" = "true" ] && ARGS+=(--skip-national)
           ./target/release/smartshop branches-sync "${ARGS[@]}" 2>&1 | tee branches.log

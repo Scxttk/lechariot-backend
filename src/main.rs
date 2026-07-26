@@ -212,7 +212,7 @@ enum Command {
         #[arg(long, value_name = "PLZ")]
         area: Vec<String>,
 
-        /// Alle aktiven Regionen aus Supabase als Gebiete verwenden
+        /// Die PLZ der gewählten Filialen als Gebiete verwenden
         #[arg(long, default_value_t = false)]
         from_branches: bool,
 
@@ -454,7 +454,7 @@ fn main() -> Result<()> {
             let mut areas = area;
             if from_branches {
                 let from_db = smartshop::branches::areas_from_chosen_branches(&cfg)?;
-                println!("{} aktive Region(en) aus Supabase als Gebiete.", from_db.len());
+                println!("{} Gebiet(e) aus den gewählten Filialen.", from_db.len());
                 areas.extend(from_db);
             }
             areas.sort();
