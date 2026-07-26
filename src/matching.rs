@@ -312,7 +312,7 @@ mod tests {
     #[test]
     #[ignore]
     fn parity_with_eval_db() {
-        let path = std::env::var("HOME").unwrap() + "/.local/share/smartshop/smartshop.db";
+        let path = std::env::var("HOME").unwrap() + "/.local/share/lechariot/lechariot.db";
         let conn = rusqlite::Connection::open(&path).unwrap();
         let mut stmt = conn
             .prepare(

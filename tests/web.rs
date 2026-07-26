@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
-use smartshop::db;
-use smartshop::models::{Market, Offer};
+use lechariot::db;
+use lechariot::models::{Market, Offer};
 
 fn offer(
     id: &str,
@@ -45,7 +45,7 @@ fn build_fixture(path: &std::path::Path) {
 
 fn fixture_db(name: &str) -> std::path::PathBuf {
     let path = std::env::temp_dir()
-        .join(format!("smartshop_web_test_{name}_{}.db", std::process::id()));
+        .join(format!("lechariot_web_test_{name}_{}.db", std::process::id()));
     let _ = std::fs::remove_file(&path);
     build_fixture(&path);
     path
@@ -61,8 +61,8 @@ fn spawn_server(db_path: &std::path::Path) -> SocketAddr {
         rt.block_on(async {
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             tx.send(listener.local_addr().unwrap()).unwrap();
-            let app = smartshop::web::router(db_path.clone())
-                .nest("/api", smartshop::api::router(db_path));
+            let app = lechariot::web::router(db_path.clone())
+                .nest("/api", lechariot::api::router(db_path));
             axum::serve(listener, app).await.unwrap();
         });
     });

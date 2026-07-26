@@ -264,7 +264,7 @@ pub fn fetch_branch(cfg: &PushConfig, market_id: &str) -> Result<Branch> {
     rows.into_iter().next().with_context(|| {
         format!(
             "Filiale {market_id} steht nicht im Verzeichnis. \
-             `smartshop branches-sync --area <PLZ>` füllt das Gebiet nach."
+             `lechariot branches-sync --area <PLZ>` füllt das Gebiet nach."
         )
     })
 }

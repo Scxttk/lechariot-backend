@@ -23,7 +23,7 @@ fn migrate(conn: &Connection) -> Result<()> {
     let mut version = schema_version(conn)?;
     if version > SCHEMA_VERSION {
         bail!(
-            "Datenbank hat Schema-Version {version}, dieses Programm unterstützt maximal {SCHEMA_VERSION}. Bitte smartshop aktualisieren."
+            "Datenbank hat Schema-Version {version}, dieses Programm unterstützt maximal {SCHEMA_VERSION}. Bitte lechariot aktualisieren."
         );
     }
     while version < SCHEMA_VERSION {

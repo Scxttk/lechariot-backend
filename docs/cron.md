@@ -1,4 +1,4 @@
-# smartshop automatisieren: Cron, launchd und die JSON-API
+# lechariot automatisieren: Cron, launchd und die JSON-API
 
 > **macOS-Nutzer:** Der empfohlene Weg ist der fertige launchd-Agent —
 > Einrichtung in [automation.md](automation.md). Diese Seite beschreibt die
@@ -8,13 +8,13 @@ Zwei Bausteine bieten sich für Automatisierung an:
 
 1. `scripts/nightly.sh` — nächtliche Pipeline: Angebote aller Ketten
    abrufen, nach Supabase pushen, Watchlist prüfen (Konfiguration über
-   `~/.config/smartshop/env`, siehe `scripts/env.example`).
-2. `smartshop watch check` — meldet Watchlist-Treffer per **Exit-Code 1**
+   `~/.config/lechariot/env`, siehe `scripts/env.example`).
+2. `lechariot watch check` — meldet Watchlist-Treffer per **Exit-Code 1**
    (0 = keine Treffer), ideal als Cron-Bedingung für Benachrichtigungen.
 
 ## Voraussetzungen
 
-- `smartshop` gebaut und im `PATH` (oder `SMARTSHOP_BIN` setzen).
+- `lechariot` gebaut und im `PATH` (oder `LECHARIOT_BIN` setzen).
 - `curl` im `PATH` (Netto, ALDI Süd und EDEKA nutzen System-curl).
 - Für Rewe: `rewerse` + Zertifikat, siehe [rewe-cert.md](rewe-cert.md) —
   ohne läuft `--all-stores` trotzdem durch, Rewe erscheint dann als Fehler
@@ -22,7 +22,7 @@ Zwei Bausteine bieten sich für Automatisierung an:
 
 Hinweis zum Fehlerverhalten: `fetch --all-stores` bricht bei einzelnen
 Ketten-Fehlern **nicht** ab und endet mit Exit-Code 0, solange der Lauf als
-Ganzes funktioniert. Das Lauf-Log (unter `~/Library/Logs/smartshop/`)
+Ganzes funktioniert. Das Lauf-Log (unter `~/Library/Logs/lechariot/`)
 enthält die Zusammenfassung pro Kette.
 
 ## Crontab (Linux/macOS)
@@ -31,11 +31,11 @@ enthält die Zusammenfassung pro Kette.
 
 ```cron
 # Komplette Pipeline (fetch + push + watch check); Konfiguration liest das
-# Skript aus ~/.config/smartshop/env
-30 6 * * * /pfad/zu/smartshop/scripts/nightly.sh
+# Skript aus ~/.config/lechariot/env
+30 6 * * * /pfad/zu/lechariot/scripts/nightly.sh
 
 # Watchlist prüfen: Exit-Code 1 bei Treffern -> Benachrichtigung schicken
-0 7 * * * /usr/local/bin/smartshop watch check --db "$HOME/.local/share/smartshop/smartshop.db" > /tmp/smartshop-watch.txt || mail -s "smartshop: neue Deals" ich@example.com < /tmp/smartshop-watch.txt
+0 7 * * * /usr/local/bin/lechariot watch check --db "$HOME/.local/share/lechariot/lechariot.db" > /tmp/lechariot-watch.txt || mail -s "lechariot: neue Deals" ich@example.com < /tmp/lechariot-watch.txt
 ```
 
 Der Watch-Check nutzt den Exit-Code-Vertrag: `watch check` schreibt die
@@ -45,18 +45,18 @@ Statt `mail` funktioniert jeder Notifier, z. B. `notify-send` (Linux-Desktop)
 oder ein `curl`-POST an ntfy/Slack:
 
 ```cron
-0 7 * * * smartshop watch check --db /pfad/smartshop.db > /tmp/w.txt || curl -s -d @/tmp/w.txt ntfy.sh/mein-smartshop-topic
+0 7 * * * lechariot watch check --db /pfad/lechariot.db > /tmp/w.txt || curl -s -d @/tmp/w.txt ntfy.sh/mein-lechariot-topic
 ```
 
 Alternativ übernimmt `nightly.sh` das bereits: mit gesetztem `NTFY_TOPIC`
-in `~/.config/smartshop/env` benachrichtigt es nach dem Push automatisch
+in `~/.config/lechariot/env` benachrichtigt es nach dem Push automatisch
 bei Watchlist-Treffern und Fehlläufen.
 
 ## launchd (macOS)
 
 Cron funktioniert auch auf macOS, launchd ist aber der native Weg und holt
 verpasste Läufe nach dem Aufwachen nach. Der fertige Agent
-(`de.smartshop.nightly`, täglich 06:30) liegt in `scripts/` und wird mit
+(`de.lechariot.nightly`, täglich 06:30) liegt in `scripts/` und wird mit
 
 ```sh
 scripts/install-launchd.sh
@@ -67,12 +67,12 @@ Deinstallation in [automation.md](automation.md).
 
 ## JSON-API für Dashboards
 
-`smartshop serve` startet eine **rein lesende** HTTP-API auf Port 8080
+`lechariot serve` startet eine **rein lesende** HTTP-API auf Port 8080
 (änderbar mit `--port`), z. B. für ein Grafana-/Homepage-Widget oder ein
 eigenes Dashboard:
 
 ```sh
-smartshop serve --db "$HOME/.local/share/smartshop/smartshop.db" --port 8080
+lechariot serve --db "$HOME/.local/share/lechariot/lechariot.db" --port 8080
 ```
 
 | Endpoint | Parameter | Liefert |
@@ -97,4 +97,4 @@ curl -s "http://localhost:8080/api/watches/check" | jq '.hits'
 
 Die API bindet an `0.0.0.0` und hat **keine Authentifizierung** — im
 Heimnetz betreiben oder per Reverse-Proxy/Firewall absichern. Als Dauerdienst
-eignet sich wieder launchd/systemd (Programm: `smartshop serve --db ...`).
+eignet sich wieder launchd/systemd (Programm: `lechariot serve --db ...`).

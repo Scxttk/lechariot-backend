@@ -1070,7 +1070,7 @@ fn download_pdf(pdf_url: &str) -> Result<std::path::PathBuf> {
         .with_context(|| util::ctx("Lidl", "Prospekt-PDF lesen", pdf_url))?;
     println!("  PDF geladen ({:.0} MB)", bytes.len() as f64 / 1_048_576.0);
 
-    let path = std::env::temp_dir().join(format!("smartshop-lidl-{}.pdf", std::process::id()));
+    let path = std::env::temp_dir().join(format!("lechariot-lidl-{}.pdf", std::process::id()));
     std::fs::write(&path, &bytes)
         .context("Prospekt-PDF konnte nicht zwischengespeichert werden")?;
     Ok(path)

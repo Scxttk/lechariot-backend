@@ -99,7 +99,7 @@ jobs:
             ARGS+=(--from-branches)
           fi
           [ "${SKIP_NATIONAL:-false}" = "true" ] && ARGS+=(--skip-national)
-          ./target/release/smartshop branches-sync "${ARGS[@]}" 2>&1 | tee branches.log
+          ./target/release/lechariot branches-sync "${ARGS[@]}" 2>&1 | tee branches.log
 
       - name: Zusammenfassung
         if: always()

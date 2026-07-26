@@ -26,7 +26,7 @@ jobs:
     # 45 min — die Läufe vom 18.07. wurden bei 45 min abgebrochen.
     timeout-minutes: 150
     env:
-      SMARTSHOP_ZIP: ${{ vars.SMARTSHOP_ZIP }}
+      LECHARIOT_ZIP: ${{ vars.LECHARIOT_ZIP }}
       # `secrets` ist in Step-`if` nicht erlaubt — Verfügbarkeit hier als Env-Flag.
       REWE_SECRETS_SET: ${{ secrets.REWE_CERT_PEM != '' && secrets.REWE_KEY_PEM != '' }}
       DB: ${{ github.workspace }}/nightly.db
@@ -36,8 +36,8 @@ jobs:
 
       - name: Preflight (ZIP variable, curl, sqlite3)
         run: |
-          if [ -z "$SMARTSHOP_ZIP" ]; then
-            echo "::error::Repo-Variable SMARTSHOP_ZIP ist nicht gesetzt (Settings -> Variables)."
+          if [ -z "$LECHARIOT_ZIP" ]; then
+            echo "::error::Repo-Variable LECHARIOT_ZIP ist nicht gesetzt (Settings -> Variables)."
             exit 1
           fi
           # Netto/ALDI Süd/EDEKA werden über system-curl geholt (Akamai).
@@ -79,11 +79,11 @@ jobs:
             fi
           fi
           if [ -n "$RUN_ID" ] \
-              && gh run download "$RUN_ID" --name smartshop-linux-x86_64 --dir prebuilt \
-              && [ -f prebuilt/smartshop ]; then
+              && gh run download "$RUN_ID" --name lechariot-linux-x86_64 --dir prebuilt \
+              && [ -f prebuilt/lechariot ]; then
             mkdir -p target/release
-            install -m 0755 prebuilt/smartshop target/release/smartshop
-            if ./target/release/smartshop --help >/dev/null 2>&1; then
+            install -m 0755 prebuilt/lechariot target/release/lechariot
+            if ./target/release/lechariot --help >/dev/null 2>&1; then
               echo "Prebuilt Binary aus CI-Lauf $RUN_ID übernommen."
               FOUND=true
             fi
@@ -154,17 +154,17 @@ jobs:
           if [ -n "${ONLY_MARKET:-}" ]; then
             ONLY_ARGS+=(--market-id "$ONLY_MARKET")
           fi
-          if ./target/release/smartshop sync --db "$DB" \
+          if ./target/release/lechariot sync --db "$DB" \
               ${ONLY_ARGS[@]+"${ONLY_ARGS[@]}"} \
               ${CERT_ARGS[@]+"${CERT_ARGS[@]}"} 2>&1 | tee "$LOG"; then
             echo "sync_failed=false" >> "$GITHUB_OUTPUT"
           else
             echo "sync_failed=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::sync fehlgeschlagen — Fallback auf Einzel-PLZ $SMARTSHOP_ZIP."
+            echo "::warning::sync fehlgeschlagen — Fallback auf Einzel-PLZ $LECHARIOT_ZIP."
           fi
 
       # Bootstrap-Fallback: Solange noch niemand eine Filiale gewählt hat
-      # (frische Datenbank), holt SMARTSHOP_ZIP wenigstens eine Gegend, damit
+      # (frische Datenbank), holt LECHARIOT_ZIP wenigstens eine Gegend, damit
       # die Pipeline nie dunkel geht. Bei On-Demand-Läufen wäre der Fallback
       # die falsche Filiale — dort übernimmt der nächtliche Voll-Sync.
       - name: Fallback fetch+push (single ZIP)
@@ -179,10 +179,10 @@ jobs:
           CERT_ARGS=()
           [ -n "${REWE_CERT:-}" ] && [ -f "$REWE_CERT" ] && CERT_ARGS+=(--cert "$REWE_CERT")
           [ -n "${REWE_KEY:-}" ] && [ -f "$REWE_KEY" ] && CERT_ARGS+=(--key "$REWE_KEY")
-          ./target/release/smartshop fetch --all-stores \
-            --zip "$SMARTSHOP_ZIP" --db "$DB" \
+          ./target/release/lechariot fetch --all-stores \
+            --zip "$LECHARIOT_ZIP" --db "$DB" \
             ${CERT_ARGS[@]+"${CERT_ARGS[@]}"} 2>&1 | tee -a "$LOG"
-          ./target/release/smartshop push --db "$DB" \
+          ./target/release/lechariot push --db "$DB" \
             2>&1 | tee -a "$LOG"
 
       - name: Store summary + zero-offer check
@@ -235,7 +235,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          ./target/release/smartshop prune-images --execute --min-age-days 1 \
+          ./target/release/lechariot prune-images --execute --min-age-days 1 \
             2>&1 | tee -a "$LOG"
 
       # Preis-Historie beschneiden: Anders als `offers` rotiert sie nicht —
@@ -249,7 +249,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          ./target/release/smartshop prune-history --execute \
+          ./target/release/lechariot prune-history --execute \
             2>&1 | tee -a "$LOG"
 
       - name: Upload run log

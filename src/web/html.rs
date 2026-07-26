@@ -50,7 +50,7 @@ pub fn page(title: &str, body: &str) -> String {
     format!(
         "<!DOCTYPE html>\n<html lang=\"de\"><head><meta charset=\"utf-8\">\
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
-<title>{} — smartshop</title><style>{STYLE}</style></head><body>\
+<title>{} — lechariot</title><style>{STYLE}</style></head><body>\
 <nav><a href=\"/\">Übersicht</a><a href=\"/search\">Suche</a>\
 <a href=\"/compare\">Vergleich</a><a href=\"/watchlist\">Watchlist</a></nav>\
 <main><h1>{}</h1>\n{body}\n</main></body></html>",

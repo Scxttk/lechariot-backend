@@ -38,7 +38,7 @@ alles andere bleibt bei marktguru. Beides läuft nebeneinander, damit sich die
 Quellen über ein paar Wochen vergleichen lassen.
 
 ```sh
-LIDL_SOURCE=prospekt smartshop fetch --store lidl --zip 01219 --dry-run
+LIDL_SOURCE=prospekt lechariot fetch --store lidl --zip 01219 --dry-run
 ```
 
 Was der Prospekt besser kann:
@@ -157,7 +157,7 @@ Eine Seite, die auch dann scheitert, wird übersprungen — sie darf nicht den
 ganzen Prospekt kippen.
 
 ```sh
-LIDL_SOURCE=prospekt-llm smartshop fetch --store lidl --zip 01219 --dry-run
+LIDL_SOURCE=prospekt-llm lechariot fetch --store lidl --zip 01219 --dry-run
 ```
 
 Modell über `LIDL_LLM_MODEL` austauschbar (Standard `openai/gpt-4.1-mini`).

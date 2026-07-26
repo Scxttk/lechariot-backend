@@ -6,8 +6,8 @@
 // REWE, Netto und EDEKA in `markets` durchweg NULL, weil die Felder in der
 // Antwort standen und nicht gelesen wurden.
 
-use smartshop::models::Branch;
-use smartshop::scrapers;
+use lechariot::models::Branch;
+use lechariot::scrapers;
 
 fn json(raw: &str) -> serde_json::Value {
     serde_json::from_str(raw).unwrap()
@@ -338,8 +338,8 @@ fn the_radius_keeps_the_neighbourhood_and_drops_the_next_city() {
     let near = Branch::new("A", "Lidl", "Lidl Strehlen", "test").with_geo(Some(51.0338), Some(13.7498));
     let far = Branch::new("B", "Lidl", "Lidl Chemnitz", "test").with_geo(Some(50.83), Some(12.92));
 
-    assert!(smartshop::branches::within(&near, CENTER, 25.0));
-    assert!(!smartshop::branches::within(&far, CENTER, 25.0));
+    assert!(lechariot::branches::within(&near, CENTER, 25.0));
+    assert!(!lechariot::branches::within(&far, CENTER, 25.0));
 }
 
 /// Eine Filiale ohne Koordinaten wegen einer Datenlücke des Finders
@@ -349,7 +349,7 @@ fn the_radius_keeps_the_neighbourhood_and_drops_the_next_city() {
 fn a_branch_without_coordinates_survives_the_radius() {
     let unknown = Branch::new("C", "EDEKA", "EDEKA ohne Geo", "test");
 
-    assert!(smartshop::branches::within(&unknown, CENTER, 1.0));
+    assert!(lechariot::branches::within(&unknown, CENTER, 1.0));
 }
 
 /// Benachbarte Gebiete überlappen sich im Umkreis; dieselbe Filiale kommt
@@ -360,7 +360,7 @@ fn the_same_branch_from_two_areas_is_written_once() {
     let second = Branch::new("565005", "REWE", "Aus 01257", "test");
     let other = Branch::new("565264", "REWE", "Andere Filiale", "test");
 
-    let rows = smartshop::branches::deduplicated(vec![first, second, other]);
+    let rows = lechariot::branches::deduplicated(vec![first, second, other]);
 
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].name, "Aus 01219");

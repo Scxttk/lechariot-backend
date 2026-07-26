@@ -176,7 +176,7 @@ pub fn map_offer(offer: &Offer, chain: &str, nationwide: bool) -> Option<Supabas
         base_unit: unit_price.map(|up| up.unit.label().to_string()),
         brand: None,
         ean: None,
-        source: "smartshop-rust".to_string(),
+        source: "lechariot-rust".to_string(),
         nationwide,
         match_key: crate::matching::match_keys(
             &offer.title,

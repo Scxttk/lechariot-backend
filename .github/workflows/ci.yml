@@ -40,6 +40,6 @@ jobs:
         if: github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v4
         with:
-          name: smartshop-linux-x86_64
-          path: target/release/smartshop
+          name: lechariot-linux-x86_64
+          path: target/release/lechariot
           retention-days: 14

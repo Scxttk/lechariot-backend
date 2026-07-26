@@ -6,7 +6,7 @@
 .DS_Store
 
 # Rewe-Client-Zertifikat & Extraktions-Artefakte — NIEMALS committen
-# (siehe docs/rewe-cert.md; Ablage nur unter ~/.config/smartshop/)
+# (siehe docs/rewe-cert.md; Ablage nur unter ~/.config/lechariot/)
 *.pem
 *.key
 *.pfx

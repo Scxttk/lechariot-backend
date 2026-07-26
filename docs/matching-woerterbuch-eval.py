@@ -3,7 +3,7 @@
 import sqlite3, re, os, json
 from collections import Counter, defaultdict
 
-DB = os.path.expanduser("~/.local/share/smartshop/smartshop.db")
+DB = os.path.expanduser("~/.local/share/lechariot/lechariot.db")
 
 # Kategorien, die klar Non-Food sind (Ketten-Marketing-Kategorien)
 NONFOOD_CAT = re.compile(r"mode|style|heim|haus|garten|haustier|tierbedarf|tiernahrung|pflanzen|angeln|elektro|medien|kinderzimmer|wäschepflege|schulstart|kochen-und-grillen|drogerie|spielzeug|alltagshelfer|technik|spielwaren|baumarkt|multimedia|bekleidung|schuhe|camping|auto|buero|non.?food", re.I)

@@ -1,7 +1,7 @@
 use std::process::Command;
 
-use smartshop::db;
-use smartshop::models::{Market, Offer};
+use lechariot::db;
+use lechariot::models::{Market, Offer};
 
 fn offer(id: &str, market_id: &str, title: &str, subtitle: Option<&str>, overline: Option<&str>, price: f64, regular: Option<f64>) -> Offer {
     Offer {
@@ -38,7 +38,7 @@ fn build_fixture(path: &std::path::Path) {
 }
 
 fn run(args: &[&str]) -> (String, String, bool) {
-    let out = Command::new(env!("CARGO_BIN_EXE_smartshop"))
+    let out = Command::new(env!("CARGO_BIN_EXE_lechariot"))
         .args(args)
         .output()
         .expect("Binary ausführen");
@@ -50,7 +50,7 @@ fn run(args: &[&str]) -> (String, String, bool) {
 }
 
 fn fixture_db(name: &str) -> std::path::PathBuf {
-    let path = std::env::temp_dir().join(format!("smartshop_cli_test_{name}_{}.db", std::process::id()));
+    let path = std::env::temp_dir().join(format!("lechariot_cli_test_{name}_{}.db", std::process::id()));
     let _ = std::fs::remove_file(&path);
     build_fixture(&path);
     path
@@ -117,7 +117,7 @@ fn deals_lists_price_drops_biggest_first() {
     let dbf = fixture_db("deals");
     let db = dbf.to_str().unwrap();
     // Synthetischer Verlauf: o1 war 1.00 € teurer, o4 0.50 € teurer
-    let conn = smartshop::db::open(db).unwrap();
+    let conn = lechariot::db::open(db).unwrap();
     conn.execute_batch(
         "INSERT INTO price_history (offer_id, market_id, title, price, seen_at)
          VALUES ('o1', 'M1', 'MEGGLE Feine Butter', 2.59, date('now', '-7 days')),
@@ -140,7 +140,7 @@ fn deals_since_filters_old_drops() {
     let dbf = fixture_db("deals_since");
     let db = dbf.to_str().unwrap();
     // Drop, dessen letzter Stand 10 Tage alt ist (altes Angebot verschwunden)
-    let conn = smartshop::db::open(db).unwrap();
+    let conn = lechariot::db::open(db).unwrap();
     conn.execute_batch(
         "INSERT INTO price_history (offer_id, market_id, title, price, seen_at)
          VALUES ('alt', 'M1', 'Altes Produkt', 5.00, date('now', '-20 days')),
