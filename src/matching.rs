@@ -212,6 +212,24 @@ mod tests {
         match_keys(title, None, None)
     }
 
+    /// Die drei Beobachtungen aus dem Backlog, abgearbeitet am 2026-07-26.
+    /// Alle drei kamen aus echten Fehltreffern, nicht aus dem Kopf.
+    #[test]
+    fn woerterbuch_beobachtungen_2026_07() {
+        // „Käse" traf „Laugenstange mit Käse" — ein DIREKTtreffer, das Wort
+        // stand wörtlich im Titel. Eine Blockliste half hier zunächst nicht,
+        // weil sie am Begriff hängt und nicht am Produkt; jetzt hängt das
+        // Backwerk selbst darin.
+        assert!(keys("Laugenstange mit Käse").is_empty(), "{:?}", keys("Laugenstange mit Käse"));
+        assert_eq!(keys("Gouda am Stück"), vec!["käse"], "echter Käse bleibt");
+
+        // `arla → milch` war mehrdeutig: Arla macht Milch UND Käse UND Butter.
+        // Statt der Marke stehen jetzt die Produktlinien im Wörterbuch —
+        // „ARLA Kærgården" ist Butter, „ARLA Finello" ist Käse.
+        assert_eq!(keys("ARLA Kærgården"), vec!["butter"]);
+        assert_eq!(keys("ARLA Finello"), vec!["käse"]);
+    }
+
     #[test]
     fn regressionsfaelle() {
         assert_eq!(keys("Nadler Edle Matjesfilets"), vec!["fisch"]);

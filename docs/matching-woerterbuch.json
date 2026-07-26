@@ -55,7 +55,8 @@
     "süßrahmbutter",
     "weidebutter",
     "markenbutter",
-    "markenbutter",
+    "kærgården",
+    "kaergarden",
     "kräuterbutter"
    ],
    "suffix": [],
@@ -84,6 +85,7 @@
     "parmesan",
     "grana",
     "halloumi",
+    "finello",
     "tilsiter",
     "camembert",
     "käsestangen",
@@ -97,7 +99,13 @@
     "käsekuchen",
     "frischkäse",
     "croissant",
-    "leberkäse"
+    "leberkäse",
+    "laugenstange",
+    "laugengebäck",
+    "brezel",
+    "käsebrötchen",
+    "käsestange",
+    "käsegebäck"
    ]
   },
   "frischkäse": {
@@ -1719,7 +1727,6 @@
   "géramont": "käse",
   "leerdammer": "käse",
   "milkana": "käse",
-  "arla": "milch",
   "alpro": "milch",
   "oatly": "milch",
   "exquisa": "frischkäse",
