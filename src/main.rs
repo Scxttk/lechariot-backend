@@ -147,16 +147,11 @@ enum Command {
         #[arg(long, default_value_t = false)]
         all_stores: bool,
 
-        /// PLZ, aus der die Angebote stammen (Pflicht außer bei --dry-run
-        /// oder --national)
-        #[arg(long)]
-        region: Option<String>,
-
-        /// Bundesweit speichern statt für eine PLZ: die Zeilen bekommen
-        /// `region = NULL` und gelten für jede Filiale ihrer Kette. Nur für
-        /// Ketten mit bundesweit identischem Katalog (ALDI Nord, ALDI SÜD) —
-        /// bei allen anderen wären die Angebote schlicht falsch.
-        #[arg(long, default_value_t = false, conflicts_with = "region")]
+        /// Bundesweit speichern statt an einer Filiale: die Zeilen bekommen
+        /// `nationwide = true` und gelten für jede Filiale ihrer Kette. Nur
+        /// für Ketten mit bundesweit identischem Katalog (ALDI Nord,
+        /// ALDI SÜD) — bei allen anderen wären die Angebote schlicht falsch.
+        #[arg(long, default_value_t = false)]
         national: bool,
 
         /// Nur zeigen, was hochgeladen würde — kein Netzwerkzugriff
@@ -172,26 +167,20 @@ enum Command {
         db: String,
     },
     /// Alle aktiven Regionen aus Supabase abrufen und syncen (fetch + push)
-    SyncRegions {
-        /// Höchstens so viele Regionen pro Lauf syncen
-        #[arg(long, default_value_t = 10)]
-        max_regions: usize,
-
-        /// Nur diese eine PLZ syncen (wird bei Bedarf registriert)
-        #[arg(long, value_name = "PLZ")]
-        only: Option<String>,
+    Sync {
+        /// Höchstens so viele Filialen pro Lauf syncen
+        #[arg(long, default_value_t = 25)]
+        max_branches: usize,
 
         /// Nur diese eine Filiale syncen (ID aus `public.branches`).
-        /// Angebote gehören der Filiale, nicht der Kette in einer PLZ —
-        /// dieser Weg trifft auch die zweite REWE derselben PLZ.
-        #[arg(long, value_name = "ID", conflicts_with = "only")]
+        #[arg(long, value_name = "ID")]
         market_id: Option<String>,
 
         /// Nur die bundesweiten Ketten (ALDI Nord, ALDI SÜD) syncen und
-        /// danach aufhören. Deren Katalog hängt an keiner Region — dieser
-        /// Lauf braucht weder Regionsliste noch Store-Finder und ist in
+        /// danach aufhören. Deren Katalog hängt an keiner Filiale — dieser
+        /// Lauf braucht weder Filialliste noch Store-Finder und ist in
         /// Sekunden durch.
-        #[arg(long, default_value_t = false, conflicts_with_all = ["only", "market_id"])]
+        #[arg(long, default_value_t = false, conflicts_with = "market_id")]
         national_only: bool,
 
         /// Pfad zum Rewe TLS-Zertifikat (PEM)
@@ -223,7 +212,7 @@ enum Command {
 
         /// Alle aktiven Regionen aus Supabase als Gebiete verwenden
         #[arg(long, default_value_t = false)]
-        from_regions: bool,
+        from_branches: bool,
 
         /// Kaufland und Penny nicht mitziehen
         #[arg(long, default_value_t = false)]
@@ -382,33 +371,21 @@ fn main() -> Result<()> {
         Command::List { action } => shopping_list(action),
         Command::Deals { since, db } => deals(since, db),
         Command::Serve { port, host, db } => smartshop::api::serve(&host, port, db),
-        Command::Push { store, all_stores: _, region, national, dry_run, no_mirror_images, db } => {
-            // Ohne PLZ und ohne --national landeten die Zeilen mit
-            // `region = NULL` in der Datenbank und wären für jede Filiale
-            // sichtbar — bei REWE oder Kaufland schlicht falsch. Der Schalter
-            // erzwingt, dass „bundesweit" eine Entscheidung ist, kein
-            // vergessenes Argument.
-            if region.is_none() && !national && !dry_run {
-                anyhow::bail!(
-                    "--region <PLZ> ist Pflicht (außer bei --dry-run). \
-                     Bundesweite Ketten wie ALDI brauchen stattdessen --national."
-                );
-            }
+        Command::Push { store, all_stores: _, national, dry_run, no_mirror_images, db } => {
             let opts = smartshop::push::PushOptions {
                 db_path: db,
                 chain: store.map(|s| s.chain().to_string()),
                 // Der Push von Hand bedient keine Filial-Anforderung.
                 branch_id: None,
-                region,
+                nationwide: national,
                 dry_run,
                 mirror_images: !no_mirror_images,
                 defer_mirror: false,
             };
             smartshop::push::run(&opts, None)
         }
-        Command::SyncRegions {
-            max_regions,
-            only,
+        Command::Sync {
+            max_branches,
             market_id,
             national_only,
             cert,
@@ -419,8 +396,7 @@ fn main() -> Result<()> {
             let opts = smartshop::sync::SyncOptions {
                 db_path: db,
                 dry_run,
-                max_regions,
-                only,
+                max_branches,
                 market_id: market_id.clone(),
             };
             // Bundesweite Ketten: Der National-Markt steht fest, es gibt
@@ -461,31 +437,11 @@ fn main() -> Result<()> {
             if let Some(market_id) = &market_id {
                 return smartshop::sync::run_branch(&opts, None, &scraper, &national, market_id);
             }
-            let fetcher = |plz: &str| {
-                Store::ALL
-                    .iter()
-                    .map(|store| {
-                        // Bundesweite Ketten werden hier nur noch gesucht:
-                        // Ob ALDI in der Region vertreten ist, entscheidet
-                        // der Store-Finder, die Angebote holt der
-                        // bundesweite Lauf. Die leere Angebotsliste ist
-                        // Absicht — `sync_region` erkennt die Kette daran
-                        // nicht, sondern an `stores_nationally`.
-                        let result = if store.stores_nationally() {
-                            smartshop::stores::find_market(*store, plz, &cert, &key)
-                                .map(|m| m.map(|m| (m, Vec::new())))
-                        } else {
-                            scrape_store(*store, plz, &cert, &key)
-                        };
-                        (store.chain().to_string(), result)
-                    })
-                    .collect()
-            };
-            smartshop::sync::run(&opts, None, &fetcher, &scraper, &national)
+            smartshop::sync::run(&opts, None, &scraper, &national)
         }
         Command::BranchesSync {
             area,
-            from_regions,
+            from_branches,
             skip_national,
             radius_km,
             cert,
@@ -494,8 +450,8 @@ fn main() -> Result<()> {
         } => {
             let cfg = smartshop::push::config_from_env()?;
             let mut areas = area;
-            if from_regions {
-                let from_db = smartshop::branches::areas_from_regions(&cfg)?;
+            if from_branches {
+                let from_db = smartshop::branches::areas_from_chosen_branches(&cfg)?;
                 println!("{} aktive Region(en) aus Supabase als Gebiete.", from_db.len());
                 areas.extend(from_db);
             }

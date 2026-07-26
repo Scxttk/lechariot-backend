@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# nightly.sh — kompletter nächtlicher smartshop-Lauf: sync-regions (alle
+# nightly.sh — kompletter nächtlicher smartshop-Lauf: sync (alle
 # aktiven Regionen aus Supabase: fetch + push pro PLZ), danach watch check.
-# Schlägt sync-regions fehl (Tabelle leer/unerreichbar, alle Regionen
+# Schlägt sync fehl (Tabelle leer/unerreichbar, alle Filialen
 # gescheitert), fällt das Skript auf den alten Einzel-PLZ-Pfad zurück
 # (fetch --all-stores + push mit ZIP), damit die Pipeline nie dunkel geht.
 # Gedacht als Ziel für den launchd-Agent (scripts/de.smartshop.nightly.plist),
@@ -116,7 +116,7 @@ if [ -z "${SMARTSHOP_BIN:-}" ]; then
 fi
 [ -x "$SMARTSHOP_BIN" ] || fail "smartshop-Binary nicht ausführbar: $SMARTSHOP_BIN"
 
-# sync-regions liest die Regionsliste auch im Dry-Run aus Supabase.
+# sync liest die Filialliste auch im Dry-Run aus Supabase.
 [ -n "${SUPABASE_URL:-}" ] || fail "SUPABASE_URL ist in $ENV_FILE nicht gesetzt."
 [ -n "${SUPABASE_SERVICE_KEY:-}" ] || fail "SUPABASE_SERVICE_KEY ist in $ENV_FILE nicht gesetzt."
 export SUPABASE_URL="${SUPABASE_URL:-}" SUPABASE_SERVICE_KEY="${SUPABASE_SERVICE_KEY:-}"
@@ -148,21 +148,21 @@ run_step() {
 
 log "Start Nightly-Lauf (Fallback-PLZ $ZIP, DB $DB, dry-run=$DRY_RUN)"
 
-# Die Nightly soll ALLE aktiven Regionen schaffen — der CLI-Default (10)
-# ist ein Schutz für manuelle Läufe, würde hier aber Regionen auf die
-# nächste Nacht verschieben (Fund 2026-07-22: 15 aktive Regionen, 5 blieben
-# pro Lauf liegen). MAX_REGIONS in der env übersteuert bei Bedarf.
-SYNC_ARGS=(sync-regions --db "$DB" --max-regions "${MAX_REGIONS:-50}" ${CERT_ARGS[@]+"${CERT_ARGS[@]}"})
+# Die Nightly soll ALLE gewählten Filialen schaffen — der CLI-Default (25)
+# ist ein Schutz für manuelle Läufe, würde hier aber Filialen auf die nächste
+# Nacht verschieben (dieselbe Falle wie 2026-07-22 mit den Regionen: 15 aktiv,
+# 5 blieben pro Lauf liegen). MAX_BRANCHES in der env übersteuert bei Bedarf.
+SYNC_ARGS=(sync --db "$DB" --max-branches "${MAX_BRANCHES:-100}" ${CERT_ARGS[@]+"${CERT_ARGS[@]}"})
 [ "$DRY_RUN" -eq 1 ] && SYNC_ARGS+=(--dry-run)
 
-log "Schritt 'sync-regions': ${SYNC_ARGS[*]}"
+log "Schritt 'sync': ${SYNC_ARGS[*]}"
 if "$SMARTSHOP_BIN" "${SYNC_ARGS[@]}" 2>&1 | while IFS= read -r line; do log "  $line"; done; then
-    log "Schritt 'sync-regions' erfolgreich."
+    log "Schritt 'sync' erfolgreich."
 else
-    log "WARNUNG: sync-regions fehlgeschlagen (Exit-Code ${PIPESTATUS[0]:-?}) — Fallback auf Einzel-PLZ $ZIP."
+    log "WARNUNG: sync fehlgeschlagen (Exit-Code ${PIPESTATUS[0]:-?}) — Fallback auf Einzel-PLZ $ZIP."
     run_step "fetch (Fallback)" "$SMARTSHOP_BIN" fetch --all-stores --zip "$ZIP" --db "$DB" \
         ${CERT_ARGS[@]+"${CERT_ARGS[@]}"}
-    PUSH_ARGS=(push --region "$ZIP" --db "$DB")
+    PUSH_ARGS=(push --db "$DB")
     [ "$DRY_RUN" -eq 1 ] && PUSH_ARGS+=(--dry-run)
     run_step "push (Fallback)" "$SMARTSHOP_BIN" "${PUSH_ARGS[@]}"
 fi

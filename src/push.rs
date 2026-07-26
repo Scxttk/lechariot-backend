@@ -1,8 +1,8 @@
 //! Upload gespeicherter Angebote in die Supabase-Tabelle `public.offers`
 //! (PostgREST-API). Ersetzt den Python-Uploader `supabase_uploader.py`:
-//! Upsert mit on_conflict=market_id,product,valid_from,region, Batches à 100,
-//! vorheriges Löschen veralteter Wochen pro Filiale, Region-Cache in
-//! `public.regions`.
+//! Upsert mit on_conflict=market_id,product,valid_from, Batches à 100,
+//! vorheriges Löschen veralteter Wochen pro Filiale, Fertigmeldung in
+//! `public.branch_requests`.
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -14,7 +14,7 @@ use crate::{db, enrich, storage, units};
 
 pub const BATCH_SIZE: usize = 100;
 
-/// Zeile im Supabase-Schema (schema.sql + migration_v2.sql + migration_regions.sql).
+/// Zeile im Supabase-Schema (schema.sql + migration_v2.sql + migration_v16).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SupabaseRow {
     /// Filial-ID der Kette (migration_v13) — der Angebots-Schlüssel. Dieselbe
@@ -38,11 +38,13 @@ pub struct SupabaseRow {
     pub brand: Option<String>,
     pub ean: Option<String>,
     pub source: String,
-    pub region: Option<String>,
+    /// Gilt dieses Angebot bundesweit (ALDI) statt an einer Filiale?
+    /// Ersetzt seit Migration v16 die alte `region`-Spalte — die trug längst
+    /// keine Region mehr, sondern beantwortete genau diese Frage.
+    pub nationwide: bool,
     /// Begriffs-Tags aus matching.rs (migration_v10); ["nonfood"] = Non-Food,
-    /// leer = ungetaggt (Kandidat für die Review-Liste). default: die
-    /// Region-Kopie in sync.rs liest Bestandszeilen, die vor der Migration
-    /// gepusht wurden und das Feld noch nicht tragen.
+    /// leer = ungetaggt (Kandidat für die Review-Liste). `default`, weil
+    /// Bestandszeilen aus der Zeit vor der Migration das Feld nicht tragen.
     #[serde(default)]
     pub match_key: Vec<String>,
 }
@@ -142,7 +144,7 @@ fn is_pure_quantity(text: &str) -> bool {
 
 /// Lokales Angebot in eine Supabase-Zeile mappen. None bei Angeboten ohne
 /// Preis — die kann die App nicht anzeigen.
-pub fn map_offer(offer: &Offer, chain: &str, region: Option<&str>) -> Option<SupabaseRow> {
+pub fn map_offer(offer: &Offer, chain: &str, nationwide: bool) -> Option<SupabaseRow> {
     let price = offer.price?;
     let enriched =
         enrich::enrich(&offer.title, offer.subtitle.as_deref(), offer.category.as_deref());
@@ -175,7 +177,7 @@ pub fn map_offer(offer: &Offer, chain: &str, region: Option<&str>) -> Option<Sup
         brand: None,
         ean: None,
         source: "smartshop-rust".to_string(),
-        region: region.map(String::from),
+        nationwide,
         match_key: crate::matching::match_keys(
             &offer.title,
             offer.subtitle.as_deref(),
@@ -184,18 +186,13 @@ pub fn map_offer(offer: &Offer, chain: &str, region: Option<&str>) -> Option<Sup
     })
 }
 
-/// Duplikate auf dem Upsert-Schlüssel (market_id, product, valid_from,
-/// region) entfernen; der erste Treffer gewinnt.
+/// Duplikate auf dem Upsert-Schlüssel (market_id, product, valid_from)
+/// entfernen; der erste Treffer gewinnt.
 pub fn dedupe_rows(rows: Vec<SupabaseRow>) -> Vec<SupabaseRow> {
     let mut seen = HashSet::new();
     rows.into_iter()
         .filter(|r| {
-            seen.insert((
-                r.market_id.clone(),
-                r.product.clone(),
-                r.valid_from.clone(),
-                r.region.clone(),
-            ))
+            seen.insert((r.market_id.clone(), r.product.clone(), r.valid_from.clone()))
         })
         .collect()
 }
@@ -207,7 +204,7 @@ struct HistoryRow<'a> {
     market_id: &'a str,
     market: &'a str,
     product: &'a str,
-    region: Option<&'a str>,
+    nationwide: bool,
     price: f64,
     regular_price: Option<f64>,
     base_price: Option<f64>,
@@ -224,7 +221,7 @@ impl<'a> From<&'a SupabaseRow> for HistoryRow<'a> {
             market_id: &r.market_id,
             market: &r.market,
             product: &r.product,
-            region: r.region.as_deref(),
+            nationwide: r.nationwide,
             price: r.price,
             regular_price: r.regular_price,
             base_price: r.base_price,
@@ -254,13 +251,13 @@ pub struct PushOptions {
     pub db_path: String,
     /// Nur diese Kette pushen (Anzeigename, z. B. "REWE"); None = alle.
     pub chain: Option<String>,
-    /// PLZ, aus der die Angebote stammen. `None` heißt **bundesweit**: die
-    /// Zeilen bekommen `region = NULL` und gelten für jede Filiale ihrer
-    /// Kette (siehe `Store::stores_nationally`). Vor Phase 12 war das ein
-    /// Fehler — die App fragte `region=in.(…)` und hätte sie nie gesehen.
-    pub region: Option<String>,
+    /// Bundesweit speichern statt an einer Filiale (siehe
+    /// `Store::stores_nationally`). Vor Phase 12 war das gar nicht
+    /// darstellbar — die App fragte `region=in.(…)` und hätte solche Zeilen
+    /// nie gesehen.
+    pub nationwide: bool,
     /// Filiale, deren Anforderung dieser Push bedient (`branch_requests`).
-    /// Gesetzt nur im Filial-Sync; None beim Regions-Sync.
+    /// Gesetzt nur im Filial-Sync; None beim bundesweiten Lauf.
     pub branch_id: Option<String>,
     pub dry_run: bool,
     /// Produktbilder in den Supabase-Storage-Bucket spiegeln (Händler-URL ->
@@ -279,7 +276,7 @@ pub struct ChainRows {
     /// Angebote ohne Preis — die kann die App nicht anzeigen.
     pub no_price: usize,
     /// Angebote ohne valid_from — die App filtert sie serverseitig weg und
-    /// der Upsert-Schlüssel (market, product, valid_from, region) ist nicht
+    /// der Upsert-Schlüssel (market_id, product, valid_from) ist nicht
     /// NULL-sicher, jeder Lauf würde sie duplizieren.
     pub no_date: usize,
 }
@@ -320,7 +317,7 @@ fn load_grouped(opts: &PushOptions) -> Result<BTreeMap<&'static str, ChainRows>>
         .map(|(chain, (offers, no_price))| {
             let mapped: Vec<SupabaseRow> = offers
                 .iter()
-                .filter_map(|o| map_offer(o, chain, opts.region.as_deref()))
+                .filter_map(|o| map_offer(o, chain, opts.nationwide))
                 .collect();
             let (rows, dateless): (Vec<_>, Vec<_>) =
                 mapped.into_iter().partition(|r| r.valid_from.is_some());
@@ -419,7 +416,7 @@ fn push_history(
             .post(&url)
             .header("apikey", &cfg.api_key)
             .header("Authorization", format!("Bearer {}", cfg.api_key))
-            .query(&[("on_conflict", "market_id,product,valid_from,region")])
+            .query(&[("on_conflict", "market_id,product,valid_from")])
             .header("Prefer", "resolution=merge-duplicates")
             .json(&payload)
             .send()
@@ -484,7 +481,7 @@ pub fn upsert_branches(cfg: &PushConfig, branches: &[crate::models::Branch]) -> 
 }
 
 /// Zeilen in Batches nach `public.offers` upserten (Konfliktschlüssel wie
-/// Schema: market_id, product, valid_from, region — migration_v13).
+/// Schema: market_id, product, valid_from — migration_v16).
 pub fn upsert_offer_rows(
     client: &reqwest::blocking::Client,
     cfg: &PushConfig,
@@ -497,7 +494,7 @@ pub fn upsert_offer_rows(
             .post(&url)
             .header("apikey", &cfg.api_key)
             .header("Authorization", format!("Bearer {}", cfg.api_key))
-            .query(&[("on_conflict", "market_id,product,valid_from,region")])
+            .query(&[("on_conflict", "market_id,product,valid_from")])
             .header("Prefer", "resolution=merge-duplicates")
             .json(batch)
             .send()
@@ -518,7 +515,6 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
         return dry_run_report(&groups);
     }
 
-    let region = opts.region.as_deref();
     let cfg = match cfg {
         Some(c) => c,
         None => &config_from_env()?,
@@ -553,24 +549,20 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
         let rows = &g.rows;
         if rows.is_empty() {
             eprintln!(
-                "WARNUNG [{chain}] 0 Angebote hochladbar ({}) — Kette bleibt in dieser Region leer.",
+                "WARNUNG [{chain}] 0 Angebote hochladbar ({}) — die Kette bleibt hier leer.",
                 skipped_note(g)
             );
             continue;
         }
 
-        // Veraltete Wochen DIESER FILIALE in DIESER Region löschen — nur wenn
-        // neue Daten mit Gültigkeitsdatum vorliegen. Legacy-Zeilen ohne
-        // valid_from (alte Scraper-Läufe) matchen `lt.` nie und müssen
-        // explizit mit weg.
+        // Veraltete Wochen DIESER FILIALE löschen — nur wenn neue Daten mit
+        // Gültigkeitsdatum vorliegen. Legacy-Zeilen ohne valid_from (alte
+        // Scraper-Läufe) matchen `lt.` nie und müssen explizit mit weg.
         //
-        // Gefiltert wird auf `market_id`, nicht mehr auf die Kette: Seit v13
+        // Gefiltert wird auf `market_id`, nicht auf die Kette: Seit v13
         // gehören Angebote der Filiale, und in einer PLZ können zwei Filialen
         // derselben Kette stehen — ein Ketten-Filter räumte beim Push der
-        // einen die Wochen der anderen ab. Der Region-Filter bleibt daneben
-        // stehen, weil dieselbe Filiale bis Phase 12 unter mehreren PLZ
-        // geführt wird und der Push einer Region die anderen nicht anfassen
-        // darf.
+        // einen die Wochen der anderen ab.
         let mut latest: BTreeMap<&str, &str> = BTreeMap::new();
         for row in rows {
             let Some(valid_from) = row.valid_from.as_deref() else { continue };
@@ -579,18 +571,15 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
                 *newest = valid_from;
             }
         }
-        // Bundesweite Zeilen tragen keine Region; `eq.` trifft NULL nie, der
-        // Filter muss also `is.null` lauten — sonst bliebe jede alte
-        // ALDI-Woche für immer stehen.
-        let region_filter = match region {
-            Some(r) => format!("eq.{r}"),
-            None => "is.null".to_string(),
-        };
+        // Gelöscht wird nur noch über die Filiale. Der Region-Filter, der hier
+        // bis Migration v16 danebenstand, war nötig, solange dieselbe Filiale
+        // unter mehreren PLZ geführt wurde — seit der Schlüssel
+        // (market_id, product, valid_from) heißt, gibt es diese Zeilen nicht
+        // mehr, und ein zusätzlicher Filter ließe nur alte Wochen stehen.
         for (market_id, current) in latest {
             let resp = auth(client.delete(&offers_url))
                 .query(&[
                     ("market_id", format!("eq.{market_id}")),
-                    ("region", region_filter.clone()),
                     ("or", format!("(valid_from.lt.{current},valid_from.is.null)")),
                 ])
                 .send()
@@ -613,23 +602,6 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
         }
     }
 
-    // Region-Cache aktualisieren: diese PLZ wurde soeben gesynct. Ein
-    // bundesweiter Push gehört zu keiner Region und darf hier nichts
-    // anfassen — sonst meldete er 16 Regionen als frisch, die er nie
-    // angesehen hat.
-    if let Some(region) = region {
-        let resp = auth(client.post(format!("{}/rest/v1/regions", cfg.base_url)))
-            .query(&[("on_conflict", "plz")])
-            .header("Prefer", "resolution=merge-duplicates")
-            .json(&serde_json::json!([{
-                "plz": region,
-                "last_synced": chrono::Utc::now().to_rfc3339(),
-            }]))
-            .send()
-            .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
-        check_response(&format!("Region {region} eintragen"), resp)?;
-    }
-
     // Die Anforderung als erledigt melden — HIER, nicht nach dem Spiegeln.
     // Genau dafür gibt es `defer_mirror`: Die Angebote sind ab jetzt in der
     // App sichtbar, die Bilder kommen nach (bis dahin greift das Emoji).
@@ -649,10 +621,8 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
         check_response(&format!("Filiale {market_id} als gesynct eintragen"), resp)?;
     }
 
-    match region {
-        Some(region) => println!("Fertig: {total} Angebote nach Supabase gepusht (Region {region})."),
-        None => println!("Fertig: {total} Angebote nach Supabase gepusht (bundesweit, ohne Region)."),
-    }
+    let scope = if opts.nationwide { "bundesweit" } else { "je Filiale" };
+    println!("Fertig: {total} Angebote nach Supabase gepusht ({scope}).");
 
     // Phase 2 (defer_mirror): Bilder jetzt spiegeln und die betroffenen Zeilen
     // erneut upserten — die App zeigt die Angebote längst, hier kommen nur noch
