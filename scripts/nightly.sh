@@ -120,6 +120,9 @@ fi
 [ -n "${SUPABASE_URL:-}" ] || fail "SUPABASE_URL ist in $ENV_FILE nicht gesetzt."
 [ -n "${SUPABASE_SERVICE_KEY:-}" ] || fail "SUPABASE_SERVICE_KEY ist in $ENV_FILE nicht gesetzt."
 export SUPABASE_URL="${SUPABASE_URL:-}" SUPABASE_SERVICE_KEY="${SUPABASE_SERVICE_KEY:-}"
+# Lidl-Quelle aus der env ans Binary durchreichen (sonst fiele der Lauf
+# still auf den marktguru-Default zurück).
+[ -n "${LIDL_SOURCE:-}" ] && export LIDL_SOURCE
 
 # launchd startet mit minimalem PATH; lechariot ruft das `rewerse`-Binary aber
 # über den PATH auf (Command::new("rewerse")). Cargo-/Go-bin voranstellen, damit

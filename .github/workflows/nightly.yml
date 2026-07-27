@@ -31,6 +31,9 @@ jobs:
       REWE_SECRETS_SET: ${{ secrets.REWE_CERT_PEM != '' && secrets.REWE_KEY_PEM != '' }}
       DB: ${{ github.workspace }}/nightly.db
       LOG: ${{ github.workspace }}/nightly.log
+      # Lidl aus dem eigenen Prospekt statt marktguru (Code-Default bleibt
+      # marktguru als Rückfall, wenn die Variable fehlt).
+      LIDL_SOURCE: prospekt
     steps:
       - uses: actions/checkout@v4
 

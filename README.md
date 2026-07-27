@@ -289,21 +289,21 @@ for this ZIP — both are region-dependent. The Rewe number (~323) comes from a
 live fetch for ZIP 01219 (Dresden, store "REWE Supermarkt", ID 565005) on
 2026-07-18.
 
-² Lidl is the only chain sourced from a third party (marktguru), and at ~30 %
-of all rows it is also the largest. `LIDL_SOURCE=prospekt` switches to Lidl's
-own weekly leaflet instead — a PDF with a real text layer, read via
+² Lidl comes from Lidl's own weekly leaflet (`LIDL_SOURCE=prospekt`, set in
+the nightly workflow and in `~/.config/lechariot/env`; template in
+`scripts/env.example`) — a PDF with a real text layer, read via
 `pdftotext -bbox-layout` (install `poppler-utils`), plus the online-shop
-articles from the leaflet JSON. As of 2026-07-25 it covers **96 % of the
-marktguru prices** for the same week and additionally carries struck-through
-prices, page-accurate validity windows, images and categories, none of which
-marktguru provides for Lidl. No API key, no LLM.
+articles from the leaflet JSON. It carries struck-through prices,
+page-accurate validity windows, images and categories. No API key, no LLM.
+If the variable is unset, the code falls back to the third-party marktguru
+web API — the original source, which the leaflet covered to 96 % when it
+took over on 2026-07-27.
 
 An optional third mode, `LIDL_SOURCE=prospekt-llm`, reads the same text layer
 page by page through GitHub Models (free with the GitHub Student pack) to pick
 up the tiles the geometry misses. It is an add-on, not a replacement — every
 price it returns must appear verbatim in the page text and pass the same
-arithmetic check, so the model can miss rows but cannot invent them. Both
-sources run side by side for now; see
+arithmetic check, so the model can miss rows but cannot invent them. See
 [docs/scrapers/README.md](docs/scrapers/README.md).
 
 ¹ The *offers* are national, the *presence* no longer is: `find_market`
