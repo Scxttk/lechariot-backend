@@ -197,12 +197,12 @@ manuell im Supabase SQL-Editor ausführen** (idempotent):
    läuft über den Service-Role-Key (umgeht Storage-RLS), es ist keine
    Insert-Policy nötig.
 
-Danach zeigt `image_url` auf
-`…/storage/v1/object/public/offer-images/<sha256>.<ext>` statt auf das
-Händler-CDN. Läuft der Push, bevor v6 ausgeführt wurde, schlagen nur die
-Bild-Uploads fehl (Zeile behält die Händler-URL, Log zählt
-„fehlgeschlagen") — der Push selbst geht durch. Spiegelung abschalten:
-`push --no-mirror-images`.
+**Seit 2026-07-27 wird standardmäßig nicht mehr gespiegelt:** `image_url`
+trägt die Händler-CDN-URL, die App lädt direkt (Hotlinking statt eigener
+Kopien). Der Bucket aus v6 bleibt bestehen; Spiegelung ist Opt-in über
+`push --mirror-images`. Schlagen einzelne Uploads dabei fehl, behält die
+Zeile die Händler-URL, das Log zählt „fehlgeschlagen" — der Push selbst
+geht durch.
 
 ## Zeitplan
 

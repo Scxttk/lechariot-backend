@@ -158,9 +158,10 @@ enum Command {
         #[arg(long, default_value_t = false)]
         dry_run: bool,
 
-        /// Produktbilder NICHT in den Storage-Bucket spiegeln (Händler-URLs behalten)
+        /// Produktbilder in den Storage-Bucket spiegeln (Standard: Händler-URLs
+        /// behalten — die App lädt direkt vom Händler-CDN)
         #[arg(long, default_value_t = false)]
-        no_mirror_images: bool,
+        mirror_images: bool,
 
         /// Pfad zur SQLite-Datenbank
         #[arg(long, default_value = "lechariot.db")]
@@ -377,7 +378,7 @@ fn main() -> Result<()> {
         Command::List { action } => shopping_list(action),
         Command::Deals { since, db } => deals(since, db),
         Command::Serve { port, host, db } => lechariot::api::serve(&host, port, db),
-        Command::Push { store, all_stores: _, national, dry_run, no_mirror_images, db } => {
+        Command::Push { store, all_stores: _, national, dry_run, mirror_images, db } => {
             let opts = lechariot::push::PushOptions {
                 db_path: db,
                 chain: store.map(|s| s.chain().to_string()),
@@ -385,7 +386,7 @@ fn main() -> Result<()> {
                 branch_id: None,
                 nationwide: national,
                 dry_run,
-                mirror_images: !no_mirror_images,
+                mirror_images,
                 defer_mirror: false,
             };
             lechariot::push::run(&opts, None)

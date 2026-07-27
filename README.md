@@ -174,15 +174,14 @@ changes only go out together with an app update (regression test in
 `tests/enrich.rs`).
 
 In addition, every row carries a product image in `image_url`: the scrapers
-deliver the retailer image URLs, the push mirrors them into the public
-Supabase storage bucket `offer-images` (`src/storage.rs`) and writes the
-stable bucket URL into the row — retailer CDNs rotate their paths weekly and
-some block hotlinking. The mirroring is idempotent (object path = sha256 of
-the source URL, upload with `x-upsert`); already-uploaded images are tracked
-in the local table `uploaded_images`, so nightly runs only touch new images.
-Failures of individual images don't abort the push — the retailer URL stays in
-place, and the emoji is the last fallback in the app. `--no-mirror-images`
-disables the mirroring.
+deliver the retailer image URLs and the push writes them into the row as-is —
+the app loads them straight from the retailer CDNs (hotlinking freely
+accessible content instead of hosting copies; also saves all image egress).
+If a CDN rotates its paths or blocks hotlinking, the app falls back to the
+category emoji. Mirroring into the Supabase bucket `offer-images`
+(`src/storage.rs`, idempotent, object path = sha256 of the source URL,
+uploads tracked in the local table `uploaded_images`) still exists as an
+opt-in via `push --mirror-images`.
 
 | Category | Default emoji | | Category | Default emoji |
 |---|---|---|---|---|

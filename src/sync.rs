@@ -159,16 +159,15 @@ pub fn run_branch(
             db_path: opts.db_path.clone(),
             chain: None,
             nationwide: false,
-            // Die Fertigmeldung (`branch_requests.last_synced`) schreibt der
-            // Push selbst, direkt nach dem Angebots-Upsert und VOR dem
-            // Spiegeln der Bilder — sonst wartet die App auf ein „fertig",
-            // das längst gilt.
             branch_id: Some(branch.market_id.clone()),
             dry_run: opts.dry_run,
-            mirror_images: true,
-            // Wie beim On-Demand-Sync einer PLZ: Hier wartet gerade jemand in
-            // der App, Angebote zuerst, Bilder danach.
-            defer_mirror: true,
+            // Seit 2026-07-27 werden Bilder nicht mehr gespiegelt: Die App
+            // lädt die Händler-CDN-URLs direkt (Hotlinking frei zugänglicher
+            // Inhalte statt eigener Kopien — urheberrechtlich der sichere
+            // Weg, und der Storage-Egress entfällt). Spiegeln bleibt als
+            // Opt-in über `push --mirror-images` erhalten.
+            mirror_images: false,
+            defer_mirror: false,
         },
         Some(cfg),
     )
@@ -239,8 +238,10 @@ pub fn sync_national(
             nationwide: true,
             branch_id: branch_id.map(String::from),
             dry_run: opts.dry_run,
-            mirror_images: true,
-            defer_mirror: branch_id.is_some(),
+            // Kein Spiegeln mehr — siehe sync_branch: die App lädt die
+            // Händler-URLs direkt.
+            mirror_images: false,
+            defer_mirror: false,
         },
         Some(cfg),
     )
