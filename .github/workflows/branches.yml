@@ -46,7 +46,13 @@ jobs:
           command -v curl >/dev/null || { echo "::error::curl fehlt auf dem Runner."; exit 1; }
           curl --version | head -1
 
+      # prefix-key mit Cratename und bumpbarer Version: nach der Umbenennung
+      # smartshop->lechariot haben restaurierte target/-Verzeichnisse zweimal
+      # Phantom-Testfehler produziert (26./27.07.2026). Bei erneutem Verdacht
+      # auf einen vergifteten Cache: Version hochzaehlen (v1 -> v2).
       - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-lechariot
 
       - name: Build release
         run: cargo build --release

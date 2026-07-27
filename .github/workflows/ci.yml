@@ -15,7 +15,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # prefix-key mit Cratename und bumpbarer Version: nach der Umbenennung
+      # smartshop->lechariot haben restaurierte target/-Verzeichnisse zweimal
+      # Phantom-Testfehler produziert (26./27.07.2026). Bei erneutem Verdacht
+      # auf einen vergifteten Cache: Version hochzaehlen (v1 -> v2).
       - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-lechariot
 
       - name: cargo check
         run: cargo check --all-targets
