@@ -316,6 +316,37 @@ mod tests {
         assert!(!keys("Tortilla Wraps Weizen").contains(&"fertiggericht".to_string()));
         assert!(!keys("Antipasti Creme").contains(&"fertiggericht".to_string()));
         assert!(keys("Maultaschen").contains(&"fertiggericht".to_string()));
+        // Aus dem proaktiven Audit über 11 Regionen (2026-07-30, 3.245 Produkte).
+        //
+        // Der teuerste Fund: Der Markenschlüssel „5,0 original" (eine Biermarke)
+        // verliert unter `norm()` Ziffer und Komma und blieb als nacktes
+        // „original" stehen — ein Wort, das auf sehr vielen Verpackungen steht.
+        // Es taggte quer durch das Sortiment Bier: Snickers-Eis, McCain-Frites,
+        // Miracel Whip, sogar den Schreibwarenhersteller STABILO. Der Schlüssel
+        // ist raus, Löwenbräu dafür als eigene Marke drin — es hing vorher
+        // ausschließlich an diesem kaputten Eintrag.
+        assert!(!keys("Snickers Original Ice Cream").contains(&"bier".to_string()));
+        assert!(!keys("McCain 1-2-3 Frites Original").contains(&"bier".to_string()));
+        assert!(!keys("Miracel Whip Salatcreme Original").contains(&"bier".to_string()));
+        assert!(keys("Löwenbräu Original").contains(&"bier".to_string()));
+        // „adler" (Käsemarke) steckt als Teilstring in NADLER — einer Fisch-
+        // und Salatmarke. Marken werden per Teilstring gesucht, also raus.
+        assert!(!keys("NADLER Sahne Hering filets XXL").contains(&"käse".to_string()));
+        assert!(keys("NADLER Sahne Hering filets XXL").contains(&"fisch".to_string()));
+        // Tierfutter stand mitten in den Lebensmitteln.
+        assert_eq!(keys("Vitakraft Beef Stick"), vec![NONFOOD_KEY]);
+        // Das Suffix `medaillons` von hähnchen nahm irisches Rind mit.
+        assert!(!match_keys("Teres Major", Some("irisches Rindfleisch, ideal als Medaillons"), None)
+            .contains(&"hähnchen".to_string()));
+        // Barista-Hafderdrink ist Milchersatz, kein Kaffee.
+        assert!(!keys("Oatly Haferdrink Barista").contains(&"kaffee".to_string()));
+        assert!(keys("Oatly Haferdrink Barista").contains(&"milch".to_string()));
+        // Cheestrings ist Käse; als exact schlägt es den Marken-Fallback
+        // „bauer" -> joghurt, der vorher gewann.
+        assert!(keys("BAUER Cheestrings").contains(&"käse".to_string()));
+        // Das Wörterbuch kannte nur `mc cain` mit Leerzeichen, der Prospekt
+        // schreibt MCCAIN.
+        assert!(keys("MCCAIN 1-2-3 Frites Original").contains(&"pommes".to_string()));
     }
 
     #[test]

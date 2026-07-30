@@ -76,6 +76,7 @@
     "kaese",
     "käsescheiben",
     "käsesnack",
+    "cheestrings",
     "cottage",
     "gouda",
     "emmentaler",
@@ -88,6 +89,7 @@
     "grana",
     "halloumi",
     "finello",
+    "obazda",
     "tilsiter",
     "camembert",
     "käsestangen",
@@ -108,7 +110,8 @@
     "käsebrötchen",
     "käsestange",
     "käsegebäck",
-    "fleischkäse"
+    "fleischkäse",
+    "twister"
    ]
   },
   "frischkäse": {
@@ -268,6 +271,10 @@
     "kartoffelsalat",
     "krautsalat",
     "fleischsalat",
+    "wurstsalat",
+    "krebssalat",
+    "flusskrebssalat",
+    "matjessalat",
     "thunfisch-salat",
     "salatcreme",
     "salatmayonnaise"
@@ -544,7 +551,9 @@
     "medaillons"
    ],
    "block": [
-    "schweinemedaillons"
+    "schweinemedaillons",
+    "rindfleisch",
+    "rindermedaillons"
    ]
   },
   "pute": {
@@ -591,6 +600,7 @@
    "exact": [
     "schwein",
     "schweine",
+    "schweinefleisch",
     "schweinemedaillons",
     "kasseler",
     "schweinefilet",
@@ -634,7 +644,12 @@
     "steak",
     "steaks"
    ],
-   "block": []
+   "block": [
+    "nackensteaks",
+    "schweinesteaks",
+    "hacksteaks",
+    "putensteaks"
+   ]
   },
   "bratwurst": {
    "exact": [
@@ -673,6 +688,8 @@
     "leberkäse",
     "hackepeter",
     "knacker",
+    "landjäger",
+    "markenspeck",
     "räucherlendchen",
     "schinkenspeck",
     "schinkenkrakauer"
@@ -694,6 +711,7 @@
     "kabeljau",
     "seelachs",
     "garnelen",
+    "garnele",
     "shrimps",
     "fischstäbchen",
     "matjes",
@@ -900,7 +918,8 @@
    "block": [
     "kaffeesahne",
     "eiskaffee",
-    "kaffeeweißer"
+    "kaffeeweißer",
+    "haferdrink"
    ]
   },
   "tee": {
@@ -1508,7 +1527,6 @@
   "ur-krostitzer": "bier",
   "wernesgrüner": "bier",
   "freiberger": "bier",
-  "5,0 original": "bier",
   "heineken": "bier",
   "desperados": "bier",
   "astra": "bier",
@@ -1575,7 +1593,6 @@
   "loose": "käse",
   "cheestrings": "käse",
   "lindenhof": "käse",
-  "adler": "käse",
   "ergüllü": "frischkäse",
   "miree": "frischkäse",
   "kærgården": "butter",
@@ -1631,6 +1648,7 @@
   "miracel whip": "soßen",
   "apostels": "soßen",
   "mc cain": "pommes",
+  "mccain": "pommes",
   "namdong": "fertiggericht",
   "dovgan": "fertiggericht",
   "satori": "fertiggericht",
@@ -1645,9 +1663,68 @@
   "bravo": "nüsse",
   "corny": "müsli",
   "little moons": "eis",
+  "snickers": "schokolade",
   "dr. oetker": "backwaren",
   "uncle sam": "NONFOOD",
   "purina": "NONFOOD",
+  "vitakraft": "NONFOOD",
+  "pyrex": "NONFOOD",
+  "kitchenaid": "NONFOOD",
+  "curver": "NONFOOD",
+  "denver": "NONFOOD",
+  "kesper": "NONFOOD",
+  "russell hobbs": "NONFOOD",
+  "stabilo": "NONFOOD",
+  "vileda": "NONFOOD",
+  "geschenkkarte": "NONFOOD",
+  "eshop card": "NONFOOD",
+  "zalando": "NONFOOD",
+  "pepsi": "limonade",
+  "schwip schwap": "limonade",
+  "sinalco": "limonade",
+  "brause": "limonade",
+  "havana club": "spirituosen",
+  "underberg": "spirituosen",
+  "cachaca": "spirituosen",
+  "magenbitter": "spirituosen",
+  "weinfreunde": "wein",
+  "lugana": "wein",
+  "gaffels": "limonade",
+  "somersby": "bier",
+  "holsten": "bier",
+  "köstritzer": "bier",
+  "hasseröder": "bier",
+  "weihenstephaner": "bier",
+  "weltenburger": "bier",
+  "saint albray": "käse",
+  "bärenmarke": "milch",
+  "hafercreme": "milch",
+  "sojacreme": "milch",
+  "streichfett": "margarine",
+  "sanella": "margarine",
+  "stremellachs": "fisch",
+  "rollmops": "fisch",
+  "pulpo": "fisch",
+  "deutsche see": "fisch",
+  "kabanos": "wurst",
+  "sucuk": "wurst",
+  "pancetta": "wurst",
+  "tyrolini": "wurst",
+  "köttbullar": "fleisch",
+  "tafelspitz": "rind",
+  "spanferkel": "schwein",
+  "hendl": "hähnchen",
+  "vosskko": "fleisch",
+  "almtaler": "hähnchen",
+  "smoothie": "saft",
+  "porridge": "müsli",
+  "cini minis": "müsli",
+  "cappuccino": "kaffee",
+  "quarktasche": "backwaren",
+  "apfeldreieck": "backwaren",
+  "bäckerkrönung": "backwaren",
+  "aioli": "soßen",
+  "true fruits": "saft",
   "buko": "frischkäse",
   "kiri": "frischkäse",
   "magnum": "eis",
@@ -1663,6 +1740,8 @@
   "lipton": "limonade",
   "starbucks": "kaffee",
   "karlsberg": "bier",
+  "löwenbräu": "bier",
+  "loewenbraeu": "bier",
   "mixery": "bier",
   "landskron": "bier",
   "pülleken": "bier",
