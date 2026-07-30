@@ -110,6 +110,72 @@ static WORD: LazyLock<Regex> =
 /// Zeilen, ab denen die Beschreibung beginnt — davor steht Marke + Name.
 static DESCRIPTIVE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(Versch\.|Je\s|1 (kg|l|Stk) =|zzgl\.)").unwrap());
+/// Aktionszeile mit Datumsvorspann: „Ab Do. 30.7. Deluxe-Woche",
+/// „Erhältlich ab Do. 30.7. Für draußen". Das ist die Überschrift eines
+/// Prospektblocks, kein Artikel.
+///
+/// Der Titel wird **verworfen, nicht gekürzt**: Schneidet man den Vorspann ab,
+/// fällt der Rest mit einer bereits vorhandenen Zeile desselben Produkts
+/// zusammen (die Angebots-ID ist Filiale + Titel + Preis) und überschreibt
+/// sie. Am 2026-07-30 gemessen kostete das mehr echte Angebote, als die
+/// Rettung einbrachte.
+static LEAD_DATE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(?i)(erhältlich\s+)?ab\s+(mo|di|mi|do|fr|sa|so)\.\s*\d{1,2}\.\d{1,2}\.?\s*")
+        .unwrap()
+});
+/// Zeilen, die eine Eigenschaft beschreiben statt ein Produkt zu benennen.
+/// Ein Produktname im Prospekt fängt nicht mit „Für" oder „Inkl." an.
+static DESCRIPTIVE_LEAD: LazyLock<Regex> = LazyLock::new(|| {
+    // Die Wortgrenze steht in jeder Alternative einzeln: nach „inkl." folgt ein
+    // Punkt, und zwischen Punkt und Leerzeichen gibt es kein \b.
+    Regex::new(
+        r"^(?i)(für\b|inkl\.|passende[rs]?\b|bis zu\b|geeignet\b|helligkeit\b|multifunktional\b)",
+    )
+    .unwrap()
+});
+/// Reine Layout-Zeilen aus dem Prospekt: Aktionsdaten, Farbhinweise,
+/// Eigenschaftstexte. Sie sehen wie ein Produktname aus und bestehen die
+/// Geometrie-Prüfung, benennen aber kein Angebot.
+///
+/// **Bewusst getrennt von `is_plausible_title`:** Jene Funktion entscheidet
+/// beim Clustern auch, welche Kachel Produkt und welche Preis ist. Wird sie
+/// strenger, verschiebt sich die Zuordnung, und es fallen echte Angebote
+/// heraus — am 2026-07-30 gemessen: 15 Stück, darunter Weizenmehl,
+/// Plattpfirsiche und Cordon bleu. Diese Prüfung läuft deshalb erst auf dem
+/// fertigen Titel, wenn die Paarung längst steht.
+const LAYOUT_TEXT: &[&str] = &[
+    "aktionszeitraum",
+    "artikel mit",
+    "entspricht",
+    "qualität die schmeckt",
+    "weitere farbe",
+    "mit backindikator",
+    "passende co2",
+    "für glasstärke",
+    "für drinnen",
+    "für draußen",
+    "für 6 personen",
+    "sparen beim preis",
+    "testsieger",
+    // pdftotext zerlegt die Herkunfts-Grafik der Fleischtheke; „AUS UT HER
+    // LAN" ist der Rest von „AUS DEUTSCHER LANDWIRTSCHAFT".
+    "aus ut her lan",
+];
+
+/// Ist der Titel nur Prospekt-Layout?
+///
+/// Wird **vor** der Paarung angewandt, nicht danach: Die Zuordnung vergibt
+/// jede Preis-Kachel nur einmal. Verwirft man die Layout-Kachel erst am
+/// Ende, hat sie den Preis schon belegt, und das echte Produkt daneben geht
+/// leer aus — am 2026-07-30 kostete das vier Lebensmittel (u. a. MÖVENPICK
+/// Eis und PRIMADONNA Olivenöl). Vorher aussortiert, wird der Preis frei.
+fn is_layout_text(title: &str) -> bool {
+    let lower = title.to_lowercase();
+    LAYOUT_TEXT.iter().any(|n| lower.contains(n))
+        || DESCRIPTIVE_LEAD.is_match(title)
+        || LEAD_DATE.is_match(title)
+}
+
 static SLUG: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"aktionsprospekt-[A-Za-z0-9-]+").unwrap());
 static SLUG_RANGE: LazyLock<Regex> = LazyLock::new(|| {
@@ -736,7 +802,7 @@ pub fn extract_offers(
         for tile in tiles {
             if PRICE_STAR.is_match(&tile.text()) {
                 prices.push(tile);
-            } else if is_plausible_title(&title_of(&tile)) {
+            } else if is_plausible_title(&title_of(&tile)) && !is_layout_text(&title_of(&tile)) {
                 // Bewusst am *Titel* gemessen, nicht am ganzen Kacheltext:
                 // Auf einer Fleisch-Kachel steht neben dem Namen auch
                 // „Frischluftstall", und danach zu verwerfen hätte
@@ -826,7 +892,7 @@ pub fn extract_offers(
             let title = title_of(product);
             // "Mit Lidl Plus" steht mitunter in derselben Zeile wie der Name.
             let title = title.trim_end_matches("Mit Lidl Plus").trim().to_string();
-            if !is_plausible_title(&title) {
+            if !is_plausible_title(&title) || is_layout_text(&title) {
                 stats.bad_title += usable.len();
                 if debug_enabled() {
                     eprintln!(
@@ -1234,6 +1300,65 @@ pub fn merge_products(flyer: &Flyer, market_id: &str, existing: &[Offer]) -> Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Aus dem 11-Regionen-Audit (2026-07-30): 538 Zeilen eines
+    /// Wochenprospekt-Satzes waren keine Angebote, sondern Layout-Text —
+    /// Aktionsdaten, Farbhinweise, Eigenschaftszeilen. In einer
+    /// Preisvergleichs-App ist so ein Eintrag schlimmer als gar keiner.
+    #[test]
+    fn layout_zeilen_sind_keine_produkte() {
+        for zeile in [
+            "Aktionszeitraum",
+            "Artikel mit",
+            "Entspricht",
+            "Qualität die schmeckt lohnt sich",
+            "Weitere Farbe: Schwarz",
+            "Weitere Farbe: Weiß PARKSIDE",
+            "Erhältlich ab Do. 30.7. Für draußen",
+            "Für Glasstärke von 4–6 mm",
+            "Für 6 Personen 62-teilig",
+            "Für drinnen/ draußen",
+            "Inkl. 2-in-1-Bürste und Fugendüse",
+            "Mit Backindikator",
+            "Helligkeit per Touchdimmer in 4 Stufen regelbar",
+            "Multifunktional – bis zu 19 Aufnahmemöglichkeiten",
+            "Passende CO2-Zylinder dauerhaft in der Filiale",
+            "AUS UT HER LAN",
+        ] {
+            assert!(is_layout_text(zeile), "sollte Layout sein: {zeile}");
+        }
+    }
+
+    /// Aktionsüberschriften mit Datum sind keine Artikel. Sie werden
+    /// verworfen und **nicht** gekürzt — sonst fiele der Rest mit einer
+    /// vorhandenen Zeile desselben Produkts zusammen und überschriebe sie.
+    #[test]
+    fn datumszeilen_sind_keine_produkte() {
+        for zeile in [
+            "Ab Do. 30.7",
+            "Ab Do. 30.7. Deluxe-Woche",
+            "Ab Mi. 29.7. DELUXE Olivenöl",
+            "Erhältlich ab Do. 30.7. Für draußen",
+        ] {
+            assert!(is_layout_text(zeile), "sollte Layout sein: {zeile}");
+        }
+        assert!(!is_layout_text("BARILLA Pasta"));
+    }
+
+    /// Gegenprobe: echte Produkte aus demselben Prospekt bleiben gültig.
+    #[test]
+    fn echte_produkte_ueberstehen_die_neuen_filter() {
+        for zeile in [
+            "BARILLA Pasta",
+            "ALESTO Pistazien XXL",
+            "OCEAN SEA Lachsfilet-portionen XXL",
+            "Gartenhortensie",
+            "MÜHLENHOF Frisches Hähnchen-Innenbrustfilet",
+            "Couronne Feigen-Walnuss",
+        ] {
+            assert!(is_plausible_title(zeile) && !is_layout_text(zeile), "sollte ein Produkt sein: {zeile}");
+        }
+    }
 
     #[test]
     fn parse_price_reads_the_lidl_notation_for_amounts_below_one_euro() {
