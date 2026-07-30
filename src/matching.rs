@@ -9,7 +9,7 @@
 //! Ergebnis pro Angebot: Liste von Begriffs-Tags ("käse", "tomaten", …),
 //! `["nonfood"]` für erkanntes Non-Food, leer für ungetaggt (Review-Liste).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use regex::Regex;
@@ -44,6 +44,10 @@ struct Term {
 
 struct Dict {
     terms: Vec<Term>,
+    /// Normalisierte Kategorie → Begriff. Letzter Ausweg, wenn Titel und
+    /// Untertitel nichts hergeben; gepflegte Zuordnung, kein Regex — die
+    /// Begründung steht bei `KAT_ROH` in der Python-Referenz.
+    categories: HashMap<String, String>,
     /// Marke (normalisiert) → Begriff bzw. NONFOOD_KEY; Reihenfolge = JSON-Reihenfolge.
     brands: Vec<(String, String)>,
     nonfood_cat: Regex,
@@ -103,8 +107,20 @@ fn dict() -> &'static Dict {
                 None => Regex::new(fallback).unwrap(),
             }
         };
+        // Fehlt die Sektion (alter JSON-Stand), bleibt die Zuordnung leer und
+        // das Verhalten ist exakt das vor dieser Regel.
+        let categories = v["kategorien"]
+            .as_object()
+            .map(|o| {
+                o.iter()
+                    .filter_map(|(cat, term)| Some((norm(cat), term.as_str()?.to_string())))
+                    .filter(|(c, _)| !c.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
         Dict {
             terms,
+            categories,
             brands,
             nonfood_cat: rx("nonfood_cat", NONFOOD_CAT),
             nonfood_terms: rx("nonfood_terms", NONFOOD_TERMS),
@@ -200,6 +216,23 @@ pub fn match_keys(title: &str, subtitle: Option<&str>, category: Option<&str>) -
                 return vec![key.clone()];
             }
         }
+        // Letzter Ausweg: die Kategorie der Kette. Sie steht erst hier, damit
+        // ein Titel-Treffer nie überstimmt wird.
+        //
+        // Die Blockliste des Begriffs gilt auch auf diesem Weg, und das ist
+        // keine Vorsichtsmaßnahme, sondern ein gefundener Fehler: „Erdnuss-
+        // butter" steht auf der Blockliste von `butter` und bekam den Tag
+        // über die Kategorie „Butter" zurück — die Blockliste wäre auf dem
+        // neuen Weg schlicht wirkungslos gewesen.
+        if let Some(key) = d.categories.get(norm(cat).as_str()) {
+            let blocked = d.terms.iter().filter(|t| t.key == *key).any(|t| {
+                t.block_phrases.iter().any(|b| ntext.contains(b.as_str()))
+                    || t.block_words.iter().any(|b| toks.contains(b))
+            });
+            if !blocked {
+                return vec![key.clone()];
+            }
+        }
     }
     hits
 }
@@ -210,6 +243,41 @@ mod tests {
 
     fn keys(title: &str) -> Vec<String> {
         match_keys(title, None, None)
+    }
+
+    fn keys_cat(title: &str, cat: &str) -> Vec<String> {
+        match_keys(title, None, Some(cat))
+    }
+
+    /// Die Kategorie-Zuordnung, gebaut am 2026-07-31 aus einer Messung über
+    /// 414 Food-Angebote (Abdeckung 88 % → 97 %). Jeder Fall hier stand in
+    /// dieser Messung; keiner ist ausgedacht.
+    #[test]
+    fn kategorie_als_letzter_ausweg() {
+        // Titel nichtssagend, Kategorie eindeutig — genau dafür ist die Regel.
+        assert_eq!(keys_cat("Die Extrazarte", "Butter"), vec!["butter"]);
+        assert_eq!(keys_cat("Grande Réserve", "Champagner"), vec!["wein"]);
+        assert_eq!(keys_cat("Froop", "Joghurt"), vec!["joghurt"]);
+        assert_eq!(keys_cat("Naturelle", "Wasser"), vec!["wasser"]);
+        // Kategorie mit Akzent und Komma: der Schlüssel wird normalisiert
+        // verglichen, nicht wörtlich.
+        assert_eq!(keys_cat("Bio Feine Creme zum Kochen", "Sahne, Schmand und Crème fraîche"), vec!["sahne"]);
+
+        // Bewusst NICHT zugeordnet — die freie Wörterbuchsuche über die
+        // Kategorie hätte hier danebengegriffen, und das ist der teurere
+        // Fehler: ein falsches Tag legt jemandem das falsche Produkt in den
+        // Einkauf.
+        assert!(keys_cat("Not Milk", "Veganes").is_empty());          // Haferdrink, kein Tofu
+        assert!(keys_cat("Spitzkohl", "Brokkoli und Kohl").is_empty()); // Kohl, kein Brokkoli
+        assert!(keys_cat("Ganzes Kaninchen", "Geflügel").is_empty());   // Kaninchen ist kein Geflügel
+
+        // Ein Titel-Treffer wird nie überstimmt, und eine Blockliste auch
+        // nicht: „Erdnussbutter" steht auf der Blockliste von „butter" und
+        // darf sie nicht über die Kategorie zurückbekommen.
+        assert!(keys_cat("Erdnussbutter", "Butter").is_empty());
+        // Und die Gegenprobe zur Gegenprobe: echte Butter behält ihren Tag,
+        // auch ohne Kategorie.
+        assert_eq!(keys("Deutsche Markenbutter"), vec!["butter"]);
     }
 
     /// Die drei Beobachtungen aus dem Backlog, abgearbeitet am 2026-07-26.
