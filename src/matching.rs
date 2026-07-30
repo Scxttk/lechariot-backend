@@ -373,6 +373,16 @@ mod tests {
             .contains(&"käse".to_string()));
         assert!(match_keys("Rinderhack", None, Some("Fleisch, Geflügel, Wurst"))
             .contains(&"hackfleisch".to_string()));
+        // Beim Ausbau der Non-Food-Warengruppen einmal zu weit gegriffen und
+        // gleich wieder zurückgenommen: „Sportnahrung" klingt nach Zubehör,
+        // steht bei Lidl aber über Proteinriegeln, Protein-Chips und
+        // Protein-Sahne. Das ist Essen und muss Essen bleiben.
+        assert!(match_keys("Proteinriegel", None, Some("Sportnahrung"))
+            .contains(&"protein/fitness".to_string()));
+        assert!(match_keys("Premium High Protein-Chips", None, Some("Sportnahrung"))
+            .contains(&"chips".to_string()));
+        assert!(match_keys("Protein Coffee", None, Some("Sportnahrung"))
+            .contains(&"kaffee".to_string()));
     }
 
     #[test]
