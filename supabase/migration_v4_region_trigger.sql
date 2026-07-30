@@ -1,4 +1,20 @@
--- Le Chariot – Migration v4: On-Demand-Trigger für Regionen
+-- Migration v4: On-demand region scraping trigger
+--
+-- An INSERT into public.regions fires an async pg_net HTTP POST to GitHub's
+-- workflow_dispatch API for nightly.yml, so a newly requested PLZ gets
+-- scraped within minutes instead of waiting for the nightly cron.
+--
+-- Prerequisites (one-time, Supabase SQL editor):
+--   1. A fine-grained GitHub PAT with "Actions: read and write" on
+--      Scxttk/lechariot-backend (see docs/ci.md).
+--   2. Store it in Vault under the name 'github_pat':
+--        select vault.create_secret('<PAT>', 'github_pat');
+--
+-- Idempotent: safe to re-run.
+--
+-- Debugging: pg_net is async; responses land in net._http_response.
+--   select * from net._http_response order by id desc limit 5;
+-- A successful dispatch returns HTTP 204.
 
 create extension if not exists pg_net with schema extensions;
 
@@ -14,10 +30,12 @@ begin
   select decrypted_secret into pat
   from vault.decrypted_secrets
   where name = 'github_pat';
+
   if pat is null then
     raise warning 'trigger_region_scrape: Vault secret github_pat missing, no scrape dispatched for PLZ %', new.plz;
     return new;
   end if;
+
   -- Async fire-and-forget; result appears later in net._http_response.
   -- GitHub rejects requests without a User-Agent header.
   perform net.http_post(
@@ -31,6 +49,7 @@ begin
     ),
     body := jsonb_build_object('ref', 'master')
   );
+
   return new;
 exception when others then
   -- Never block the region insert because the dispatch failed.
@@ -39,6 +58,7 @@ exception when others then
 end;
 $$;
 
+-- Function runs with owner rights; nobody else needs direct execute.
 revoke execute on function public.trigger_region_scrape() from public, anon, authenticated;
 
 drop trigger if exists on_region_insert on public.regions;

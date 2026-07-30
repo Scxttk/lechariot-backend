@@ -1,4 +1,10 @@
+-- ============================================================
 -- Le Chariot – Migration v7: Preis-Historie
+-- Wochenweise Preis-Schnappschüsse pro (market, product, region,
+-- valid_from) für Preisverlaufs-Charts in der App. Wird beim Push
+-- per Upsert gefüllt; alte Wochen bleiben erhalten.
+-- Idempotent – kann gefahrlos erneut laufen.
+-- ============================================================
 
 create table if not exists public.price_history (
     id            bigint generated always as identity primary key,
@@ -16,6 +22,8 @@ create table if not exists public.price_history (
     recorded_at   timestamptz default now()
 );
 
+-- Upsert-Schlüssel: dieselbe Woche wird bei erneutem Push aktualisiert,
+-- nicht dupliziert.
 do $$
 begin
     alter table public.price_history
