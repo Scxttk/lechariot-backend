@@ -46,7 +46,9 @@
     "kokosnussmilch",
     "milka",
     "knoppers",
-    "milch schnitte"
+    "milch schnitte",
+    "bergkäse",
+    "käsescheiben"
    ]
   },
   "butter": {
@@ -105,7 +107,8 @@
     "brezel",
     "käsebrötchen",
     "käsestange",
-    "käsegebäck"
+    "käsegebäck",
+    "fleischkäse"
    ]
   },
   "frischkäse": {
@@ -548,6 +551,7 @@
    "exact": [
     "pute",
     "putenbrust",
+    "putenbrustfilet",
     "putenschnitzel",
     "putensteaks"
    ],
@@ -716,7 +720,11 @@
     "schweine",
     "lamm",
     "lammfilets",
-    "kasseler"
+    "kasseler",
+    "hähnchen",
+    "brustfilet",
+    "innenfilet",
+    "putenbrustfilet"
    ]
   },
   "nudeln": {
@@ -760,7 +768,9 @@
    "block": [
     "milchreis",
     "reiswaffeln",
-    "reisdrink"
+    "reisdrink",
+    "puffreis",
+    "wassereis"
    ]
   },
   "mehl": {
@@ -866,7 +876,10 @@
     "marmelade",
     "konfitüre"
    ],
-   "block": []
+   "block": [
+    "eisbecher",
+    "biscuits"
+   ]
   },
   "kaffee": {
    "exact": [
@@ -1389,14 +1402,15 @@
     "frühlingsrollen",
     "frühlingsrolle",
     "gua bao",
-    "jjigae",
-    "antipasti"
+    "jjigae"
    ],
    "suffix": [
     "gericht",
     "teigtaschen"
    ],
-   "block": []
+   "block": [
+    "tortilla"
+   ]
   },
   "knäckebrot": {
    "exact": [

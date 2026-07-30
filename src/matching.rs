@@ -280,6 +280,42 @@ mod tests {
         assert!(keys("Skyr Natur").contains(&"quark".to_string()));
         assert!(keys("Süßrahmbutter").contains(&"butter".to_string()));
         assert!(keys("Gezuckerte Kondensmilch").contains(&"kondensmilch".to_string()));
+        // Aus der Feedback-Schleife (Pflegerunde 2026-07-30, 173 Rückmeldungen).
+        // Jeweils mit Gegenprobe: der echte Treffer behält seinen Tag.
+        //
+        // Das Suffix `filet` von „fisch" nahm Geflügel mit — der mit Abstand
+        // größte gemeldete Block. „Hähnchen" blockt die Bindestrich-Formen,
+        // `putenbrustfilet` das zusammengeschriebene Wort.
+        assert!(!keys("Hähnchen-Brustfilet").contains(&"fisch".to_string()));
+        assert!(keys("Hähnchen-Brustfilet").contains(&"hähnchen".to_string()));
+        assert!(!keys("Putenbrustfilet XXL").contains(&"fisch".to_string()));
+        assert!(keys("Putenbrustfilet XXL").contains(&"pute".to_string()));
+        assert!(keys("Seelachsfilet").contains(&"fisch".to_string()));
+        // Das Suffix `reis` traf „Puffreis" und — weniger offensichtlich —
+        // „Wassereis", das auf dieselben vier Buchstaben endet.
+        assert!(!keys("NIPPON Puffreis in Schokolade").contains(&"reis".to_string()));
+        assert!(!keys("MERONG BAR Wassereis").contains(&"reis".to_string()));
+        assert!(keys("Basmatireis").contains(&"reis".to_string()));
+        // Molkerei-Marken auf -milch tragen auch Käse. Geblockt wird das
+        // Produktwort, nicht die Marke — sonst verlöre echte Milch derselben
+        // Marke ihren Tag.
+        assert!(!keys("SALZBURGMILCH Bergkäse").contains(&"milch".to_string()));
+        assert!(keys("SALZBURGMILCH Bergkäse").contains(&"käse".to_string()));
+        assert!(!keys("Kärntnermilch Käsescheiben").contains(&"milch".to_string()));
+        assert!(keys("Kärntnermilch Vollmilch").contains(&"milch".to_string()));
+        // Fleischkäse ist Wurst, kein Käse — dieselbe Familie wie Leberkäse.
+        assert!(!keys("Delikatess-Fleischkäse").contains(&"käse".to_string()));
+        assert!(keys("Gouda am Stück").contains(&"käse".to_string()));
+        // `nutella` steht bei „marmelade" im exact; die Marke steht aber auch
+        // auf Eis und Keksen.
+        assert!(!keys("Nutella Eisbecher").contains(&"marmelade".to_string()));
+        assert!(!keys("Nutella Biscuits").contains(&"marmelade".to_string()));
+        assert!(keys("Nutella 450g").contains(&"marmelade".to_string()));
+        // Tortilla-Fladen sind kein Fertiggericht, und Antipasti sind eine
+        // Vorspeise — vier Meldungen aus vier Märkten, deshalb ganz raus.
+        assert!(!keys("Tortilla Wraps Weizen").contains(&"fertiggericht".to_string()));
+        assert!(!keys("Antipasti Creme").contains(&"fertiggericht".to_string()));
+        assert!(keys("Maultaschen").contains(&"fertiggericht".to_string()));
     }
 
     #[test]
