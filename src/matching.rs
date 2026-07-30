@@ -347,6 +347,32 @@ mod tests {
         // Das Wörterbuch kannte nur `mc cain` mit Leerzeichen, der Prospekt
         // schreibt MCCAIN.
         assert!(keys("MCCAIN 1-2-3 Frites Original").contains(&"pommes".to_string()));
+        // Warengruppen der Ketten, die klar Non-Food sind und bisher in den
+        // Lebensmitteln standen. Über 11 Regionen gemessen: E-Bikes,
+        // Staubsauger, Unterwäsche, Geschirr, Batterien, Nähmaschinen.
+        // `FOOD_CAT` sticht weiterhin — deshalb die Gegenproben unten.
+        for (titel, kat) in [
+            ("FISCHER E-MTB Montis 2.2 29 Zoll", "E-Bikes"),
+            ("Bodenstaubsauger", "Reinigungsgeräte"),
+            ("ESMARA MEN Herren Boxer, 10 Stück", "Unterhemden"),
+            ("Tellerset Magic Black Square 16-tlg.", "Essgeschirr"),
+            ("Knopfzellen", "Batterien"),
+            ("Computer Nähmaschine Serenade 660L", "Nähmaschinen"),
+            ("Küchenmaschine", "Küchengeräte"),
+        ] {
+            assert_eq!(
+                match_keys(titel, None, Some(kat)),
+                vec![NONFOOD_KEY],
+                "sollte Non-Food sein: {titel} [{kat}]"
+            );
+        }
+        // Gegenprobe: Ein Food-Marker in der Kategorie schlägt die neuen
+        // Non-Food-Muster weiterhin — sonst risse „Küchengeräte" auch
+        // „Fleisch, Geflügel, Wurst" mit, wo beides in einer Zeile steht.
+        assert!(match_keys("Gouda am Stück", None, Some("Käsetheke"))
+            .contains(&"käse".to_string()));
+        assert!(match_keys("Rinderhack", None, Some("Fleisch, Geflügel, Wurst"))
+            .contains(&"hackfleisch".to_string()));
     }
 
     #[test]
