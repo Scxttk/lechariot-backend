@@ -398,3 +398,59 @@ fn aldi_rejects_a_failed_uberall_response() {
             .is_err()
     );
 }
+
+// ------------------------------------------------- Gebiets-Anforderung (v21)
+
+/// Der Cooldown der Migration v21 sperrt 30 Minuten je **Rasterzelle**. Diese
+/// Funktion muss dieselbe Zeichenkette liefern wie das SQL — für Migrationen
+/// gibt es keine Testinfrastruktur, das hier ist die einzige Stelle, an der
+/// die Entscheidung überhaupt automatisch geprüft wird.
+///
+/// Der Nachweis ist der gemeldete Fall: Ahlbeck und Ueckermünde dürfen sich
+/// nicht dieselbe Zelle teilen, sonst unterdrückt die eine Anforderung die
+/// andere und der zweite Ort wird nie geholt.
+#[test]
+fn the_cooldown_cell_separates_ahlbeck_from_ueckermuende() {
+    let ahlbeck = lechariot::branches::area_cell(53.9440, 14.1830);
+    let ueckermuende = lechariot::branches::area_cell(53.7383, 14.0511);
+
+    assert_eq!(ahlbeck, "cell:53.9,14.2");
+    assert_eq!(ueckermuende, "cell:53.7,14.1");
+    assert_ne!(ahlbeck, ueckermuende, "in beiden Achsen verschieden");
+}
+
+/// Und die Gegenrichtung: Wer in derselben Zelle liegt, wird zu Recht
+/// unterdrückt — der Lauf des Ersten holt 25 km um seinen Mittelpunkt, die
+/// Zelle ist höchstens 13,5 km lang. Niemand verliert dadurch eine Filiale.
+#[test]
+fn two_points_in_one_cell_are_inside_the_same_run() {
+    let a = (53.91, 14.16);
+    let b = (53.94, 14.24);
+
+    assert_eq!(lechariot::branches::area_cell(a.0, a.1), lechariot::branches::area_cell(b.0, b.1));
+    let gap = scrapers::store_finder::distance_km(a, b);
+    assert!(gap < lechariot::branches::AREA_RADIUS_KM, "{gap:.1} km müssen in den Lauf passen");
+}
+
+/// Die Zahl, auf der das 60-km-Tor der Migration steht. Ein Anker darf
+/// konstruktionsbedingt bis zu `maxRadiusKm` (40 km in der App) entfernt
+/// liegen; ein 30-km-Tor verwürfe die Koordinaten ausgerechnet im gemeldeten
+/// Fall und fiele still auf den alten Fehler zurück.
+#[test]
+fn the_reported_gap_is_inside_the_sixty_kilometre_gate() {
+    let gap = scrapers::store_finder::distance_km((53.9440, 14.1830), (53.7383, 14.0511));
+
+    assert!((24.4..24.6).contains(&gap), "Ahlbeck -> Ueckermünde sind 24,5 km, gemessen {gap:.2}");
+    assert!(gap > 15.0, "und mehr als der Regionsbegriff CUTOFF_KM hergibt");
+}
+
+/// Ohne Koordinaten bleibt der Schlüssel die PLZ — der Weg des Sonntagslaufs
+/// und aller Anforderungen von Apps, die v21 noch nicht kennen.
+#[test]
+fn without_coordinates_the_key_stays_the_postcode() {
+    let target = lechariot::branches::AreaTarget::from_plz("17419");
+
+    assert_eq!(target.dedup_key(), "plz:17419");
+    assert_eq!(target.coords, None);
+    assert_eq!(target.anchor_market_id, None);
+}

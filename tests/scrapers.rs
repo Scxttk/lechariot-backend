@@ -440,6 +440,43 @@ fn store_finder_nominatim_parses_plz_coordinates() {
     assert!(scrapers::store_finder::parse_nominatim(&serde_json::json!([])).is_none());
 }
 
+/// Reverse-Geocoding ist ab v21 der Weg, auf dem ein Gebiets-Lauf seine PLZ
+/// bekommt: Die App schickt die Mitte der Region, hier wird die Postleitzahl
+/// daraus. Die Fixture ist die Seestraße in Seebad Ahlbeck — die Ecke, an der
+/// der Fehler vom 2026-07-30 aufgefallen ist.
+#[test]
+fn store_finder_nominatim_reverse_yields_postcode_and_city() {
+    let raw: serde_json::Value = serde_json::from_str(include_str!(
+        "fixtures/store_finder/nominatim_reverse_ahlbeck.json"
+    ))
+    .unwrap();
+
+    let (plz, city) = scrapers::store_finder::parse_nominatim_reverse(&raw);
+
+    assert_eq!(plz.as_deref(), Some("17419"), "genau die PLZ, die dem Tester gefehlt hat");
+    assert_eq!(city.as_deref(), Some("Seebad Ahlbeck"), "auf dem Land steht dort `village`");
+
+    // Und der Grund, warum es einen eigenen Parser gibt: `/reverse` antwortet
+    // mit einem Objekt, `/search` mit einem Array. Die Array-Parser geben für
+    // diese Antwort still None zurück — das sähe aus wie „Gegend unbekannt".
+    assert!(
+        scrapers::store_finder::parse_nominatim(&raw).is_none(),
+        "der Vorwärts-Parser darf hier gar nichts verstehen"
+    );
+}
+
+/// Über See, im Wald oder bei einer Lücke in OSM antwortet Nominatim mit
+/// `{"error": …}`. Das ist kein Fehler des Laufs: Dann trägt die PLZ der
+/// Ankerfiliale die Textsuchen weiter, also das Verhalten von vor v21.
+#[test]
+fn store_finder_nominatim_reverse_survives_an_ungeocodable_point() {
+    let raw = serde_json::json!({"error": "Unable to geocode"});
+
+    let (plz, city) = scrapers::store_finder::parse_nominatim_reverse(&raw);
+
+    assert!(plz.is_none() && city.is_none());
+}
+
 #[test]
 fn store_finder_resolve_falls_back_to_national_on_error() {
     use lechariot::models::Market;

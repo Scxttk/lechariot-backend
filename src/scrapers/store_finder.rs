@@ -10,11 +10,15 @@
 //!              die Plattform hinter den Filialfindern auf aldi-nord.de bzw.
 //!              aldi-sued.de. Sucht per lat/lng, liefert `distance` in Metern.
 //!
-//! Beide brauchen Koordinaten statt PLZ; die PLZ geocodiert Nominatim
-//! (nominatim.openstreetmap.org, 1 Request pro Region, mit eigenem UA laut
-//! OSM-Policy). Alle drei Hosts sind nicht Akamai-geschützt — reqwest mit dem
-//! gemeinsamen Browser-UA (util::blocking_client) reicht, anders als bei den
-//! Angebots-Scrapern von Netto/ALDI SÜD (System-curl).
+//! Beide brauchen Koordinaten statt PLZ; die besorgt Nominatim
+//! (nominatim.openstreetmap.org, 1 Request pro Gebiet) in beide Richtungen:
+//! `/search` macht aus einer PLZ Koordinaten, `/reverse` aus Koordinaten eine
+//! PLZ. Nominatim läuft über `util::nominatim_client` — eigener UA und
+//! 1 Request/Sekunde laut OSM-Policy; **das stand hier schon, bevor es
+//! stimmte**, siehe den Kommentar in `util.rs`. Die Filialfinder-Hosts sind
+//! nicht Akamai-geschützt, dort reicht der gemeinsame Browser-UA
+//! (util::blocking_client), anders als bei den Angebots-Scrapern von
+//! Netto/ALDI SÜD (System-curl).
 //!
 //! Fehlerverhalten: Finder-Fehler (Netz, Formatänderung) fallen mit WARN auf
 //! den nationalen Platzhalter zurück — lieber ein zu breiter Eintrag als eine
@@ -55,7 +59,7 @@ pub fn geocode_plz_with_city(plz: &str) -> Result<(f64, f64, Option<String>)> {
         "https://nominatim.openstreetmap.org/search?postalcode={plz}&country=de&format=jsonv2&limit=1&addressdetails=1"
     );
     util::polite_pause(&url);
-    let raw: serde_json::Value = util::blocking_client()?
+    let raw: serde_json::Value = util::nominatim_client()?
         .get(&url)
         .send()
         .with_context(|| util::ctx("Store-Finder", "PLZ geocodieren", &url))?
@@ -66,6 +70,60 @@ pub fn geocode_plz_with_city(plz: &str) -> Result<(f64, f64, Option<String>)> {
     let (lat, lon) =
         parse_nominatim(&raw).with_context(|| format!("Nominatim kennt PLZ {plz} nicht"))?;
     Ok((lat, lon, parse_nominatim_city(&raw)))
+}
+
+/// Koordinaten -> (PLZ, Stadt) über Nominatim. Die Gegenrichtung zu
+/// [`geocode_plz_with_city`], und der Kern der Gebiets-Anforderung ab v21:
+/// Die App schickt die Mitte der Region, in der ihr Picker gesucht hat, und
+/// **hier** wird daraus die PLZ — nicht mehr aus der Ankerfiliale, die 24 km
+/// entfernt in der Nachbarstadt stehen kann (Ahlbeck/Ueckermünde, 2026-07-30).
+///
+/// Kein `zoom`-Parameter: Der Standard (18, Gebäudeebene) füllt
+/// `address.postcode`. Mit `zoom=10` antwortet Nominatim auf Stadtebene und
+/// lässt die PLZ weg — dann wäre der ganze Aufruf umsonst.
+///
+/// Beide Rückgaben sind optional, und der Aufrufer muss damit rechnen: Über
+/// See, im Wald oder bei einer Lücke in OSM antwortet Nominatim mit
+/// `{"error": "Unable to geocode"}`. Das ist kein Fehler des Laufs — dann
+/// trägt die PLZ der Ankerfiliale die Textsuchen weiter, also genau das
+/// Verhalten von vor v21.
+pub fn reverse_geocode(lat: f64, lon: f64) -> Result<(Option<String>, Option<String>)> {
+    let url = format!(
+        "https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=jsonv2&addressdetails=1"
+    );
+    util::polite_pause(&url);
+    let raw: serde_json::Value = util::nominatim_client()?
+        .get(&url)
+        .send()
+        .with_context(|| util::ctx("Store-Finder", "Koordinaten rückwärts geocodieren", &url))?
+        .error_for_status()
+        .with_context(|| util::ctx("Store-Finder", "Reverse-Geocoding (HTTP-Status)", &url))?
+        .json()
+        .with_context(|| util::ctx("Store-Finder", "Reverse-Geocoding JSON parsen", &url))?;
+    Ok(parse_nominatim_reverse(&raw))
+}
+
+/// PLZ und Stadt aus einer `/reverse`-Antwort.
+///
+/// Eigener Parser, und das ist keine Doppelung: **`/reverse` liefert ein
+/// Objekt, `/search` ein Array.** [`parse_nominatim`] und
+/// [`parse_nominatim_city`] beginnen beide mit `as_array()?` und gäben für
+/// eine Reverse-Antwort still `None` zurück — ein Fehler, der wie „diese
+/// Gegend kennt Nominatim nicht" aussähe und nirgends auffiele.
+pub fn parse_nominatim_reverse(raw: &serde_json::Value) -> (Option<String>, Option<String>) {
+    let Some(address) = raw.get("address") else {
+        return (None, None);
+    };
+    let field = |key: &str| {
+        address
+            .get(key)
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    let city = ["city", "town", "village", "municipality"].iter().find_map(|key| field(key));
+    (field("postcode"), city)
 }
 
 /// Erstes Ergebnis einer Nominatim-Antwort als (lat, lon).

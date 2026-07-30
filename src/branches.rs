@@ -42,9 +42,69 @@ pub const MAX_PER_CHAIN: usize = 60;
 /// eine Stichprobe.
 const DRY_RUN_FULL_LIST: usize = 200;
 
+/// Ein Gebiet, das geholt werden soll.
+///
+/// Bis v20 war das schlicht eine PLZ. Seit v21 kann stattdessen (oder
+/// zusätzlich) die **Mitte** mitkommen, um die die App gesucht hat — und die
+/// ist die verlässlichere Angabe: Die PLZ stammte aus der Ankerfiliale, und
+/// die kann in der Nachbarstadt stehen (Ahlbeck 17419, Anker in Ueckermünde
+/// 17373, 24,5 km — der Lauf am 2026-07-30 holte die falsche Stadt und meldete
+/// Erfolg).
+///
+/// Die drei Felder, und warum jedes einzeln nötig ist:
+///
+/// * `coords` — der Suchmittelpunkt. Liegt er vor, gewinnt er; die PLZ für die
+///   Textsuchen kommt dann aus dem Reverse-Geocoding.
+/// * `plz` — ohne `coords` der Suchbegriff, mit `coords` der **Rückfall**,
+///   falls Nominatim nichts liefert. Ein Teilausfall (Lidl/ALDI richtig,
+///   Textsuchen auf der Anker-PLZ) ist besser als gar kein Lauf.
+/// * `anchor_market_id` — die `area_requests`-Zeile, die die aufgelöste PLZ
+///   und die Fertigmeldung bekommt. Ohne sie wüsste der Lauf nicht, welche
+///   Zeile er in Ordnung bringen soll: `market_id` ist deren Primärschlüssel,
+///   die PLZ darin ist zum Zeitpunkt des Dispatches noch die falsche.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AreaTarget {
+    pub coords: Option<(f64, f64)>,
+    pub plz: Option<String>,
+    pub anchor_market_id: Option<String>,
+}
+
+impl AreaTarget {
+    /// Der Weg vor v21 und der Weg des Sonntagslaufs: nur eine PLZ.
+    pub fn from_plz(plz: impl Into<String>) -> Self {
+        AreaTarget { coords: None, plz: Some(plz.into()), anchor_market_id: None }
+    }
+
+    /// Schlüssel, unter dem zwei Anforderungen als dasselbe Gebiet gelten.
+    /// **Dieselbe Regel wie der Cooldown in Migration v21** — laufen die
+    /// beiden auseinander, holt der Lauf ein Gebiet doppelt oder gar nicht.
+    pub fn dedup_key(&self) -> String {
+        match self.coords {
+            Some((lat, lon)) => area_cell(lat, lon),
+            None => format!("plz:{}", self.plz.as_deref().unwrap_or("")),
+        }
+    }
+}
+
+/// Rasterzelle als Text, auf 0,1° gerundet — der Rust-Spiegel des
+/// Cooldown-Schlüssels aus Migration v21. Beide Seiten müssen dieselbe Zeichen-
+/// kette erzeugen, und diese Funktion ist das Einzige daran, was ein Test
+/// überhaupt fassen kann (für das SQL gibt es keine Testinfrastruktur).
+///
+/// 0,1° sind 11,1 km in der Breite und 6,5-7,6 km in der Länge über
+/// Deutschland, also höchstens 13,5 km Diagonale — zwei Anforderungen in
+/// derselben Zelle liegen im 25-km-Kreis (`AREA_RADIUS_KM`) des ersten Laufs.
+///
+/// `round()` rundet in Rust wie `round(numeric, 1)` in Postgres von der Null
+/// weg; `+ 0.0` macht aus einer eventuellen -0.0 wieder 0.0.
+pub fn area_cell(lat: f64, lon: f64) -> String {
+    let round1 = |v: f64| (v * 10.0).round() / 10.0 + 0.0;
+    format!("cell:{:.1},{:.1}", round1(lat), round1(lon))
+}
+
 pub struct DirectoryOptions {
-    /// PLZ, deren Umkreis geholt wird. Leer = nur die landesweiten Ketten.
-    pub areas: Vec<String>,
+    /// Gebiete, deren Umkreis geholt wird. Leer = nur die landesweiten Ketten.
+    pub targets: Vec<AreaTarget>,
     /// Kaufland und Penny mitziehen (je ein Request für ganz Deutschland).
     pub national: bool,
     pub radius_km: f64,
@@ -58,12 +118,79 @@ pub struct DirectoryOptions {
 impl Default for DirectoryOptions {
     fn default() -> Self {
         DirectoryOptions {
-            areas: Vec::new(),
+            targets: Vec::new(),
             national: true,
             radius_km: AREA_RADIUS_KM,
             cert: "cert.pem".to_string(),
             key: "private.key".to_string(),
             dry_run: false,
+        }
+    }
+}
+
+/// Was aus einem [`AreaTarget`] nach dem Geocoding geworden ist.
+struct ResolvedArea {
+    center: Option<(f64, f64)>,
+    plz: Option<String>,
+    city: Option<String>,
+}
+
+impl ResolvedArea {
+    /// Kopf der Log-Zeilen. **Die Workflow-Zusammenfassung liest `[<PLZ>]` aus
+    /// `branches.log`** — steht dort etwas anderes, fehlt die Zeile im
+    /// Actions-Bericht, deshalb bleibt die PLZ die erste Wahl.
+    fn label(&self) -> String {
+        match (&self.plz, self.center) {
+            (Some(plz), _) => plz.clone(),
+            (None, Some((lat, lon))) => format!("{lat:.4},{lon:.4}"),
+            (None, None) => "?".to_string(),
+        }
+    }
+}
+
+/// Mittelpunkt, PLZ und Stadt für ein Gebiet bestimmen.
+///
+/// Mit Koordinaten ist der Mittelpunkt gesetzt und die PLZ kommt aus dem
+/// Reverse-Geocoding; scheitert das, **bleiben die Koordinaten** und die
+/// mitgeschickte PLZ trägt die Textsuchen. Ohne Koordinaten der Weg von vor
+/// v21: PLZ vorwärts geocodieren.
+fn resolve_area(target: &AreaTarget) -> ResolvedArea {
+    if let Some((lat, lon)) = target.coords {
+        return match store_finder::reverse_geocode(lat, lon) {
+            Ok((plz, city)) => {
+                if plz.is_none() {
+                    eprintln!(
+                        "WARNUNG [{lat:.4},{lon:.4}] Reverse-Geocoding kennt keine PLZ — \
+                         Textsuchen laufen auf der Anker-PLZ {:?}",
+                        target.plz
+                    );
+                }
+                ResolvedArea {
+                    center: Some((lat, lon)),
+                    plz: plz.or_else(|| target.plz.clone()),
+                    city,
+                }
+            }
+            Err(e) => {
+                eprintln!("WARNUNG [{lat:.4},{lon:.4}] Reverse-Geocoding fehlgeschlagen: {e:#}");
+                ResolvedArea { center: Some((lat, lon)), plz: target.plz.clone(), city: None }
+            }
+        };
+    }
+
+    // Ohne Koordinaten fallen die drei Umkreis-Ketten aus und der
+    // Umkreisfilter kann nicht greifen; die Textsuchen laufen trotzdem,
+    // sie brauchen nur die PLZ.
+    let Some(plz) = target.plz.clone() else {
+        return ResolvedArea { center: None, plz: None, city: None };
+    };
+    match store_finder::geocode_plz_with_city(&plz) {
+        Ok((lat, lon, city)) => {
+            ResolvedArea { center: Some((lat, lon)), plz: Some(plz), city }
+        }
+        Err(e) => {
+            eprintln!("WARNUNG [{plz}] Geocoding fehlgeschlagen: {e:#}");
+            ResolvedArea { center: None, plz: Some(plz), city: None }
         }
     }
 }
@@ -80,26 +207,44 @@ pub fn sync(cfg: &PushConfig, opts: &DirectoryOptions) -> Result<usize> {
         collect("Penny (landesweit)", &mut all, penny::fetch_branches());
     }
 
-    for area in &opts.areas {
+    // Die Gebiete, die am Ende ihre Fertigmeldung bekommen. `synced_plzs`
+    // bedient alle Zeilen eines Orts (v19), `synced_anchors` die eine Zeile,
+    // die diesen Lauf ausgelöst hat — nötig, falls ihre PLZ nicht gesetzt
+    // werden konnte und der Filter über die PLZ sie deshalb nicht trifft.
+    let mut synced_plzs: Vec<String> = Vec::new();
+    let mut synced_anchors: Vec<String> = Vec::new();
+
+    for target in &opts.targets {
+        let resolved = resolve_area(target);
+        let area = resolved.label();
         println!("[{area}] Filialen im Umkreis von {:.0} km …", opts.radius_km);
-        // Ohne Koordinaten fallen die drei Umkreis-Ketten aus und der
-        // Umkreisfilter kann nicht greifen; die Textsuchen laufen trotzdem,
-        // sie brauchen nur die PLZ.
-        let center = match store_finder::geocode_plz_with_city(area) {
-            Ok((lat, lon, city)) => Some((lat, lon, city)),
-            Err(e) => {
-                eprintln!("WARNUNG [{area}] Geocoding fehlgeschlagen: {e:#}");
-                None
+
+        // Die aufgelöste PLZ **vor** den Ketten auf die Ankerzeile schreiben.
+        // Bricht der Lauf mitten drin ab, steht dort dann trotzdem das echte
+        // Gebiet — sonst läse der Sonntagslauf weiter die Anker-PLZ und holte
+        // ein zweites Mal die falsche Stadt.
+        if let (false, Some(anchor), Some(plz)) =
+            (opts.dry_run, &target.anchor_market_id, &resolved.plz)
+        {
+            match mark_area_resolved(cfg, anchor, plz) {
+                Ok(true) => println!("[{area}] Gebiet auf Anforderung {anchor} nachgetragen."),
+                Ok(false) => {}
+                Err(e) => eprintln!("WARNUNG [{area}] Gebiet nachtragen fehlgeschlagen: {e:#}"),
             }
-        };
+        }
+        if let Some(plz) = &resolved.plz {
+            synced_plzs.push(plz.clone());
+        }
+        if let Some(anchor) = &target.anchor_market_id {
+            synced_anchors.push(anchor.clone());
+        }
 
         // Eigene Liste je Gebiet: Der Umkreisfilter unten darf nur die
         // Treffer dieses Gebiets sehen, nicht die landesweiten Ketten und
         // nicht die Nachbargebiete.
         let mut area_branches: Vec<Branch> = Vec::new();
 
-        if let Some((lat, lon, _)) = &center {
-            let (lat, lon) = (*lat, *lon);
+        if let Some((lat, lon)) = resolved.center {
             collect(
                 &format!("[{area}] Lidl"),
                 &mut area_branches,
@@ -117,40 +262,49 @@ pub fn sync(cfg: &PushConfig, opts: &DirectoryOptions) -> Result<usize> {
             );
         }
 
-        if rewe_available(&opts.cert, &opts.key) {
-            // Zwei Suchen, und beide sind nötig:
-            //  · Die PLZ nimmt REWE wörtlich — „01219" liefert fünf Filialen
-            //    in 01257/01259/01277, also die Nachbarschaft, aber nur die.
-            //  · Die Stadt liefert die Innenstadt (REWE am Postplatz und die
-            //    anderen), deckelt aber bei 20 Treffern und schneidet damit in
-            //    einer Großstadt den Rand ab.
-            // Zusammen decken sie Umgebung und Zentrum ab; Dubletten fallen
-            // ohnehin heraus, und der Umkreisfilter unten begrenzt das Ganze.
-            let city = center.as_ref().and_then(|(_, _, city)| city.clone());
-            let mut queries = vec![area.clone()];
-            queries.extend(city.filter(|c| c != area));
-            for query in queries {
-                collect(
-                    &format!("[{area}] REWE ({query})"),
-                    &mut area_branches,
-                    rewe::find_branches(&query, &opts.cert, &opts.key),
-                );
+        // REWE, Netto und EDEKA sind **Textsuchen je PLZ** — ohne PLZ gibt es
+        // für sie nichts zu fragen. Genau diese drei fehlten dem Tester in
+        // Ahlbeck, weil sie mit „17373" statt „17419" gelaufen sind; sie still
+        // ausfallen zu lassen wäre derselbe Fehler in leiser.
+        if let Some(plz) = &resolved.plz {
+            if rewe_available(&opts.cert, &opts.key) {
+                // Zwei Suchen, und beide sind nötig:
+                //  · Die PLZ nimmt REWE wörtlich — „01219" liefert fünf Filialen
+                //    in 01257/01259/01277, also die Nachbarschaft, aber nur die.
+                //  · Die Stadt liefert die Innenstadt (REWE am Postplatz und die
+                //    anderen), deckelt aber bei 20 Treffern und schneidet damit in
+                //    einer Großstadt den Rand ab.
+                // Zusammen decken sie Umgebung und Zentrum ab; Dubletten fallen
+                // ohnehin heraus, und der Umkreisfilter unten begrenzt das Ganze.
+                let mut queries = vec![plz.clone()];
+                queries.extend(resolved.city.clone().filter(|c| c != plz));
+                for query in queries {
+                    collect(
+                        &format!("[{area}] REWE ({query})"),
+                        &mut area_branches,
+                        rewe::find_branches(&query, &opts.cert, &opts.key),
+                    );
+                }
+            } else {
+                eprintln!("WARNUNG [{area}] REWE übersprungen: kein Zertifikat (--cert/--key)");
             }
+            collect(
+                &format!("[{area}] Netto"),
+                &mut area_branches,
+                netto::find_branches(plz, opts.radius_km as u32),
+            );
+            collect(&format!("[{area}] EDEKA"), &mut area_branches, edeka::find_branches(plz));
         } else {
-            eprintln!("WARNUNG [{area}] REWE übersprungen: kein Zertifikat (--cert/--key)");
+            eprintln!(
+                "WARNUNG [{area}] REWE, Netto und EDEKA übersprungen: keine PLZ für die Textsuche"
+            );
         }
-        collect(
-            &format!("[{area}] Netto"),
-            &mut area_branches,
-            netto::find_branches(area, opts.radius_km as u32),
-        );
-        collect(&format!("[{area}] EDEKA"), &mut area_branches, edeka::find_branches(area));
 
         // Erst hier filtern, nicht je Kette: Die Finder ziehen ihre Grenze
         // jeweils anders (Lidl serverseitig, Netto über einen eigenen
         // Radius-Parameter, EDEKA und REWE gar nicht). Ein Umkreis, der in
         // der App etwas bedeuten soll, muss an einer Stelle für alle gelten.
-        if let Some((lat, lon, _)) = center {
+        if let Some((lat, lon)) = resolved.center {
             let before = area_branches.len();
             area_branches.retain(|b| within(b, (lat, lon), opts.radius_km));
             let dropped = before - area_branches.len();
@@ -197,11 +351,25 @@ pub fn sync(cfg: &PushConfig, opts: &DirectoryOptions) -> Result<usize> {
     // Nur warnen, nicht abbrechen: Die Filialen sind geschrieben, das ist das
     // Ergebnis des Laufs. Eine fehlende Fertigmeldung kostet den Hinweis,
     // nicht die Daten — und der Sonntagslauf holt sie nach.
-    if !opts.areas.is_empty() {
-        match mark_areas_synced(cfg, &opts.areas) {
+    if !synced_plzs.is_empty() {
+        synced_plzs.sort();
+        synced_plzs.dedup();
+        match mark_areas_synced(cfg, &synced_plzs) {
             Ok(n) if n > 0 => println!("{n} Gebiets-Anforderung(en) als erledigt gemeldet."),
             Ok(_) => {}
             Err(e) => eprintln!("WARNUNG: Gebiete als erledigt melden fehlgeschlagen: {e:#}"),
+        }
+    }
+    // Und dieselbe Meldung noch einmal über die Ankerzeile. Sie ist nicht
+    // überflüssig: Konnte die aufgelöste PLZ oben nicht geschrieben werden,
+    // trägt die Zeile weiter die des Ankers, und der Filter über die PLZ geht
+    // an ihr vorbei — die Anforderung bliebe für immer offen und die App
+    // wartete auf einen Hinweis, der nie kommt.
+    if !synced_anchors.is_empty() {
+        synced_anchors.sort();
+        synced_anchors.dedup();
+        if let Err(e) = mark_anchors_synced(cfg, &synced_anchors) {
+            eprintln!("WARNUNG: Anforderungen als erledigt melden fehlgeschlagen: {e:#}");
         }
     }
     Ok(rows.len())
@@ -215,8 +383,59 @@ pub fn sync(cfg: &PushConfig, opts: &DirectoryOptions) -> Result<usize> {
 ///
 /// Liefert die Zahl der gemeldeten Zeilen.
 pub fn mark_areas_synced(cfg: &PushConfig, areas: &[String]) -> Result<usize> {
-    let client = reqwest::blocking::Client::new();
     let list = areas.join(",");
+    patch_area_requests(
+        cfg,
+        ("plz", format!("in.({list})")),
+        serde_json::json!({ "last_synced": chrono::Utc::now().to_rfc3339() }),
+        "Gebiete als erledigt melden",
+    )
+}
+
+/// Trägt die **echte** PLZ auf der Anforderungszeile nach.
+///
+/// Die Zeile trägt bis hierher die PLZ der Ankerfiliale — die Migration setzt
+/// sie beim Insert als Rückfall, weil zu dem Zeitpunkt niemand die richtige
+/// kennt. Erst dieser Lauf hat sie (aus dem Reverse-Geocoding), und erst mit
+/// ihr ist die Zeile in sich stimmig: Danach findet die Fertigmeldung über die
+/// PLZ sie, das Sicherheitsnetz des Sonntagslaufs liest das richtige Gebiet,
+/// und die App zeigt im Hinweis den Ort, in dem der Nutzer wirklich steht.
+///
+/// Liefert `true`, wenn eine Zeile geändert wurde.
+pub fn mark_area_resolved(cfg: &PushConfig, anchor: &str, plz: &str) -> Result<bool> {
+    let n = patch_area_requests(
+        cfg,
+        ("market_id", format!("eq.{anchor}")),
+        serde_json::json!({ "plz": plz }),
+        "Gebiet auf der Anforderung nachtragen",
+    )?;
+    Ok(n > 0)
+}
+
+/// Meldet die Anforderungen selbst als erledigt, über die Ankerfiliale.
+///
+/// Ergänzung zu [`mark_areas_synced`], kein Ersatz: Jene bedient alle Zeilen
+/// eines Orts und ist deshalb der Normalweg. Diese hier fängt den Fall, dass
+/// die PLZ auf der Zeile nicht die des gelaufenen Gebiets ist — dann trifft
+/// der PLZ-Filter sie nicht, und ohne diese zweite Meldung bliebe sie offen.
+pub fn mark_anchors_synced(cfg: &PushConfig, anchors: &[String]) -> Result<usize> {
+    let list = anchors.join(",");
+    patch_area_requests(
+        cfg,
+        ("market_id", format!("in.({list})")),
+        serde_json::json!({ "last_synced": chrono::Utc::now().to_rfc3339() }),
+        "Anforderungen als erledigt melden",
+    )
+}
+
+/// PATCH auf `area_requests`, mit der Zahl der wirklich getroffenen Zeilen.
+fn patch_area_requests(
+    cfg: &PushConfig,
+    filter: (&str, String),
+    body: serde_json::Value,
+    what: &str,
+) -> Result<usize> {
+    let client = reqwest::blocking::Client::new();
     let resp = client
         .patch(format!("{}/rest/v1/area_requests", cfg.base_url))
         .header("apikey", &cfg.api_key)
@@ -226,20 +445,17 @@ pub fn mark_areas_synced(cfg: &PushConfig, areas: &[String]) -> Result<usize> {
         // getroffen wurden — ohne das antwortet PostgREST mit 204 und die
         // Meldung „0 Gebiete" wäre von „alle Gebiete" nicht zu unterscheiden.
         .header("Prefer", "return=representation")
-        .query(&[("plz", format!("in.({list})"))])
-        .json(&serde_json::json!({
-            "last_synced": chrono::Utc::now().to_rfc3339(),
-        }))
+        .query(&[filter])
+        .json(&body)
         .send()
         .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
     let status = resp.status();
-    let body = resp.text().unwrap_or_default();
+    let text = resp.text().unwrap_or_default();
     if !status.is_success() {
-        let excerpt: String = body.chars().take(300).collect();
-        anyhow::bail!("Gebiete als erledigt melden fehlgeschlagen (HTTP {status}): {excerpt}");
+        let excerpt: String = text.chars().take(300).collect();
+        anyhow::bail!("{what} fehlgeschlagen (HTTP {status}): {excerpt}");
     }
-    let updated: Vec<serde_json::Value> =
-        serde_json::from_str(&body).unwrap_or_default();
+    let updated: Vec<serde_json::Value> = serde_json::from_str(&text).unwrap_or_default();
     Ok(updated.len())
 }
 
@@ -252,17 +468,26 @@ pub fn mark_areas_synced(cfg: &PushConfig, areas: &[String]) -> Result<usize> {
 /// bliebe die Zeile sonst für immer offen und der Nutzer wartete auf einen
 /// Lauf, den niemand startet — genau der Fehler, der am 2026-07-25 schon
 /// einmal bei den Filialen steckte.
-pub fn areas_from_open_requests(cfg: &PushConfig) -> Result<Vec<String>> {
+/// Ab v21 kommen **Koordinaten und Anker** mit, nicht nur die PLZ — und das
+/// ist der Unterschied zwischen einem Sicherheitsnetz und einer zweiten
+/// Ausgabe desselben Fehlers. Läse dieser Weg wie früher nur `plz`, holte der
+/// Sonntagslauf für Ahlbeck wieder Ueckermünde (das ist die PLZ, die beim
+/// Insert als Rückfall auf der Zeile landet) und meldete die Anforderung als
+/// erledigt. Grüner Lauf, falsche Stadt, geschlossene Anforderung — genau der
+/// Vorfall vom 2026-07-30, nur eine Woche später und ohne Anlass, hinzusehen.
+///
+/// Der Filter `plz=not.is.null` ist deshalb weg: Eine Zeile mit Koordinaten
+/// und ohne PLZ ist seit v21 ein gültiger Auftrag. Aussortiert wird in Rust.
+pub fn targets_from_open_requests(cfg: &PushConfig) -> Result<Vec<AreaTarget>> {
     let client = reqwest::blocking::Client::new();
     let resp = client
         .get(format!("{}/rest/v1/area_requests", cfg.base_url))
         .header("apikey", &cfg.api_key)
         .header("Authorization", format!("Bearer {}", cfg.api_key))
         .query(&[
-            ("select", "plz"),
+            ("select", "market_id,plz,lat,lon"),
             ("last_synced", "is.null"),
             ("active", "eq.true"),
-            ("plz", "not.is.null"),
         ])
         .send()
         .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
@@ -271,9 +496,29 @@ pub fn areas_from_open_requests(cfg: &PushConfig) -> Result<Vec<String>> {
     }
     let rows: Vec<serde_json::Value> =
         resp.json().context("area_requests: Antwort ist kein gültiges JSON")?;
-    let mut areas: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    areas.extend(rows.iter().filter_map(|r| r.get("plz")?.as_str().map(String::from)));
-    Ok(areas.into_iter().collect())
+
+    let mut targets: Vec<AreaTarget> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for row in &rows {
+        let text = |key: &str| row.get(key).and_then(|v| v.as_str()).map(String::from);
+        let number = |key: &str| row.get(key).and_then(|v| v.as_f64());
+        let target = AreaTarget {
+            coords: match (number("lat"), number("lon")) {
+                (Some(lat), Some(lon)) => Some((lat, lon)),
+                _ => None,
+            },
+            plz: text("plz"),
+            anchor_market_id: text("market_id"),
+        };
+        // Weder Ort noch Lage — daraus lässt sich keine Suche bauen.
+        if target.coords.is_none() && target.plz.is_none() {
+            continue;
+        }
+        if seen.insert(target.dedup_key()) {
+            targets.push(target);
+        }
+    }
+    Ok(targets)
 }
 
 fn describe(branch: &Branch) -> String {
@@ -361,7 +606,12 @@ pub fn fetch_branch(cfg: &PushConfig, market_id: &str) -> Result<Branch> {
 /// mehr; die Frage „wo wird die App benutzt" beantworten jetzt die gewählten
 /// Filialen selbst. Das ist sogar genauer: Eine Region galt als aktiv,
 /// sobald irgendwer sie einmal eingetragen hatte.
-pub fn areas_from_chosen_branches(cfg: &PushConfig) -> Result<Vec<String>> {
+///
+/// Hier bleibt es bei der reinen PLZ, und das ist kein Versehen: Der Nutzer
+/// hat **diese Filiale gewählt**, also ist ihre PLZ das Gebiet, das er benutzt
+/// — die Verwechslung aus v21 entsteht nur, wo eine Filiale stellvertretend
+/// für einen Ort steht, in dem sie gar nicht liegt.
+pub fn targets_from_chosen_branches(cfg: &PushConfig) -> Result<Vec<AreaTarget>> {
     let ids = crate::sync::fetch_chosen_branches(cfg).context("Gewählte Filialen laden")?;
     let mut areas: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for market_id in ids {
@@ -376,5 +626,5 @@ pub fn areas_from_chosen_branches(cfg: &PushConfig) -> Result<Vec<String>> {
             Err(e) => eprintln!("WARNUNG: Gebiet zu Filiale {market_id} unklar: {e:#}"),
         }
     }
-    Ok(areas.into_iter().collect())
+    Ok(areas.into_iter().map(AreaTarget::from_plz).collect())
 }

@@ -20,9 +20,30 @@ on:
         type: boolean
         required: false
         default: false
+      # Ab Migration v21. Bewusst OHNE `type: number`: Der Trigger schickt
+      # Strings, und einen leeren Standardwert lehnt die Dispatch-API bei einer
+      # Zahl ab. Kommt hier eine Eingabe an, die nicht deklariert ist,
+      # antwortet GitHub mit 422 — und `trigger_area_scrape` schluckt das in
+      # eine Warnung, die niemand liest. Deshalb steht dieser Workflow auf
+      # master, bevor die Migration läuft.
+      lat:
+        description: "Breitengrad des Suchmittelpunkts (leer = aus der PLZ geocodieren)"
+        required: false
+        default: ""
+      lon:
+        description: "Längengrad des Suchmittelpunkts"
+        required: false
+        default: ""
+      anchor:
+        description: "market_id der area_requests-Zeile, die PLZ und Fertigmeldung bekommt"
+        required: false
+        default: ""
 
 concurrency:
-  group: branches-${{ inputs.area || 'all' }}
+  # Nach dem Anker gruppieren, wo es einen gibt: Zwei Orte können dieselbe
+  # nächste Filiale haben, aber zwei verschiedene Anforderungen dürfen sich
+  # nicht gegenseitig in die Warteschlange stellen.
+  group: branches-${{ inputs.anchor || inputs.area || 'all' }}
   cancel-in-progress: false
 
 env:
@@ -91,6 +112,9 @@ jobs:
           REWE_CERT: ${{ steps.rewe.outputs.cert }}
           REWE_KEY: ${{ steps.rewe.outputs.key }}
           ONLY_AREA: ${{ inputs.area }}
+          ONLY_LAT: ${{ inputs.lat }}
+          ONLY_LON: ${{ inputs.lon }}
+          ANCHOR: ${{ inputs.anchor }}
           SKIP_NATIONAL: ${{ inputs.skip_national }}
         run: |
           set -o pipefail
@@ -99,7 +123,15 @@ jobs:
           [ -n "${REWE_KEY:-}" ] && [ -f "$REWE_KEY" ] && ARGS+=(--key "$REWE_KEY")
           # Ohne explizites Gebiet: die PLZ der gewählten Filialen. Das
           # Verzeichnis wächst dort, wo die App benutzt wird.
-          if [ -n "${ONLY_AREA:-}" ]; then
+          if [ -n "${ONLY_LAT:-}" ] && [ -n "${ONLY_LON:-}" ]; then
+            # Der Weg ab v21: Die App hat die Mitte ihrer Region geschickt, die
+            # PLZ holt der Lauf per Reverse-Geocoding. `--area` bleibt als
+            # Rückfall daneben stehen — schweigt Nominatim, tragen Anker-PLZ
+            # und Anker-Stadt die Textsuchen weiter.
+            ARGS+=(--lat "$ONLY_LAT" --lon "$ONLY_LON")
+            [ -n "${ONLY_AREA:-}" ] && ARGS+=(--area "$ONLY_AREA")
+            [ -n "${ANCHOR:-}" ] && ARGS+=(--anchor "$ANCHOR")
+          elif [ -n "${ONLY_AREA:-}" ]; then
             ARGS+=(--area "$ONLY_AREA")
           else
             # Sonntagslauf: die Gebiete der gewählten Filialen — plus alles,

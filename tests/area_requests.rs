@@ -9,7 +9,9 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 
-use lechariot::branches::{areas_from_open_requests, mark_areas_synced};
+use lechariot::branches::{
+    mark_anchors_synced, mark_area_resolved, mark_areas_synced, targets_from_open_requests,
+};
 use lechariot::push::PushConfig;
 
 struct Req {
@@ -142,23 +144,104 @@ fn a_failing_completion_is_an_error_not_a_zero() {
 }
 
 /// Das Sicherheitsnetz fragt genau die Zeilen ab, auf die noch jemand wartet —
-/// offen, aktiv und mit einem Gebiet. Eine Ankerfiliale ohne PLZ im
-/// Verzeichnis ist nichts, wofür sich ein Lauf starten ließe.
+/// offen und aktiv. Der Filter `plz=not.is.null` ist mit v21 weggefallen: Eine
+/// Zeile mit Koordinaten und ohne PLZ ist ein gültiger Auftrag.
 #[test]
 fn open_requests_are_the_ones_still_waiting() {
-    let (base_url, log) =
-        spawn_mock(r#"[{"plz":"04639"},{"plz":"01219"},{"plz":"04639"}]"#);
+    let (base_url, log) = spawn_mock(
+        r#"[{"market_id":"a","plz":"04639"},{"market_id":"b","plz":"01219"},{"market_id":"c","plz":"04639"},{"market_id":"d"}]"#,
+    );
 
-    let areas = areas_from_open_requests(&cfg(&base_url)).unwrap();
+    let targets = targets_from_open_requests(&cfg(&base_url)).unwrap();
 
-    assert_eq!(areas, vec!["01219".to_string(), "04639".to_string()], "sortiert und ohne Dubletten");
+    let areas: Vec<_> = targets.iter().filter_map(|t| t.plz.clone()).collect();
+    assert_eq!(areas, vec!["04639".to_string(), "01219".to_string()], "ohne Dubletten");
+    assert!(
+        targets.iter().all(|t| t.anchor_market_id.is_some()),
+        "jede Anforderung muss ihre Ankerzeile kennen"
+    );
     let log = log.lock().unwrap();
     let req = log.iter().find(|r| r.method == "GET").expect("kein GET abgesetzt");
-    for expected in ["last_synced=is.null", "active=eq.true", "plz=not.is.null"] {
-        assert!(
-            req.target.contains(expected),
-            "Filter {expected} fehlt: {}",
-            req.target
-        );
+    for expected in ["last_synced=is.null", "active=eq.true"] {
+        assert!(req.target.contains(expected), "Filter {expected} fehlt: {}", req.target);
     }
+    assert!(
+        !req.target.contains("plz=not.is.null"),
+        "Zeilen mit Koordinaten und ohne PLZ dürfen nicht wegfiltert werden: {}",
+        req.target
+    );
+}
+
+/// **Die Regression zum Vorfall vom 2026-07-30.** Die Zeile trägt die PLZ der
+/// Ankerfiliale (Ueckermünde) und die Koordinaten der Region (Ahlbeck). Läse
+/// das Sicherheitsnetz wie vor v21 nur `plz`, holte der Sonntagslauf ein
+/// zweites Mal die falsche Stadt — grün, und die Anforderung wäre danach zu.
+#[test]
+fn open_requests_carry_coordinates_not_just_a_postcode() {
+    let (base_url, log) = spawn_mock(
+        r#"[{"market_id":"4030191","plz":"17373","lat":53.9440,"lon":14.1830}]"#,
+    );
+
+    let targets = targets_from_open_requests(&cfg(&base_url)).unwrap();
+
+    assert_eq!(targets.len(), 1);
+    assert_eq!(
+        targets[0].coords,
+        Some((53.9440, 14.1830)),
+        "die Lage der Region muss mitkommen, sonst gewinnt die Anker-PLZ wieder"
+    );
+    assert_eq!(targets[0].plz.as_deref(), Some("17373"), "die Anker-PLZ bleibt als Rückfall");
+    assert_eq!(targets[0].anchor_market_id.as_deref(), Some("4030191"));
+    let log = log.lock().unwrap();
+    let req = log.iter().find(|r| r.method == "GET").unwrap();
+    assert!(
+        req.target.contains("lat") && req.target.contains("lon"),
+        "ohne lat/lon im select kommen die Koordinaten gar nicht erst an: {}",
+        req.target
+    );
+}
+
+/// Die aufgelöste PLZ landet auf der Ankerzeile — und **ohne** `last_synced`:
+/// Das Gebiet nachzutragen passiert vor den Ketten, fertig ist der Lauf da
+/// noch lange nicht.
+#[test]
+fn the_resolved_postcode_is_written_back_to_the_anchor_row() {
+    let (base_url, log) = spawn_mock(r#"[{"market_id":"4030191"}]"#);
+
+    let changed = mark_area_resolved(&cfg(&base_url), "4030191", "17419").unwrap();
+
+    assert!(changed);
+    let log = log.lock().unwrap();
+    let req = log.iter().find(|r| r.method == "PATCH").expect("kein PATCH abgesetzt");
+    assert!(
+        req.target.contains("market_id=eq.4030191"),
+        "die Zeile wird über den Anker adressiert: {}",
+        req.target
+    );
+    assert!(req.body.contains("17419"), "die echte PLZ fehlt im Rumpf: {}", req.body);
+    assert!(
+        !req.body.contains("last_synced"),
+        "der Lauf ist an dieser Stelle nicht fertig: {}",
+        req.body
+    );
+}
+
+/// Zweite Fertigmeldung über den Anker. Sie fängt den Fall, dass die PLZ auf
+/// der Zeile nicht die des gelaufenen Gebiets ist — dann trifft der PLZ-Filter
+/// sie nicht und die Anforderung bliebe für immer offen.
+#[test]
+fn the_completion_also_reports_the_anchor_row() {
+    let (base_url, log) = spawn_mock(r#"[{"market_id":"4030191"}]"#);
+
+    let n = mark_anchors_synced(&cfg(&base_url), &["4030191".into()]).unwrap();
+
+    assert_eq!(n, 1);
+    let log = log.lock().unwrap();
+    let req = log.iter().find(|r| r.method == "PATCH").unwrap();
+    assert!(
+        req.target.contains("market_id=in.") && req.target.contains("4030191"),
+        "Filter trifft die Ankerzeile nicht: {}",
+        req.target
+    );
+    assert!(req.body.contains("last_synced"), "Rumpf setzt kein last_synced: {}", req.body);
 }

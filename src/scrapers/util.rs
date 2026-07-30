@@ -14,6 +14,24 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 pub const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const RETRIES: u32 = 3;
 
+// Nominatim ist der einzige Host hier, der uns aus Kulanz bedient, und seine
+// Nutzungsbedingungen verlangen zwei Dinge: einen UA, der sagt wer ruft, und
+// höchstens einen Request pro Sekunde.
+//
+// Beides war bis 2026-07-30 nicht erfüllt, obwohl der Modulkommentar von
+// `store_finder` das Gegenteil behauptete: Die Geocoding-Requests liefen über
+// `blocking_client()` mit dem Chrome-UA oben, und `polite_pause` wartete
+// 300-800 ms. Aufgefallen ist es beim Einbau des **zweiten**
+// Nominatim-Endpunkts (`/reverse` für die Gebiets-Anforderung).
+//
+// Die Sekunde steht deshalb hier in `polite_pause` und nicht an der
+// Aufrufstelle: Ein dritter Endpunkt kann sie so nicht vergessen.
+pub const NOMINATIM_HOST: &str = "nominatim.openstreetmap.org";
+pub const NOMINATIM_USER_AGENT: &str =
+    "LeChariot/1.0 (+https://github.com/Scxttk/lechariot-backend)";
+const NOMINATIM_MIN_GAP_MS: u64 = 1100;
+const DEFAULT_MIN_GAP_MS: u64 = 300;
+
 // Fehlerkontext einheitlich über alle Scraper: Kette, Schritt, URL.
 pub fn ctx(chain: &str, step: &str, url: &str) -> String {
     format!("[{chain}] {step} fehlgeschlagen: {url}")
@@ -34,9 +52,24 @@ pub fn blocking_client() -> Result<reqwest::blocking::Client> {
         .context("HTTP-Client konnte nicht erstellt werden")
 }
 
+// Client für Nominatim — eigener UA laut OSM-Policy, siehe oben.
+pub fn nominatim_client() -> Result<reqwest::blocking::Client> {
+    reqwest::blocking::Client::builder()
+        .user_agent(NOMINATIM_USER_AGENT)
+        .build()
+        .context("HTTP-Client konnte nicht erstellt werden")
+}
+
+// Mindestabstand zweier Requests an denselben Host, bevor der Jitter
+// dazukommt. Nominatim bekommt seine Sekunde, alle anderen die bisherigen
+// 300 ms.
+pub fn min_gap_ms(host: &str) -> u64 {
+    if host == NOMINATIM_HOST { NOMINATIM_MIN_GAP_MS } else { DEFAULT_MIN_GAP_MS }
+}
+
 // Höfliches Rate-Limiting: vor aufeinanderfolgenden Requests an denselben
-// Host eine kleine, zufällig gestreute Pause (300-800 ms) einlegen.
-// Erster Request an einen Host läuft ohne Verzögerung.
+// Host eine kleine, zufällig gestreute Pause einlegen (Nominatim 1100-1600 ms,
+// sonst 300-800 ms). Erster Request an einen Host läuft ohne Verzögerung.
 static LAST_REQUEST: Mutex<Option<HashMap<String, Instant>>> = Mutex::new(None);
 
 pub fn polite_pause(url: &str) {
@@ -52,7 +85,7 @@ pub fn polite_pause(url: &str) {
     let wait = {
         let guard = LAST_REQUEST.lock().unwrap();
         guard.as_ref().and_then(|map| map.get(&host)).and_then(|last| {
-            let delay = Duration::from_millis(300 + jitter_ms(500));
+            let delay = Duration::from_millis(min_gap_ms(&host) + jitter_ms(500));
             delay.checked_sub(last.elapsed())
         })
     };

@@ -213,6 +213,20 @@ enum Command {
         #[arg(long, value_name = "PLZ")]
         area: Vec<String>,
 
+        /// Breitengrad des Suchmittelpunkts; mit --lon statt der PLZ-Mitte.
+        /// Die PLZ für die Textsuchen kommt dann aus dem Reverse-Geocoding.
+        #[arg(long, requires = "lon")]
+        lat: Option<f64>,
+
+        /// Längengrad des Suchmittelpunkts (nur zusammen mit --lat)
+        #[arg(long, requires = "lat")]
+        lon: Option<f64>,
+
+        /// `area_requests.market_id`, dem die aufgelöste PLZ und die
+        /// Fertigmeldung gutgeschrieben werden
+        #[arg(long, value_name = "MARKET_ID")]
+        anchor: Option<String>,
+
         /// Die PLZ der gewählten Filialen als Gebiete verwenden
         #[arg(long, default_value_t = false)]
         from_branches: bool,
@@ -448,6 +462,9 @@ fn main() -> Result<()> {
         }
         Command::BranchesSync {
             area,
+            lat,
+            lon,
+            anchor,
             from_branches,
             from_area_requests,
             skip_national,
@@ -456,28 +473,47 @@ fn main() -> Result<()> {
             key,
             dry_run,
         } => {
+            use lechariot::branches::AreaTarget;
             let cfg = lechariot::push::config_from_env()?;
-            let mut areas = area;
+            let mut targets: Vec<AreaTarget> = Vec::new();
+
+            // Koordinaten schlagen die PLZ. `--area` bleibt daneben stehen und
+            // wird zum Rückfall, falls das Reverse-Geocoding nichts liefert —
+            // so schickt der Trigger beides, und der Lauf bricht nicht ab,
+            // wenn Nominatim schweigt.
+            match (lat, lon) {
+                (Some(lat), Some(lon)) => targets.push(AreaTarget {
+                    coords: Some((lat, lon)),
+                    plz: area.first().cloned(),
+                    anchor_market_id: anchor.clone(),
+                }),
+                _ => targets.extend(area.iter().map(AreaTarget::from_plz)),
+            }
+
             if from_branches {
-                let from_db = lechariot::branches::areas_from_chosen_branches(&cfg)?;
+                let from_db = lechariot::branches::targets_from_chosen_branches(&cfg)?;
                 println!("{} Gebiet(e) aus den gewählten Filialen.", from_db.len());
-                areas.extend(from_db);
+                targets.extend(from_db);
             }
             if from_area_requests {
                 // Nur warnen: Das Sicherheitsnetz darf den Lauf nicht
                 // verhindern, den es absichern soll.
-                match lechariot::branches::areas_from_open_requests(&cfg) {
+                match lechariot::branches::targets_from_open_requests(&cfg) {
                     Ok(open) => {
                         println!("{} offene Gebiets-Anforderung(en).", open.len());
-                        areas.extend(open);
+                        targets.extend(open);
                     }
                     Err(e) => eprintln!("WARNUNG: offene Gebiets-Anforderungen nicht lesbar: {e:#}"),
                 }
             }
-            areas.sort();
-            areas.dedup();
+
+            // Dieselbe Zusammenfassung wie im Cooldown der Migration: zwei
+            // Anforderungen aus derselben Rasterzelle sind dasselbe Gebiet.
+            let mut seen = std::collections::HashSet::new();
+            targets.retain(|t| seen.insert(t.dedup_key()));
+
             let opts = lechariot::branches::DirectoryOptions {
-                areas,
+                targets,
                 national: !skip_national,
                 radius_km,
                 cert,
