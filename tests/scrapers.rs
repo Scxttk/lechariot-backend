@@ -561,3 +561,62 @@ fn lidl_prospekt_takes_online_shop_articles_from_the_flyer_json() {
     // Beim Zusammenführen darf nichts doppelt gezählt werden.
     assert!(scrapers::lidl_prospekt::merge_products(&flyer, "LIDL_1988", &offers).is_empty());
 }
+
+// ------------------------------------------- Lidl-Prospekt: Kachelbilder
+
+// Der Prospekt trägt seine Produktfotos nicht als benannte Objekte; die
+// Textebene weiß nur, wo Wörter stehen. Das Foto ist der Platz *darüber*,
+// nach oben begrenzt durch die nächste Kachel derselben Spalte. Diese
+// Rechnung ist der ganze Unterschied zwischen „Lidl hat Bilder" und „Lidl
+// zeigt Emojis", seit marktguru weg ist.
+#[test]
+fn lidl_prospekt_derives_a_photo_strip_above_each_tile() {
+    let (offers, shots) = scrapers::lidl_prospekt::extract_offers_with_shots(
+        include_str!("fixtures/lidl/prospekt_bbox_layout.xml"),
+        "LIDL_1988",
+        Some("2026-07-20"),
+        Some("2026-07-25"),
+    );
+    assert!(!shots.is_empty(), "kein einziger Bildstreifen berechnet");
+
+    // Jeder Streifen gehört zu einem Angebot, das es noch gibt — das Dedup
+    // wirft Kacheln weg, und verwaiste Streifen würden Bilder für Angebote
+    // rastern, die nie in der Datenbank landen.
+    let ids: std::collections::HashSet<&str> = offers.iter().map(|o| o.id.as_str()).collect();
+    for shot in &shots {
+        assert!(
+            ids.contains(shot.offer_id.as_str()),
+            "Streifen ohne Angebot: {}",
+            shot.offer_id
+        );
+    }
+
+    // Höchstens einer je Angebot.
+    let unique: std::collections::HashSet<&str> =
+        shots.iter().map(|s| s.offer_id.as_str()).collect();
+    assert_eq!(unique.len(), shots.len(), "doppelte Streifen je Angebot");
+
+    // Nichts Flaches: Unter 25 pt ist es der Zeilenabstand zur Kachel darüber,
+    // kein Foto. Gemessen an dieser Seite liegen die echten bei 85-111 pt.
+    for shot in &shots {
+        assert!(shot.h >= 25.0, "zu flacher Streifen: {:?}", shot);
+        assert!(shot.w > 0.0 && shot.page >= 1);
+        assert!(shot.y >= 0.0, "Streifen über dem Seitenrand: {:?}", shot);
+    }
+
+    // Und die Gegenprobe zur Messung: Für den Leerdammer, dessen Foto oben in
+    // der Kachel steht, muss ein hoher Streifen herauskommen.
+    let leerdammer = offers
+        .iter()
+        .find(|o| o.title.contains("LEERDAMMER"))
+        .expect("Leerdammer fehlt");
+    let shot = shots
+        .iter()
+        .find(|s| s.offer_id == leerdammer.id)
+        .expect("kein Streifen für den Leerdammer");
+    assert!(
+        shot.h > 60.0,
+        "Leerdammer-Streifen nur {} pt hoch — Foto vermutlich abgeschnitten",
+        shot.h
+    );
+}
