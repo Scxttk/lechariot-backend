@@ -1795,6 +1795,8 @@ struct Leaflet {
     /// Textebene je `pdftotext`-Modus — `-bbox-layout` für den Extraktor,
     /// `-layout` für den LLM-Weg. Beide lesen dieselbe Datei.
     text: HashMap<String, std::sync::Arc<String>>,
+    /// Bildauszug (`pdftohtml -xml`) je Seitenfenster.
+    xobjects: HashMap<(usize, usize), std::sync::Arc<XObjects>>,
 }
 
 static LEAFLET: LazyLock<std::sync::Mutex<Option<Leaflet>>> =
@@ -1827,6 +1829,7 @@ fn cached_leaflet(
             url: pdf_url.to_string(),
             pdf: download(pdf_url)?,
             text: HashMap::new(),
+            xobjects: HashMap::new(),
         });
     }
 
@@ -1866,6 +1869,9 @@ pub fn release_leaflet() {
     if let Some(leaflet) = slot.take() {
         let _ = std::fs::remove_file(&leaflet.pdf);
     }
+    // Die Bildauszüge liegen unter einer gemeinsamen Wurzel; sie fällt hier
+    // mit, auch wenn ein Auszug am Cache vorbei entstanden ist.
+    let _ = std::fs::remove_dir_all(xobject_root());
 }
 
 /// `pdftotext` mit dem gewünschten Modus laufen lassen.
@@ -2134,6 +2140,7 @@ fn place_embedded_photos(
 /// Jeder Fehlschlag ist hier folgenlos: Es gibt dann kein zweites Bild, und
 /// die Kachel bleibt bei ihrem Emoji.
 fn embedded_photos(
+    pdf_url: &str,
     pdf: &std::path::Path,
     bbox_xml: &str,
     open: &[OpenTile],
@@ -2148,11 +2155,96 @@ fn embedded_photos(
         return HashMap::new();
     };
 
-    let dir = std::env::temp_dir().join(format!("lechariot-lidl-xobj-{}", std::process::id()));
+    let Some(xobjects) = cached_xobjects(pdf_url, pdf, bbox_xml, first, last) else {
+        return HashMap::new();
+    };
+
+    let mut taken: HashSet<String> = HashSet::new();
+    let mut assigned: Vec<(String, String)> = Vec::new();
+    for tile in open {
+        let Some(page) = xobjects.images.get(tile.page - first) else { continue };
+        if let Some(img) = embedded_photo_for(&tile.tile, page, &taken) {
+            taken.insert(img.file.clone());
+            assigned.push((tile.offer_id.clone(), img.file.clone()));
+        }
+    }
+
+    place_embedded_photos(&xobjects.dir, &assigned)
+}
+
+/// Der Bildauszug eines Seitenfensters: das Verzeichnis, in das `pdftohtml`
+/// die Bilder geschrieben hat, und ihre Rechtecke je Seite.
+struct XObjects {
+    dir: std::path::PathBuf,
+    images: Vec<Vec<EmbeddedImage>>,
+}
+
+/// Wurzelverzeichnis aller Bildauszüge dieses Prozesses.
+fn xobject_root() -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("lechariot-lidl-xobj-{}", std::process::id()))
+}
+
+/// Bildauszug zu `first..=last` — beim ersten Aufruf gezogen, danach aus dem
+/// Cache.
+///
+/// **Der teuerste Schritt des ganzen Lidl-Abends.** Am 2026-07-31 gemessen:
+/// `pdftohtml -xml` über die 64 Seiten mit offenen Kacheln kostet 112 s und
+/// legt 163 MB ab; ein voller Marktdurchlauf dauert 145 s. Ohne diesen Cache
+/// zog jede Filiale dieselben 163 MB neu aus derselben PDF — bei drei
+/// Filialen also 224 s für nichts.
+///
+/// Das Fenster steht im Schlüssel, obwohl alle Filialen dasselbe bekommen:
+/// Es hängt an den offenen Kacheln, und die hängen am Extraktor. Kommt dort
+/// je Filiale einmal ein anderes Fenster heraus, liefert der Cache lieber
+/// einen zweiten Auszug als den falschen.
+fn cached_xobjects(
+    pdf_url: &str,
+    pdf: &std::path::Path,
+    bbox_xml: &str,
+    first: usize,
+    last: usize,
+) -> Option<std::sync::Arc<XObjects>> {
+    let mut slot = LEAFLET.lock().unwrap_or_else(|e| e.into_inner());
+    // Nur der Prospekt, der gerade im Cache liegt, darf dort auch ablegen.
+    // In `fetch_offers` ist das immer derselbe — die Bedingung ist die
+    // Zusicherung, nicht der Regelfall.
+    let cachebar = slot.as_ref().is_some_and(|l| l.url == pdf_url);
+    if cachebar {
+        if let Some(hit) = slot
+            .as_ref()
+            .and_then(|l| l.xobjects.get(&(first, last)))
+            .cloned()
+        {
+            println!("  Bildauszug aus dem Prospekt-Cache (Seiten {first}-{last})");
+            return Some(hit);
+        }
+    }
+
+    let extracted = std::sync::Arc::new(extract_xobjects(pdf, bbox_xml, first, last)?);
+    if cachebar {
+        if let Some(leaflet) = slot.as_mut() {
+            leaflet.xobjects.insert((first, last), extracted.clone());
+        }
+    }
+    Some(extracted)
+}
+
+/// `pdftohtml -xml` über das Seitenfenster laufen lassen und seine Ausgabe
+/// lesen.
+///
+/// Jeder Fehlschlag ist folgenlos: Es gibt dann kein zweites Bild, und die
+/// Kachel bleibt bei ihrem Emoji.
+fn extract_xobjects(
+    pdf: &std::path::Path,
+    bbox_xml: &str,
+    first: usize,
+    last: usize,
+) -> Option<XObjects> {
+    let dir = xobject_root().join(format!("{first}-{last}"));
     let _ = std::fs::remove_dir_all(&dir);
     if let Err(e) = std::fs::create_dir_all(&dir) {
         eprintln!("WARNUNG [Lidl] Bildauszug nicht ablegbar ({e}) — keine eingebetteten Bilder.");
-        return HashMap::new();
+        return None;
     }
 
     let out = dir.join("doc");
@@ -2164,9 +2256,11 @@ fn embedded_photos(
     match status {
         Ok(s) if s.success() => {}
         other => {
-            eprintln!("WARNUNG [Lidl] pdftohtml fehlgeschlagen ({other:?}) — keine eingebetteten Bilder.");
+            eprintln!(
+                "WARNUNG [Lidl] pdftohtml fehlgeschlagen ({other:?}) — keine eingebetteten Bilder."
+            );
             let _ = std::fs::remove_dir_all(&dir);
-            return HashMap::new();
+            return None;
         }
     }
 
@@ -2175,7 +2269,7 @@ fn embedded_photos(
         Err(e) => {
             eprintln!("WARNUNG [Lidl] Bildauszug nicht lesbar ({e}) — keine eingebetteten Bilder.");
             let _ = std::fs::remove_dir_all(&dir);
-            return HashMap::new();
+            return None;
         }
     };
 
@@ -2184,21 +2278,7 @@ fn embedded_photos(
     let sizes = page_sizes(bbox_xml);
     let window: Vec<(f64, f64)> =
         sizes.get(first - 1..last.min(sizes.len())).unwrap_or(&[]).to_vec();
-    let images = parse_embedded_images(&xml, &window);
-
-    let mut taken: HashSet<String> = HashSet::new();
-    let mut assigned: Vec<(String, String)> = Vec::new();
-    for tile in open {
-        let Some(page) = images.get(tile.page - first) else { continue };
-        if let Some(img) = embedded_photo_for(&tile.tile, page, &taken) {
-            taken.insert(img.file.clone());
-            assigned.push((tile.offer_id.clone(), img.file.clone()));
-        }
-    }
-
-    let placed = place_embedded_photos(&dir, &assigned);
-    let _ = std::fs::remove_dir_all(&dir);
-    placed
+    Some(XObjects { dir, images: parse_embedded_images(&xml, &window) })
 }
 
 fn render_shots(pdf: &std::path::Path, shots: &[TileShot]) -> HashMap<String, String> {
@@ -2383,7 +2463,7 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
     // Zweiter Weg für die Kacheln, die der Schnitt abgelehnt hat. Scheitert er,
     // ist das kein Fehler des Laufs — die Angebote stehen, nur einige tragen
     // weiter ihr Emoji.
-    let embedded = embedded_photos(&pdf_path, xml, &open);
+    let embedded = embedded_photos(pdf_url, &pdf_path, xml, &open);
     for offer in &mut offers {
         if let Some(url) = crops.get(&offer.id).or_else(|| embedded.get(&offer.id)) {
             offer.images = vec![url.clone()];
@@ -2606,6 +2686,49 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// Auch der Bildauszug wird je Lauf nur einmal gezogen.
+    ///
+    /// `pdftohtml` lässt sich nicht als Attrappe unterschieben, es ist ein
+    /// fremder Prozess. Der Nachweis geht deshalb andersherum: Der Auszug
+    /// wird von Hand hinterlegt und zeigt auf ein Verzeichnis, das es gar
+    /// nicht gibt. Kommt genau dieses Verzeichnis zurück, kann `pdftohtml`
+    /// nicht gelaufen sein — ein echter Lauf könnte es nicht liefern.
+    #[test]
+    fn the_image_extract_is_pulled_once_per_run() {
+        let _reihum = leaflet_tests_one_at_a_time();
+        release_leaflet();
+
+        const URL: &str = "https://assets.leaflets.schwarz/auszug.pdf";
+        let download = |_: &str| -> Result<std::path::PathBuf> {
+            Ok(std::env::temp_dir().join("lechariot-test-auszug.pdf"))
+        };
+        let parse = |_: &std::path::Path, _: &str| -> Result<String> { Ok(String::new()) };
+        cached_leaflet(URL, "-bbox-layout", &download, &parse).expect("erster Markt");
+
+        let erfunden = std::path::PathBuf::from("/gibt/es/nicht/auszug-12-64");
+        {
+            let mut slot = LEAFLET.lock().unwrap_or_else(|e| e.into_inner());
+            slot.as_mut().expect("Slot").xobjects.insert(
+                (12, 64),
+                std::sync::Arc::new(XObjects { dir: erfunden.clone(), images: Vec::new() }),
+            );
+        }
+
+        let fehlt = std::path::Path::new("/gibt/es/nicht/prospekt.pdf");
+        let treffer = cached_xobjects(URL, fehlt, "", 12, 64).expect("Treffer erwartet");
+        assert_eq!(treffer.dir, erfunden, "der Auszug wurde neu gezogen");
+
+        // Anderes Seitenfenster: kein Treffer. Die PDF gibt es nicht, also
+        // scheitert pdftohtml — und ein Fehlschlag bleibt folgenlos.
+        assert!(cached_xobjects(URL, fehlt, "", 13, 64).is_none());
+
+        release_leaflet();
+        {
+            let slot = LEAFLET.lock().unwrap_or_else(|e| e.into_inner());
+            assert!(slot.is_none(), "der Cache blieb nach der Freigabe stehen");
+        }
+    }
+
     /// Eine PDF, die sich nicht lesen lässt, darf nicht im Cache hängen
     /// bleiben — sonst scheitern die beiden folgenden Märkte an derselben
     /// Datei, ohne es noch einmal zu versuchen.
@@ -2765,7 +2888,9 @@ mod tests {
         let xml = run_pdftotext(path, "-bbox-layout").expect("pdftotext");
         let (offers, shots, open) =
             extract_offers_shots_and_open(&xml, "MESSUNG", None, None);
-        let embedded = embedded_photos(path, &xml, &open);
+        // Ohne Prospekt-URL: Der Auszug landet nicht im Cache und die Wurzel
+        // wird am Ende weggeräumt.
+        let embedded = embedded_photos("", path, &xml, &open);
 
         let kacheln = shots.len() + open.len();
         let vereint = shots.len() + embedded.len();

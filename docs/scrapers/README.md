@@ -56,6 +56,25 @@ Was der Prospekt besser kann:
 - **seitengenaue Laufzeiten** — Donnerstag-Angebote tragen im Seitenkopf
   („Ab Do. 23.7. bis Sa. 25.7.") eine kürzere Gültigkeit als der Prospekt.
 
+### Ein Prospekt je Lauf, nicht je Filiale
+
+Alle gewählten Lidl-Filialen einer Absatzregion bekommen denselben Prospekt.
+Seit 2026-07-31 lädt und liest ihn ein Lauf deshalb nur einmal
+(`cached_leaflet`): Schlüssel ist die `pdf_url`, gehalten werden die PDF und
+ihre Textebene je `pdftotext`-Modus. Der Cache liegt **nur im Speicher** —
+der Prospekt wechselt wöchentlich, und ein Cache über Läufe hinweg lieferte
+irgendwann die Angebote der Vorwoche. `release_leaflet()` löscht die Datei am
+Ende des Laufs (`sync.rs` nach der Filialschleife, `main.rs` nach `fetch`).
+
+Im Cache liegen drei Dinge: die PDF, ihre Textebene je `pdftotext`-Modus und
+der Bildauszug (`pdftohtml -xml`) je Seitenfenster. Der Auszug ist der
+teuerste Schritt des ganzen Abends — 2026-07-31 gemessen: 112 s und 163 MB
+für die 64 Seiten mit offenen Kacheln, bei einem Marktdurchlauf von 145 s.
+
+Was der Cache **nicht** einspart: das Rastern der Kachelstreifen
+(`pdftoppm`, ein Aufruf je Kachel, rund 0,12 s). Das läuft weiter je Filiale,
+weil der Dateiname eines Bildes die Angebots-ID ist und die den Markt enthält.
+
 ### Wie vollständig ist der Prospekt-Weg?
 
 Gemessen gegen marktguru, weil das die Messlatte ist. marktguru bezieht seine
