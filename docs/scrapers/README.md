@@ -114,6 +114,78 @@ abgeschnitten, wie bei jeder anderen Kette in einer Großstadt auch.
   Lidl-Plus-Preise ganz normale Sternpreise und im Untertitel als „nur mit
   Lidl Plus" gekennzeichnet.
 
+## Streichpreise: welche Kette den alten Preis überhaupt druckt
+
+Der durchgestrichene Preis („statt 2.99") macht aus einem behaupteten Rabatt
+einen nachprüfbaren. Er steht in `offers.regular_price` — die Spalte gibt es
+seit Schema v2, gefüllt wird sie je Kette so:
+
+| Kette | Streichpreis in der Quelle | Stand |
+|---|---|---|
+| Lidl | **ja**, im Prospekt gedruckt | 78 von 260 Angeboten (Prospekt 27.07.2026) |
+| Penny | ja, `tile`-Feld | seit jeher |
+| Kaufland | ja, eigener Selektor | seit jeher |
+| Netto | ja, `strike`-Element | seit jeher |
+| ALDI Nord / Süd | ja, im Preis-Objekt | seit jeher |
+| NORMA | ja | 91 von 221 Angeboten (31.07.2026) |
+| **REWE** | **nein** | siehe unten |
+| **EDEKA** | **nein** | siehe unten |
+
+### REWE veröffentlicht ihn nicht
+
+Nachgesehen am 2026-07-31 an Markt 565005 (Dresden-Leuben), in beiden
+Endpunkten, die das Zertifikat erreicht:
+
+- **`rewerse discounts`** — die Wochenangebote, 335 Stück. Jedes Angebot trägt
+  genau: `title`, `subtitle`, `images`, `priceRaw`, `price`, `priceParseFail`,
+  `manufacturer`, `articleNo`, `nutriScore`, `productCategory` und bei 61
+  Angeboten `loyaltyBonus`. Kein Feld für einen alten Preis. In den 335
+  Untertiteln steht **kein einziges** „statt", „UVP", „Normalpreis" oder
+  „vorher"; die 17 Prozentzeichen sind Fett- und Alkoholgehalt.
+- **`rewerse products search`** — die Online-Listung desselben Markts, 173
+  Produkte, 56 davon mit Rabatt. Das Rabatt-Objekt ist
+  `{"__typename": "RegularProductDiscount", "validTo": "01.08."}` — Laufzeit
+  und sonst nichts.
+
+Der Kommentar in `rewe.rs` („kein fromDate/regularPrice/overline mehr") ist
+damit bestätigt: `regular_price: None` ist für REWE die richtige Antwort.
+
+**Grenze der Messung, ehrlich benannt:** Beobachtet wurde die Ausgabe des
+`rewerse`-CLI, nicht die rohe API-Antwort — die URL steht nur als zerlegter
+String im Go-Binary, und die vier geratenen Pfade unter `mobile-api.rewe.de`
+antworten alle mit 404. Dass `rewerse` ein vorhandenes Feld verschweigt, ist
+damit nicht restlos ausgeschlossen; dagegen spricht, dass sein zweiter
+Endpunkt das Rabatt-Objekt roh durchreicht, mitsamt `__typename` — ein Feld,
+das nur dort steht, weil niemand die Antwort aufgeräumt hat. Die
+Gegenprobe über `www.rewe.de/angebote/` ist nicht gelaufen: Cloudflare
+antwortet dort mit 403.
+
+Was REWE stattdessen liefert und wir wegwerfen: `loyaltyBonus`, die
+PAYBACK-Cents je Angebot (61 von 335). Das ist ein echter Vorteil, aber kein
+Streichpreis.
+
+### EDEKA veröffentlicht ihn auch nicht — druckt aber den Rabatt
+
+Gemessen am 2026-07-31 an zwei Märkten (030567 und 035482, Passau), je 213
+Angebotskacheln: **null** Vorkommen von „statt", „UVP" oder `line-through` im
+HTML. Die Preisauszeichnung steht maschinenlesbar in `div.sr-only` und kennt
+drei Formen:
+
+```
+Festpreis von 3.99 €                                  (410 Vorkommen)
+App-Preis von 0.77 €                                   (44)
+Rabattierter Preis von 0.88 € (Insgesamt -56 % Rabatt)  (3 Angebote)
+```
+
+Die dritte Form nennt den **Rabatt**, nicht den alten Preis. Daraus einen
+Streichpreis zu rechnen hieße, eine Zahl zu erfinden: Der Prozentwert ist auf
+ganze Punkte gerundet, aus „0.88 € bei -56 %" folgt nur ein Bereich von 1.98
+bis 2.02 €, aus „9.49 € bei -32 %" einer von 13.96 bis 14.16 €. Ein
+Streichpreis, den die Kette so nie gedruckt hat, ist genau die Behauptung, die
+er widerlegen soll. Bleibt draußen.
+
+Betroffen wären ohnehin 3 von 213 Kacheln.
+
 ## Lidl: der eigene Prospekt, und nur noch der
 
 Lidl ist mit rund 30 % aller Zeilen die größte Kette. Die Angebote kommen aus
