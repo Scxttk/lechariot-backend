@@ -161,6 +161,66 @@ fn dedupe_on_conflict_key() {
     assert_eq!(rows, vec![a]);
 }
 
+/// Fenster mit Start/Ende auf dem Standard-Angebot.
+fn windowed(product: &str, price: f64, from: &str, until: &str) -> SupabaseRow {
+    let mut row = map_offer(&offer(product, Some(price)), "Kaufland", false).unwrap();
+    row.valid_from = Some(from.to_string());
+    row.valid_until = Some(until.to_string());
+    row
+}
+
+/// **Der Kaufland-Fall** (gemessen 2026-07-31, 523 Kombinationen, z. B.
+/// „ACTIVE O2 Erfrischungsgetränk": Woche 23.–29.07. plus Aktionstag 25.07.,
+/// beide 0,99 €): Ein verschobener Starttag zum selben Preis ist dasselbe
+/// Angebot — EINE Zeile, mit frühestem Start und spätestem Ende.
+///
+/// Vorher legte der Upsert-Schlüssel (market_id, product, valid_from) dafür
+/// zwei Zeilen an, und die App zeigte das Produkt doppelt.
+#[test]
+fn a_shifted_start_at_the_same_price_is_the_same_offer() {
+    let week = windowed("ACTIVE O2 Erfrischungsgetränk", 0.99, "2026-07-23", "2026-07-29");
+    let day = windowed("ACTIVE O2 Erfrischungsgetränk", 0.99, "2026-07-25", "2026-07-25");
+    let rows = dedupe_rows(vec![week.clone(), day]);
+    assert_eq!(rows.len(), 1, "verschobener Start zum selben Preis: eine Zeile");
+    assert_eq!(rows[0].valid_from.as_deref(), Some("2026-07-23"));
+    assert_eq!(rows[0].valid_until.as_deref(), Some("2026-07-29"));
+
+    // Auch wenn das zweite Fenster über das erste hinausreicht, entsteht das
+    // Gesamtfenster — nicht das eine oder das andere.
+    let a = windowed("Gouda", 1.99, "2026-07-27", "2026-08-01");
+    let b = windowed("Gouda", 1.99, "2026-07-31", "2026-08-02");
+    let rows = dedupe_rows(vec![a, b]);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].valid_from.as_deref(), Some("2026-07-27"));
+    assert_eq!(rows[0].valid_until.as_deref(), Some("2026-08-02"));
+}
+
+/// **Disjunkte Fenster bleiben zwei Zeilen** — Penny und Lidl pushen die
+/// Folgewoche mit (479 Kombinationen am 2026-07-31, z. B. „CHOCO'LA
+/// Schokolade" 27.07.–02.08. und 03.08.–09.08.). `valid_from` einfach aus
+/// dem Schlüssel zu nehmen hätte genau diese echten Wochen verschmolzen —
+/// der Grund, warum es im Schlüssel steht und bleibt.
+#[test]
+fn disjoint_weeks_stay_two_rows() {
+    let this_week = windowed("CHOCO'LA Schokolade", 0.69, "2026-07-27", "2026-08-02");
+    let next_week = windowed("CHOCO'LA Schokolade", 0.69, "2026-08-03", "2026-08-09");
+    let rows = dedupe_rows(vec![this_week.clone(), next_week.clone()]);
+    assert_eq!(rows, vec![this_week, next_week]);
+}
+
+/// **Überlappende Fenster mit verschiedenem Preis bleiben zwei Zeilen** —
+/// das sind echte verschiedene Angebote: Aktionstage mit eigenem Preis und
+/// Lidl-Sammeltitel wie „Bio-Käse", hinter denen verschiedene Artikel
+/// stecken (77 Kombinationen am 2026-07-31, z. B. „Bio-Käse" 1,59 € ab
+/// 03.08. neben 3,94 € ab 06.08.).
+#[test]
+fn overlapping_windows_with_different_prices_stay_apart() {
+    let a = windowed("Bio-Käse", 1.59, "2026-08-03", "2026-08-08");
+    let b = windowed("Bio-Käse", 3.94, "2026-08-06", "2026-08-08");
+    let rows = dedupe_rows(vec![a.clone(), b.clone()]);
+    assert_eq!(rows, vec![a, b]);
+}
+
 // Kern von Phase 11: Zwei Filialen derselben Kette in derselben PLZ sind
 // zwei Angebotssätze. Unter dem alten Schlüssel (market, product, valid_from,
 // waren sie ununterscheidbar — die zweite Filiale hätte die erste
