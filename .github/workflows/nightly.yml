@@ -200,8 +200,23 @@ jobs:
       - name: Store summary + zero-offer check
         if: always()
         run: |
+          # Übersprungene Filialen zuerst und als Annotation — dieselbe
+          # Behandlung wie in branches.yml (#16). Am 31.07.2026 hat ein grüner
+          # Lauf drei Lidl-Märkte fallen lassen; die Zeile stand im Log, sah
+          # aus wie eine Notiz, und niemand hat sie drei Wochen lang gelesen.
+          while IFS= read -r zeile; do
+            echo "::warning title=Nightly sync::${zeile#WARNUNG: }"
+          done < <(grep "^WARNUNG" "$LOG" 2>/dev/null || true)
+
           {
             echo "## Nightly sync"
+            if grep -q "^WARNUNG.*übersprungen" "$LOG" 2>/dev/null; then
+              echo ""
+              grep "^WARNUNG.*übersprungen" "$LOG" \
+                | sed 's/^WARNUNG: /> ⚠️ **/; s/$/**/'
+              echo ""
+              echo "> Die Zusammenfassung unten ist damit unvollständig."
+            fi
             # Jeden "Zusammenfassung"-Block aus dem Log (einer pro Region,
             # bzw. "Zusammenfassung:" im Fallback) in eine Markdown-Tabelle
             # umformen (Spalten sind mit >=2 Leerzeichen getrennt).

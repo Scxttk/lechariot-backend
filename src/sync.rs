@@ -264,21 +264,37 @@ pub fn sync_national(
 /// mit der anderen weiter. Fallen **beide** aus, ist das kein „niemand hat
 /// etwas gewählt", sondern „ich konnte nicht fragen" — und das muss ein
 /// Fehler sein, sonst meldet ein Lauf gegen eine kaputte Datenbank Erfolg.
+///
+/// **Die Reihenfolge ist die Warteschlange**, siehe [`queue_order`]. Sie war
+/// bis hierher alphabetisch (`BTreeSet`), und weil [`run`] die Liste vorn
+/// abschneidet, entschied damit der Anfangsbuchstabe, wer gesynct wird. Am
+/// 31.07.2026 fielen so jede Nacht dieselben sieben Filialen hinten herunter,
+/// darunter alle drei Lidl-Märkte (`LIDL_*` sortiert hinter `DE*`) — genau
+/// die, die am längsten nicht dran waren.
 pub fn fetch_chosen_branches(cfg: &PushConfig) -> Result<Vec<String>> {
     let client = reqwest::blocking::Client::new();
-    let mut ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut queued: Vec<QueuedBranch> = Vec::new();
+    let mut extra: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     let mut answered = 0usize;
 
     let resp = auth(cfg, client.get(format!("{}/rest/v1/branch_requests", cfg.base_url)))
-        .query(&[("select", "market_id"), ("active", "eq.true")])
+        .query(&[
+            ("select", "market_id,last_synced,requested_at"),
+            ("active", "eq.true"),
+        ])
         .send()
         .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
     if resp.status().is_success() {
         let rows: Vec<serde_json::Value> =
             resp.json().context("branch_requests: Antwort ist kein gültiges JSON")?;
-        ids.extend(
-            rows.iter().filter_map(|r| r.get("market_id")?.as_str().map(String::from)),
-        );
+        for row in &rows {
+            let Some(market_id) = row.get("market_id").and_then(|v| v.as_str()) else { continue };
+            queued.push(QueuedBranch {
+                market_id: market_id.to_string(),
+                last_synced: row.get("last_synced").and_then(|v| v.as_str()).map(String::from),
+                requested_at: row.get("requested_at").and_then(|v| v.as_str()).map(String::from),
+            });
+        }
         answered += 1;
     } else {
         eprintln!("WARNUNG: branch_requests nicht lesbar (HTTP {})", resp.status());
@@ -293,7 +309,7 @@ pub fn fetch_chosen_branches(cfg: &PushConfig) -> Result<Vec<String>> {
             resp.json().context("user_profiles: Antwort ist kein gültiges JSON")?;
         for row in &rows {
             let Some(list) = row.get("branch_ids").and_then(|v| v.as_array()) else { continue };
-            ids.extend(list.iter().filter_map(|v| v.as_str().map(String::from)));
+            extra.extend(list.iter().filter_map(|v| v.as_str().map(String::from)));
         }
         answered += 1;
     } else {
@@ -306,7 +322,93 @@ pub fn fetch_chosen_branches(cfg: &PushConfig) -> Result<Vec<String>> {
              die Liste der gewählten Filialen ist damit unbekannt, nicht leer."
         );
     }
-    Ok(ids.into_iter().collect())
+
+    // Filialen, die nur aus einem Profil kommen, haben noch keine
+    // `branch_requests`-Zeile — der Push legt sie beim ersten erfolgreichen
+    // Lauf an (`push.rs`, „Anforderung als erledigt melden"). Bis dahin
+    // zählen sie als nie gesynct und stehen deshalb vorn.
+    for id in extra {
+        if !queued.iter().any(|q| q.market_id == id) {
+            queued.push(QueuedBranch { market_id: id, last_synced: None, requested_at: None });
+        }
+    }
+
+    Ok(queue_order(queued))
+}
+
+/// Eine gewählte Filiale mit dem, was ihren Platz in der Warteschlange
+/// bestimmt.
+#[derive(Debug, Clone)]
+pub struct QueuedBranch {
+    pub market_id: String,
+    /// `None` = noch nie gesynct. Die App pollt genau diese Spalte und wartet,
+    /// solange sie null ist (Migration v14).
+    pub last_synced: Option<String>,
+    pub requested_at: Option<String>,
+}
+
+/// Wer am längsten nicht dran war, kommt zuerst.
+///
+/// Die Reihenfolge steht seit Migration v14 im Schema — der Index heißt
+/// `branch_requests_pending_idx` und lautet `(last_synced nulls first,
+/// requested_at)`. Sie wird hier trotzdem im Programm hergestellt und nicht
+/// über `order=` an PostgREST delegiert: Sortiert der Server, prüft ein Test
+/// gegen einen Mock nur noch, dass die Antwort unverändert durchgereicht wird,
+/// und bestünde auch ohne jede Sortierung.
+///
+/// **Nie gesynct steht vorn**, nicht hinten. Null heißt nicht „unwichtig",
+/// sondern „die App wartet auf den ersten Lauf" — das ist der einzige Fall,
+/// in dem ein Nutzer gerade zusieht.
+///
+/// Innerhalb dieser Gruppe kommt zuerst, wer ausdrücklich angefordert wurde
+/// (ältere Anforderung zuerst), danach die Filialen, die nur in einem Profil
+/// stehen: Hinter einer Anforderung wartet gerade jemand, hinter einem
+/// Profileintrag niemand. Letzte Stufe ist die ID — nicht als Rangfolge,
+/// sondern damit zwei Läufe über denselben Daten dieselbe Liste ergeben.
+///
+/// Doppelte IDs kann es nicht geben: `branch_requests.market_id` ist
+/// Primärschlüssel, und die Profil-IDs werden nur übernommen, wenn noch keine
+/// Anforderung sie trägt.
+pub fn queue_order(mut branches: Vec<QueuedBranch>) -> Vec<String> {
+    branches.sort_by(|a, b| {
+        Due::of(&a.last_synced)
+            .cmp(&Due::of(&b.last_synced))
+            // Hier andersherum als bei `last_synced`: ohne Anforderungszeit
+            // nach hinten (siehe oben).
+            .then_with(|| a.requested_at.is_none().cmp(&b.requested_at.is_none()))
+            .then_with(|| Due::of(&a.requested_at).cmp(&Due::of(&b.requested_at)))
+            .then_with(|| a.market_id.cmp(&b.market_id))
+    });
+    branches.into_iter().map(|b| b.market_id).collect()
+}
+
+/// Wie dringend eine Filiale drankommen muss. Die Reihenfolge der Varianten
+/// **ist** die Sortierung (`derive(Ord)` vergleicht erst die Variante).
+///
+/// `Unlesbar` steht ausdrücklich zwischen `Nie` und `Am`, statt mit `Nie`
+/// zusammenzufallen: Ein Zeitstempel, den niemand parsen kann, wird auch nach
+/// dem nächsten Lauf nicht lesbar sein. Läge er ganz vorn, hätte diese Filiale
+/// **dauerhaft** Vorrang und schnitte die Übrigen ab — derselbe stille
+/// Datenverlust, den dieser Commit behebt, nur andersherum. Also: bald dran,
+/// aber hinter denen, auf die jemand wartet, und laut gemeldet.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum Due {
+    Nie,
+    Unlesbar,
+    Am(chrono::DateTime<chrono::FixedOffset>),
+}
+
+impl Due {
+    fn of(raw: &Option<String>) -> Due {
+        let Some(raw) = raw.as_deref() else { return Due::Nie };
+        match chrono::DateTime::parse_from_rfc3339(raw) {
+            Ok(t) => Due::Am(t),
+            Err(e) => {
+                eprintln!("WARNUNG: Zeitstempel '{raw}' nicht lesbar ({e}) — Filiale wird vorgezogen.");
+                Due::Unlesbar
+            }
+        }
+    }
 }
 
 /// Der komplette nächtliche Lauf: bundesweite Ketten einmal, danach jede
@@ -346,9 +448,13 @@ pub fn run(
         return Ok(());
     }
 
+    // Eine übersprungene Filiale ist stiller Datenverlust — dieselbe Klasse,
+    // die `branches.yml` schon als Annotation nach oben holt. Deshalb WARNUNG
+    // auf stderr und nicht `println!`: Am 31.07.2026 hat ein grüner Lauf drei
+    // Lidl-Märkte fallen lassen, und die Zeile stand nur im Log.
     let selected: &[String] = if branches.len() > opts.max_branches {
-        println!(
-            "{} Filialen angefordert, Limit {} — übersprungen: {}",
+        eprintln!(
+            "WARNUNG: {} Filialen angefordert, Limit {} — übersprungen: {}",
             branches.len(),
             opts.max_branches,
             branches[opts.max_branches..].join(", ")
