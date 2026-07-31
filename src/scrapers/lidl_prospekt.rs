@@ -138,6 +138,56 @@ static DANGLING_TAIL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)[\s,]+(und|oder|mit|für|in|aus|von|zum|zur|sowie|inkl\.?)$").unwrap()
 });
 
+/// Banner, die der Prospekt VOR den Produktnamen klebt: „Erhältlich ab
+/// Do. 30.7.", „Entspricht 3.33/Stk.", „Tiefpreis Garantie", „Weitere Farbe:
+/// Weiß". Jedes davon erkennt der Extraktor für sich als Layouttext — vor
+/// einem Produktnamen riss es bisher den ganzen Titel mit (gemessen am
+/// Prospekt vom 27.07.: 14 echte Produkte, u. a. PARKSIDE Winkelschleifer,
+/// LIVARNO Steppbett, WAGNER Steinofen Pizza, GELATELLI Eis).
+///
+/// Das Spiegelbild von [`DANGLING_TAIL`], nur am Anfang: kürzen statt
+/// verwerfen, denn das Produkt steht da — nur das Banner klebt davor.
+///
+/// Jede Alternative endet vor einem Leerzeichen oder dem Titelende
+/// (`\s+|$` im Aufruf), damit „Aktionszeitraum" nie als „Aktion" + Rest
+/// gelesen wird.
+static LEADING_BANNER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"(?ix)^(?:
+            # Aktionsdatum, auch mit Bis-Teil: "Ab Do. 30.7. bis Sa. 1.8."
+            (?:erhältlich\s+)?ab\s+(?:mo|di|mi|do|fr|sa|so)\.\s*\d{1,2}\.\d{1,2}\.?
+                (?:\s*bis\s+(?:mo|di|mi|do|fr|sa|so)\.\s*\d{1,2}\.\d{1,2}\.?)?
+          | # "Entspricht 3.33/Stk." - der Betrag kann schon von BADGE_TOKEN
+            # gefressen sein, deshalb optional.
+            entspricht\s*[-\d.,]*\s*/\s*stk\.?
+          | # "Tiefpreis Garantie", auch auseinandergerissen: pdftotext
+            # verschachtelt die Plakette mit der Rubrik dazwischen
+            # ("Tiefpreis Wohnen & Einrichtung Garantie LIVARNO ...").
+            tiefpreis(?:\s+garantie)? | garantie
+          | wohnen\s*&\s*einrichtung
+          | weitere\s+farben?:?\s+\S+
+          | für\s+(?:drinnen|draußen)(?:\s*/\s*(?:drinnen|draußen))?
+          | mit\s+lidl\s+plus
+          | gültig\s+vom\s+[\d.,\s\x{2013}-]+
+          | frische\s+qualität\s+lohnt\s+sich\.?
+          | (?:xxl\s+)?mehr\s+fürs\s+geld!?
+          | # Einzelner Großbuchstabe ohne Punkt: Schriftsplitter der
+            # Plaketten-Grafik ("R ESMARA MEN Sneaker"). Marken mit Punkt
+            # (f.a.n., s.Oliver) tragen ihren Punkt und bleiben stehen.
+            [A-ZÄÖÜ]
+        )(?:\s+|$)"#,
+    )
+    .unwrap()
+});
+
+/// Dieselben Flächen-Banner am Ende des Titels: „Grünmix im Korb Für
+/// drinnen Für drinnen". Bewusst nur die Drinnen/Draußen-Plakette — alles
+/// andere am Titelende ist entweder schon `DANGLING_TAIL` oder gehört zum
+/// Namen.
+static TRAILING_BANNER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)(?:^|\s+)für\s+(?:drinnen|draußen)(?:\s*/\s*(?:drinnen|draußen))?$").unwrap()
+});
+
 /// Zeilen, die eine Eigenschaft beschreiben statt ein Produkt zu benennen.
 /// Ein Produktname im Prospekt fängt nicht mit „Für" oder „Inkl." an.
 static DESCRIPTIVE_LEAD: LazyLock<Regex> = LazyLock::new(|| {
@@ -791,6 +841,81 @@ pub fn trim_dangling_tail(title: &str) -> String {
     out
 }
 
+/// Titel einer Kachel, nachdem vorangeklebte Banner-**Zeilen** übersprungen
+/// wurden.
+///
+/// [`trim_leading_banner`] allein reicht nicht: pdftotext zerlegt das Banner
+/// in eigene Zeilen („Erhältlich" / „ab Do. 30.7." / „Für draußen"), und die
+/// Drei-Zeilen-Schranke von [`title_of`] ist voll, bevor der Produktname
+/// überhaupt drankommt — der Titel des Lavendels war das nackte Banner.
+/// Deshalb: die längste Folge von Anfangszeilen finden, deren Zusammenschluss
+/// restlos aus Bannern besteht, und den Titel aus dem Rest bauen.
+///
+/// **Nur für den fertigen Titel**, nicht für die Rollenzuteilung — dort würde
+/// eine Aktionsüberschrift wie „Ab Do. 30.7. Deluxe-Woche" zum Produkt und
+/// stähle einer echten Kachel den Preis (der gemessene Fehlschlag vom
+/// 2026-07-30).
+fn title_after_leading_banner(island: &Island) -> String {
+    let mut skip = 0usize;
+    let mut joined = String::new();
+    // Der tiefste echte Stapel sind vier Banner-Zeilen (LIVARNO: Datum +
+    // zerrissene Tiefpreis-Plakette); sechs ist Schranke, keine Messgröße.
+    for (i, line) in island.lines.iter().take(6).enumerate() {
+        if !joined.is_empty() {
+            joined.push(' ');
+        }
+        joined.push_str(line);
+        if trim_leading_banner(&joined).is_empty() {
+            skip = i + 1;
+        }
+    }
+    if skip == 0 {
+        return title_of(island);
+    }
+    let after = Island {
+        x0: island.x0,
+        y0: island.y0,
+        x1: island.x1,
+        y1: island.y1,
+        lines: island.lines[skip..].to_vec(),
+    };
+    title_of(&after)
+}
+
+/// Vorangeklebte Banner abschneiden — mehrfach, denn der Prospekt stapelt
+/// sie („Erhältlich ab Do. 30.7. Für draußen Lavendel", „Ab Do. 30.7.
+/// Tiefpreis Wohnen & Einrichtung Garantie LIVARNO …").
+///
+/// Das Spiegelbild von [`trim_dangling_tail`], aus demselben Grund eine
+/// Reparatur und kein Ausschluss: Das Produkt steht da, nur das Banner
+/// klebt davor. Es wegzuwerfen kostete am Prospekt vom 27.07. genau 14
+/// Kacheln (PARKSIDE Winkelschleifer, WAGNER Steinofen Pizza, GELATELLI
+/// Eis, LIVARNO Steppbett …) — gemessen mit `measure_dropped_tiles`:
+/// 20 verworfene Kacheln vorher, 6 nachher, 254 statt 236 Angebote.
+///
+/// **Gefahrlos für die Paarung:** Der Schnitt läuft erst auf dem fertigen
+/// Titel, wenn Produkt und Preis längst gepaart sind — anders als der am
+/// 2026-07-30 verworfene Versuch, `LEAD_DATE` schon in `is_layout_text` zu
+/// kürzen, der die Rollenzuteilung verschob und mehr kostete als er brachte.
+/// Bleibt nach dem Schnitt kein plausibler Name übrig (reine Banner-Kacheln
+/// wie „Für drinnen/draußen"), verwerfen die bestehenden Prüfungen die
+/// Kachel wie bisher.
+pub fn trim_leading_banner(title: &str) -> String {
+    let mut out = title.trim().to_string();
+    // Der tiefste echte Stapel sind vier Banner übereinander (Datum +
+    // zerrissene Tiefpreis-Plakette); die Schranke verhindert trotzdem, dass
+    // hier je eine Endlosschleife entsteht.
+    for _ in 0..6 {
+        let trimmed = LEADING_BANNER.replace(&out, "").trim().to_string();
+        let trimmed = TRAILING_BANNER.replace(&trimmed, "").trim().to_string();
+        if trimmed == out {
+            break;
+        }
+        out = trimmed;
+    }
+    out
+}
+
 pub fn is_plausible_title(title: &str) -> bool {
     if title.len() < 3 || is_boilerplate(title) {
         return false;
@@ -1089,9 +1214,12 @@ pub fn extract_offers_with_shots(
                 .join(" ");
             let context = format!("{} {} {near}", product.text(), price_tile.text());
 
-            let title = title_of(product);
+            let title = title_after_leading_banner(product);
             // "Mit Lidl Plus" steht mitunter in derselben Zeile wie der Name.
             let title = title.trim_end_matches("Mit Lidl Plus").trim().to_string();
+            // Vorangeklebte Banner abschneiden — sonst reißen sie gleich
+            // unten in `is_layout_text` den ganzen Titel mit.
+            let title = trim_leading_banner(&title);
             // Abgeschnittene Sätze am Ende kürzen, statt sie mitzuschleppen.
             let title = trim_dangling_tail(&title);
             if !is_plausible_title(&title) || is_layout_text(&title) {
@@ -2035,6 +2163,105 @@ mod tests {
         );
     }
 
+
+    /// Vorangeklebte Banner werden abgeschnitten, nicht mitgerissen — das
+    /// Spiegelbild von `dangling_conjunctions_are_trimmed_not_dropped`.
+    /// Alle Fälle stammen aus dem echten Lauf für den Prospekt vom 27.07.
+    /// (20 verworfene Kacheln, 14 davon echte Produkte).
+    #[test]
+    fn leading_banners_are_trimmed_not_dropped() {
+        for (glued, clean) in [
+            (
+                "Tiefpreis Garantie PARKSIDE Winkelschleifer",
+                "PARKSIDE Winkelschleifer",
+            ),
+            (
+                "Weitere Farbe: Weiß PARKSIDE Kabelbinder-Set",
+                "PARKSIDE Kabelbinder-Set",
+            ),
+            (
+                "Entspricht 3.33/Stk. GRANDIOL Herbst-Rasendünger",
+                "GRANDIOL Herbst-Rasendünger",
+            ),
+            // Der Betrag kann schon von BADGE_TOKEN gefressen sein.
+            (
+                "Entspricht /Stk. GELATELLI Crisp ’N’ Cake Eis",
+                "GELATELLI Crisp ’N’ Cake Eis",
+            ),
+            // Aktionsdatum, auch mit Bis-Teil.
+            (
+                "Ab Do. 30.7. bis Sa. 1.8. WAGNER Steinofen Pizza",
+                "WAGNER Steinofen Pizza",
+            ),
+            (
+                "Erhältlich ab Do. 30.7. Für draußen Lavendel angustifolia",
+                "Lavendel angustifolia",
+            ),
+            // Die zerrissene Tiefpreis-Plakette: pdftotext verschachtelt sie
+            // mit der Rubrik dazwischen.
+            (
+                "Ab Do. 30.7. Tiefpreis Wohnen & Einrichtung Garantie LIVARNO 4-Jahreszeiten-Steppbett",
+                "LIVARNO 4-Jahreszeiten-Steppbett",
+            ),
+            // Schriftsplitter der Plakette vor der Marke.
+            (
+                "Mit Lidl Plus Gültig vom 27.7.–2.8. R ESMARA MEN Sneaker",
+                "ESMARA MEN Sneaker",
+            ),
+            // Die Drinnen/Draußen-Plakette klebt auch HINTER dem Namen.
+            ("Grünmix im Korb Für drinnen Für drinnen", "Grünmix im Korb"),
+        ] {
+            assert_eq!(trim_leading_banner(glued), clean, "aus: {glued}");
+        }
+    }
+
+    /// Und die Gegenprobe: Banner-Wörter mitten im Namen bleiben stehen, und
+    /// ein Titel ganz ohne Banner kommt unverändert zurück.
+    #[test]
+    fn titles_without_a_leading_banner_stay_untouched() {
+        for title in [
+            "DELUXE Olivenöl Italienisches Natives",
+            "Gartenhortensie",
+            // Punkt-Marken sind keine Schriftsplitter.
+            "f.a.n. 7-Zonen-Kaltschaummatratze",
+            "s.Oliver Herren-Poloshirt",
+            // „Garantie" mitten im Namen ist kein Banner.
+            "SILVERCREST Wasserkocher mit Garantie-Siegel",
+        ] {
+            assert_eq!(trim_leading_banner(title), title);
+        }
+    }
+
+    /// Reine Banner-Kacheln bleiben verworfen: Nach dem Schnitt steht kein
+    /// Name mehr da, und die bestehenden Prüfungen greifen wie bisher.
+    #[test]
+    fn pure_banner_tiles_are_not_rescued() {
+        for banner in [
+            "Für drinnen/ draußen",
+            "Erhältlich ab Do. 30.7. Für draußen",
+            "Tiefpreis Garantie",
+        ] {
+            let trimmed = trim_leading_banner(banner);
+            assert!(
+                !is_plausible_title(&trimmed),
+                "Banner wurde zum Produkt: {banner:?} -> {trimmed:?}"
+            );
+        }
+    }
+
+    /// Messgerät, kein Test (portiert von `lidl-xobjekte`, `6c239f4`): nur der
+    /// Textweg, damit die Verwurfsgründe je Kachel sichtbar werden. Ohne
+    /// Netz und ohne Rastern, also in Sekunden. `LIDL_PDF` zeigt auf eine
+    /// lokale Prospekt-PDF; `LIDL_PROSPEKT_DEBUG=1` druckt jede verworfene
+    /// Kachel mit Grund.
+    #[test]
+    #[ignore = "Messgerät — braucht LIDL_PDF mit lokaler Prospekt-PDF"]
+    fn measure_dropped_tiles() {
+        let pdf = std::env::var("LIDL_PDF").expect("LIDL_PDF fehlt");
+        let xml = run_pdftotext(std::path::Path::new(&pdf), "-bbox-layout").expect("pdftotext");
+        let (offers, _) = extract_offers_with_shots(&xml, "MESSUNG", None, None);
+        eprintln!("ANGEBOTE\t{}", offers.len());
+    }
 
     fn canvas(w: u32, h: u32, bg: [u8; 3]) -> image::RgbImage {
         image::RgbImage::from_pixel(w, h, image::Rgb(bg))
