@@ -758,6 +758,15 @@ fn first_word_is_plain_lowercase(title: &str) -> bool {
     let Some(word) = title.split_whitespace().next() else {
         return false;
     };
+    // Satzzeichen am Wortende gehören nicht zum Wort. Ohne diesen Schritt
+    // rutscht „er:" durch: Das Wort ist mitten in „Anbieter:" abgeschnitten,
+    // aber der Doppelpunkt macht es für den Test unten „nicht rein
+    // alphabetisch". Genau so wurde das Kleingedruckte einer Vodafone-Anzeige
+    // zum Angebot (Prospekt vom 20.07., Seite 31).
+    //
+    // Nur am ENDE geschnitten, nicht überall: Ein Punkt *im* Wort ist die
+    // Ausnahme, die `f.a.n.` rettet, und `s.Oliver` hängt genauso daran.
+    let word = word.trim_end_matches(|c: char| !c.is_alphanumeric());
     word.chars().next().is_some_and(char::is_lowercase)
         && word.chars().all(|c| c.is_alphabetic() || c == '-')
 }
@@ -1964,6 +1973,34 @@ mod tests {
         assert!(is_plausible_title(
             "f.a.n. 7-Zonen-Kaltschaummatratze »Sweet Dream XXL«"
         ));
+        // Dieselbe Ausnahme trägt s.Oliver — der Punkt steht mitten im Wort,
+        // nicht an seinem Ende.
+        assert!(is_plausible_title("s.Oliver Herren-Poloshirt"));
+    }
+
+    /// Das Kleingedruckte einer Anzeige, das die Kachelbildung eingesammelt
+    /// hat — Prospekt vom 20.07., Seite 31.
+    ///
+    /// Es besteht #20s Prüfung auf ein abgeschnittenes Wort nur um ein
+    /// Satzzeichen: Das erste Wort ist „er:", die Hälfte von „Anbieter:", und
+    /// der Doppelpunkt machte es „nicht rein alphabetisch". Der Titel trägt am
+    /// Ende sogar ein echtes Angebot („Stapelturm"), aber ein Eintrag, der zu
+    /// neun Zehnteln aus einer Adresse und einer Widerrufsbelehrung besteht,
+    /// passt in einer Einkaufsliste auf nichts.
+    ///
+    /// Er ist auch der Grund, warum das Bild daneben falsch war: Auf die
+    /// Kachel wurde ein Ravensburger-Buch geschnitten, weil sie gar keine
+    /// Angebotskachel ist.
+    #[test]
+    fn advertisement_small_print_is_not_an_offer() {
+        for junk in [
+            "er: Vodafone GmbH („Vodafone“), Ferdinand-Braun-Platz 1, 40549 Düs \
+             egistrierung und Legitimation über Ident-Verfahren erforderlich. gg) Neuk Stapelturm",
+            "gg) Neukunden erhalten den Rabatt",
+            "ttp://www.lidl.de/agb",
+        ] {
+            assert!(!is_plausible_title(junk), "durchgelassen: {junk}");
+        }
     }
 
     /// „10 Paar" stand dreimal als eigenes Angebot in der Liste — das ist die
