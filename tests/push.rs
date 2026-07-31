@@ -267,6 +267,13 @@ impl Req {
 
 /// Minimaler HTTP/1.1-Mock: nimmt Requests an, protokolliert sie und
 /// antwortet immer mit 200 `[]`.
+///
+/// Jede Verbindung bekommt einen eigenen Thread. Vorher liefen alle in einer
+/// Schleife, und weil `keep-alive` die Verbindung offen hält, wurde die
+/// zweite nie angenommen: Der Push benutzt zwei Clients (einen für die
+/// REST-Aufrufe, einen ohne Redirects fürs Hochladen), und sobald beide
+/// gleichzeitig etwas wollen, stand der Mock. Kein Produktionsfehler — aber
+/// er hätte den Test unmöglich gemacht, der den Upload im Lauf prüft.
 fn spawn_mock() -> (String, Arc<Mutex<Vec<Req>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
@@ -275,6 +282,8 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Req>>>) {
     std::thread::spawn(move || {
         for stream in listener.incoming() {
             let Ok(stream) = stream else { break };
+            let log2 = log2.clone();
+            std::thread::spawn(move || {
             let mut reader = BufReader::new(stream);
             loop {
                 let mut line = String::new();
@@ -318,6 +327,7 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Req>>>) {
                     break;
                 }
             }
+            });
         }
     });
     (format!("http://{addr}"), log)
@@ -373,6 +383,79 @@ fn run_push(db_path: &str, base_url: &str) -> anyhow::Result<()> {
     };
     let cfg = PushConfig { base_url: base_url.to_string(), api_key: "test-key".to_string() };
     push::run(&opts, Some(&cfg))
+}
+
+/// Ein Kachelbild aus dem Prospekt liegt als Datei auf dem Runner. Es MUSS
+/// hochgeladen werden, auch wenn das Spiegeln der Händler-Bilder aus ist.
+///
+/// Beides hing bis #26 an einem Schalter. Als das Spiegeln am 27.07.
+/// abgeschaltet wurde (die App lädt Händler-CDN-URLs direkt), schaltete das
+/// unbemerkt auch den Upload der Kachelbilder ab — und `file:///tmp/...`
+/// stand danach als Bild-URL in Produktion. Am 31.07. mit drei Lidl-Läufen
+/// nachgemessen: 441 solcher Zeilen.
+fn seed_crop_offer(db_path: &str, image_url: &str) {
+    let _ = std::fs::remove_file(db_path);
+    let conn = db::open(db_path).unwrap();
+    db::upsert_market(&conn, &Market::new("LIDL_TEST", "Lidl Teststadt")).unwrap();
+    let mut o = offer("GRILLMEISTER Bratwurst", Some(4.39));
+    o.market_id = "LIDL_TEST".to_string();
+    o.id = Offer::build_id("LIDL_TEST", "GRILLMEISTER Bratwurst", Some("2026-07-13"));
+    o.images = vec![image_url.to_string()];
+    db::upsert_offer(&conn, &o).unwrap();
+}
+
+#[test]
+fn local_crops_are_uploaded_even_when_mirroring_is_off() {
+    let dir = lechariot::scrapers::lidl_prospekt::crop_dir();
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join(format!("LIDL_TEST_hochladen_{}.png", std::process::id()));
+    std::fs::write(&file, b"Bytes reichen: downscale gibt None und laedt das Original hoch").unwrap();
+
+    let db_path = temp_db("kachel-upload");
+    seed_crop_offer(&db_path, &format!("file://{}", file.display()));
+    let (base_url, log) = spawn_mock();
+
+    // run_push setzt mirror_images: false — genau der Fall, um den es geht.
+    run_push(&db_path, &base_url).unwrap();
+
+    let reqs = log.lock().unwrap().clone();
+    let bodies: String = reqs.iter().map(|r| r.body.as_str()).collect();
+    assert!(
+        reqs.iter().any(|r| r.target.contains("/storage/v1/object/offer-images/")),
+        "kein Upload versucht: {:#?}",
+        reqs.iter().map(|r| &r.target).collect::<Vec<_>>()
+    );
+    assert!(
+        !bodies.contains("file://"),
+        "file:// darf niemals in die Datenbank — im Telefon ist das ein toter Link: {bodies}"
+    );
+    assert!(
+        bodies.contains("/storage/v1/object/public/offer-images/"),
+        "Zeile trägt keine Bucket-URL: {bodies}"
+    );
+    let _ = std::fs::remove_file(&file);
+}
+
+/// Lässt sich das Kachelbild nicht hochladen, ist die Antwort „kein Bild" —
+/// nicht „der lokale Pfad". Die App bildet `.empty` und `.failure` auf
+/// dasselbe Kategorie-Symbol ab, ein toter Link sähe also aus wie kein Bild
+/// und meldete sich nie.
+#[test]
+fn a_crop_that_cannot_be_uploaded_becomes_no_image() {
+    let dir = lechariot::scrapers::lidl_prospekt::crop_dir();
+    std::fs::create_dir_all(&dir).unwrap();
+    let missing = dir.join(format!("LIDL_TEST_gibt_es_nicht_{}.png", std::process::id()));
+    let _ = std::fs::remove_file(&missing);
+
+    let db_path = temp_db("kachel-fehlt");
+    seed_crop_offer(&db_path, &format!("file://{}", missing.display()));
+    let (base_url, log) = spawn_mock();
+
+    run_push(&db_path, &base_url).unwrap();
+
+    let bodies: String = log.lock().unwrap().iter().map(|r| r.body.clone()).collect();
+    assert!(!bodies.contains("file://"), "toter Pfad in der Datenbank: {bodies}");
+    assert!(bodies.contains("\"image_url\":null"), "Bild nicht auf null gesetzt: {bodies}");
 }
 
 #[test]
