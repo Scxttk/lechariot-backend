@@ -38,6 +38,14 @@ on:
         description: "market_id der area_requests-Zeile, die PLZ und Fertigmeldung bekommt"
         required: false
         default: ""
+      # Ab Migration v24. Muss auf master stehen, BEVOR die Migration läuft —
+      # eine nicht deklarierte Eingabe beantwortet GitHub mit 422, und
+      # `trigger_area_scrape` schluckt das in eine Warnung, die niemand liest.
+      # Solange nichts kommt, rechnet der Lauf die Zelle wie bisher selbst aus.
+      area_key:
+        description: "area_key der auslösenden Zeile (leer = der Lauf rechnet die Zelle selbst)"
+        required: false
+        default: ""
 
 concurrency:
   # Nach dem Anker gruppieren, wo es einen gibt: Zwei Orte können dieselbe
@@ -115,6 +123,7 @@ jobs:
           ONLY_LAT: ${{ inputs.lat }}
           ONLY_LON: ${{ inputs.lon }}
           ANCHOR: ${{ inputs.anchor }}
+          AREA_KEY: ${{ inputs.area_key }}
           SKIP_NATIONAL: ${{ inputs.skip_national }}
         run: |
           set -o pipefail
@@ -131,6 +140,7 @@ jobs:
             ARGS+=(--lat "$ONLY_LAT" --lon "$ONLY_LON")
             [ -n "${ONLY_AREA:-}" ] && ARGS+=(--area "$ONLY_AREA")
             [ -n "${ANCHOR:-}" ] && ARGS+=(--anchor "$ANCHOR")
+            [ -n "${AREA_KEY:-}" ] && ARGS+=(--area-key "$AREA_KEY")
           elif [ -n "${ONLY_AREA:-}" ]; then
             ARGS+=(--area "$ONLY_AREA")
           else

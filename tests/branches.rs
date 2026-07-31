@@ -454,3 +454,121 @@ fn without_coordinates_the_key_stays_the_postcode() {
     assert_eq!(target.coords, None);
     assert_eq!(target.anchor_market_id, None);
 }
+
+// ------------------------------------------------- Die Rundung (Migration v24)
+
+/// **Der stille Fehler.** `round(v::numeric, 1)` in Postgres rundet eine
+/// Dezimalzahl, `(v * 10.0).round() / 10.0` einen Binärwert — und die
+/// Multiplikation mit 10 zieht einen Wert knapp unter einer Halben auf die
+/// Halbe hoch. Für den f64 direkt unter 53,85 kam so `cell:53.9` heraus,
+/// während die Datenbank `cell:53.8` schrieb; die App wartete dann auf einen
+/// Schlüssel, den es nicht gibt, und die Fertigmeldung des Laufs traf keine
+/// Zeile. Beides ohne ein einziges Fehlerzeichen.
+///
+/// Die Erwartungen hier sind die des SQL (`round(v::text::numeric, 1)`), von
+/// Hand nachgerechnet — nicht das Ergebnis derselben Funktion, sonst prüfte
+/// der Test sich selbst.
+#[test]
+fn the_cell_rounds_the_decimal_not_the_binary_value() {
+    // 53.849999999999994 ist der größte f64 unterhalb von 53,85. Dezimal
+    // gerundet ist das 53,8 — binär gerechnet wurde daraus 53,9.
+    assert_eq!(
+        lechariot::branches::area_cell(53.849999999999994, 14.149999999999999),
+        "cell:53.8,14.1"
+    );
+    // Und die Gegenprobe: 53,85 selbst liegt als f64 ÜBER der Grenze
+    // (53.850000000000001…), rundet also auf beiden Wegen auf.
+    assert_eq!(lechariot::branches::area_cell(53.85, 14.15), "cell:53.9,14.2");
+}
+
+/// Von der Null weg, nicht zur geraden Ziffer. `format!("{:.1}")` rundet zur
+/// geraden Ziffer, und x,25 und x,75 sind als f64 exakt darstellbar — dort
+/// wäre der Unterschied sofort sichtbar und träfe ganz gewöhnliche
+/// Koordinaten mit zwei Nachkommastellen.
+#[test]
+fn halves_round_away_from_zero_like_numeric_does() {
+    for (lat, lon, expected) in [
+        (53.25, 13.25, "cell:53.3,13.3"),
+        (53.75, 13.75, "cell:53.8,13.8"),
+        (53.35, 13.45, "cell:53.4,13.5"),
+        (53.95, 13.95, "cell:54.0,14.0"),
+        (53.05, 13.55, "cell:53.1,13.6"),
+    ] {
+        assert_eq!(lechariot::branches::area_cell(lat, lon), expected, "{lat}/{lon}");
+    }
+}
+
+/// Was der Trigger schreibt, wenn die Koordinaten gerade noch durchs Tor
+/// gehen, und was er bei 0 schreibt: eine Nachkommastelle, nie `-0.0`.
+/// Postgres' `round(numeric, 1)` liefert die Stelle auch dann, wenn sie 0 ist
+/// (`54` wird zu `54.0`), und `-0.04` rundet auf `0.0`.
+#[test]
+fn the_cell_always_carries_exactly_one_decimal() {
+    assert_eq!(lechariot::branches::area_cell(54.0, 14.0), "cell:54.0,14.0");
+    assert_eq!(lechariot::branches::area_cell(0.04, -0.04), "cell:0.0,0.0");
+    assert_eq!(lechariot::branches::area_cell(-53.96, -13.96), "cell:-54.0,-14.0");
+}
+
+/// **Wie erreichbar der Fehler wirklich war** — gemessen, nicht geschätzt.
+/// Über den ganzen deutschen Kasten (Breite 47,0-56,0, Länge 5,0-16,0)
+/// stimmen alte und neue Rundung für JEDE Koordinate mit bis zu vier
+/// Nachkommastellen überein. Ein Geokodierer liefert 53.944 — über diesen Weg
+/// war der Fehler nie zu erreichen, und die Notiz „bei genau 53.85" trifft
+/// ihn nicht: 53,85 liegt als f64 über der Grenze.
+///
+/// Der Test hält beide Aussagen zugleich fest: dass die Änderung nichts
+/// verschiebt, was heute vorkommt, und dass sie überhaupt etwas ändert.
+#[test]
+fn for_ordinary_coordinates_both_rules_agree() {
+    let old_rule = |v: f64| format!("{:.1}", (v * 10.0).round() / 10.0 + 0.0);
+    let new_rule = |v: f64| {
+        let cell = lechariot::branches::area_cell(v, 0.0);
+        cell.trim_start_matches("cell:").split(',').next().unwrap().to_string()
+    };
+
+    let mut checked = 0u32;
+    for scale in [10i64, 100, 1000, 10_000] {
+        for step in (47 * scale)..=(56 * scale) {
+            let lat = step as f64 / scale as f64;
+            assert_eq!(old_rule(lat), new_rule(lat), "Breite {lat}");
+            checked += 1;
+        }
+        for step in (5 * scale)..=(16 * scale) {
+            let lon = step as f64 / scale as f64;
+            assert_eq!(old_rule(lon), new_rule(lon), "Länge {lon}");
+            checked += 1;
+        }
+    }
+    assert!(checked > 200_000, "nur {checked} Werte geprüft — der Kasten ist größer");
+
+    // Und der Gegenbeweis, dass die Regeln trotzdem verschieden sind: der f64
+    // unmittelbar unter einer x,x5-Grenze.
+    let boundary = 53.849999999999994;
+    assert_eq!(old_rule(boundary), "53.9");
+    assert_eq!(new_rule(boundary), "53.8");
+}
+
+/// Der eigentliche Umbau: Wo die Datenbank ihren Schlüssel mitgegeben hat,
+/// wird nicht mehr gerundet, sondern genommen.
+///
+/// Der Fall ist echt und steht so schon im App-Code: Verwirft der
+/// BEFORE-Trigger die Koordinaten als unplausibel oder als zu weit vom Anker,
+/// führt er die Zeile unter `plz:…`, während der Client Koordinaten hat. Wer
+/// dann die Zelle nachrechnet, sucht eine Zeile, die es unter diesem Namen
+/// nicht gibt — und meldet still nichts.
+#[test]
+fn a_handed_over_key_is_used_verbatim() {
+    let target = lechariot::branches::AreaTarget {
+        coords: Some((53.9440, 14.1830)),
+        plz: Some("17419".into()),
+        anchor_market_id: Some("4030191".into()),
+        area_key: Some("plz:17419".into()),
+    };
+
+    assert_eq!(target.dedup_key(), "plz:17419");
+    assert_ne!(
+        target.dedup_key(),
+        lechariot::branches::area_cell(53.9440, 14.1830),
+        "der Test wäre wertlos, wenn die eigene Rechnung zufällig dasselbe ergäbe"
+    );
+}

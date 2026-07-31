@@ -64,23 +64,40 @@ const DRY_RUN_FULL_LIST: usize = 200;
 ///   Anker kann Zeilen in mehreren Zellen tragen — Penny Am Haff ist die
 ///   nächste Filiale sowohl für Ueckermünde als auch für Ahlbeck. Die
 ///   Fertigmeldung geht deshalb über [`AreaTarget::dedup_key`].
+/// * `area_key` — der Schlüssel, den die **Datenbank** dieser Zeile gegeben
+///   hat, wo der Lauf ihn bekommen konnte. Dann wird er benutzt, statt ihn
+///   nachzurechnen: Wer ihn nachrechnet, muss auf 0,1° genau dieselbe Rundung
+///   treffen wie das SQL, und genau daran hängt der stille Fehler, den
+///   [`area_cell`] beschreibt.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct AreaTarget {
     pub coords: Option<(f64, f64)>,
     pub plz: Option<String>,
     pub anchor_market_id: Option<String>,
+    pub area_key: Option<String>,
 }
 
 impl AreaTarget {
     /// Der Weg vor v21 und der Weg des Sonntagslaufs: nur eine PLZ.
     pub fn from_plz(plz: impl Into<String>) -> Self {
-        AreaTarget { coords: None, plz: Some(plz.into()), anchor_market_id: None }
+        AreaTarget { plz: Some(plz.into()), ..Default::default() }
     }
 
-    /// Schlüssel, unter dem zwei Anforderungen als dasselbe Gebiet gelten.
-    /// **Dieselbe Regel wie der Cooldown in Migration v21** — laufen die
-    /// beiden auseinander, holt der Lauf ein Gebiet doppelt oder gar nicht.
+    /// Schlüssel, unter dem zwei Anforderungen als dasselbe Gebiet gelten —
+    /// und zugleich der Schlüssel, unter dem die Fertigmeldung ihre Zeile
+    /// sucht. **Dieselbe Zeichenkette wie `area_requests.area_key`**; laufen
+    /// die beiden auseinander, findet die Meldung nichts und die App wartet
+    /// auf einen Lauf, den es unter diesem Namen nicht gibt.
+    ///
+    /// Deshalb wird hier nichts gerundet, wo der Schlüssel schon vorliegt: Er
+    /// steht auf der Zeile (Sonntagslauf, [`targets_from_open_requests`]) oder
+    /// kommt mit dem Dispatch mit (`--area-key`, ab Migration v24). Gerechnet
+    /// wird nur noch dort, wo niemand einen mitgegeben hat — von Hand
+    /// gestartete Läufe.
     pub fn dedup_key(&self) -> String {
+        if let Some(key) = &self.area_key {
+            return key.clone();
+        }
         match self.coords {
             Some((lat, lon)) => area_cell(lat, lon),
             None => format!("plz:{}", self.plz.as_deref().unwrap_or("")),
@@ -88,20 +105,80 @@ impl AreaTarget {
     }
 }
 
-/// Rasterzelle als Text, auf 0,1° gerundet — der Rust-Spiegel des
-/// Cooldown-Schlüssels aus Migration v21. Beide Seiten müssen dieselbe Zeichen-
-/// kette erzeugen, und diese Funktion ist das Einzige daran, was ein Test
-/// überhaupt fassen kann (für das SQL gibt es keine Testinfrastruktur).
+/// Rasterzelle als Text, auf 0,1° gerundet — der Rust-Spiegel von
+/// `public.area_key(lat, lon)` aus Migration v24. Nur noch **Rückfall**: Wo
+/// die Datenbank ihren Schlüssel mitgeschickt hat, nimmt [`AreaTarget::dedup_key`]
+/// den (ein von Hand gestarteter `branches-sync --lat/--lon` hat keinen).
 ///
 /// 0,1° sind 11,1 km in der Breite und 6,5-7,6 km in der Länge über
 /// Deutschland, also höchstens 13,5 km Diagonale — zwei Anforderungen in
 /// derselben Zelle liegen im 25-km-Kreis (`AREA_RADIUS_KM`) des ersten Laufs.
 ///
-/// `round()` rundet in Rust wie `round(numeric, 1)` in Postgres von der Null
-/// weg; `+ 0.0` macht aus einer eventuellen -0.0 wieder 0.0.
+/// **Gerundet wird auf der Dezimaldarstellung, nicht auf dem Binärwert.** Bis
+/// 2026-07-31 stand hier `(v * 10.0).round() / 10.0`, und das ist etwas
+/// anderes als `round(v::numeric, 1)`: Die Multiplikation mit 10 zieht einen
+/// Wert, der knapp unter einer Halben liegt, auf die Halbe hoch. Gemessen:
+/// 53.849999999999994 (der f64 direkt unter 53,85) ergab so `cell:53.9`,
+/// während das SQL `cell:53.8` schrieb — die App wartete dann auf einen
+/// Schlüssel, den es nicht gibt, und zwar still. Erreichbar ist das nur mit
+/// einem f64 unmittelbar neben einer x,x5-Grenze; jede Dezimalzahl mit
+/// höchstens 15 signifikanten Stellen (also alles, was ein Geokodierer
+/// liefert) ergibt auf beiden Wegen dasselbe. Siehe die Tests.
 pub fn area_cell(lat: f64, lon: f64) -> String {
-    let round1 = |v: f64| (v * 10.0).round() / 10.0 + 0.0;
-    format!("cell:{:.1},{:.1}", round1(lat), round1(lon))
+    format!("cell:{},{}", round1_decimal(lat), round1_decimal(lon))
+}
+
+/// Eine Nachkommastelle, von der Null weg gerundet — **auf der kürzesten
+/// Dezimaldarstellung**, die wieder auf denselben `f64` liest.
+///
+/// Das ist Wort für Wort, was `round(v::text::numeric, 1)` in Postgres tut,
+/// und `{v}` liefert in Rust dieselbe kürzeste Darstellung wie `float8out`
+/// seit Postgres 12. Der Trigger schickt dem Lauf `new.lat::text` — beide
+/// Seiten runden also dieselbe Zeichenkette, und das gilt unabhängig davon,
+/// welche Rundung die Gleitkomma-Multiplikation gewählt hätte.
+fn round1_decimal(v: f64) -> String {
+    let s = format!("{v}");
+    let (negative, digits) = match s.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, s.as_str()),
+    };
+    let (int_part, frac) = digits.split_once('.').unwrap_or((digits, ""));
+
+    let mut tenth = frac.as_bytes().first().map_or(0, |b| b - b'0');
+    // Alles hinter der ersten Nachkommastelle ist genau dann ≥ 0,5, wenn die
+    // zweite Ziffer ≥ 5 ist — weitere Ziffern können daran nichts mehr ändern.
+    let up = frac.as_bytes().get(1).is_some_and(|b| *b >= b'5');
+    let mut whole = int_part.to_string();
+    if up {
+        if tenth == 9 {
+            tenth = 0;
+            whole = increment_decimal(&whole);
+        } else {
+            tenth += 1;
+        }
+    }
+
+    // -0,04 rundet auf 0,0 und nicht auf -0,0: Postgres schreibt dort `0.0`.
+    let zero = tenth == 0 && whole.bytes().all(|b| b == b'0');
+    let sign = if negative && !zero { "-" } else { "" };
+    format!("{sign}{whole}.{tenth}")
+}
+
+/// Eine Dezimalziffernfolge um eins erhöhen. Über den Umweg `f64` ginge genau
+/// die Genauigkeit verloren, um die es hier geht.
+fn increment_decimal(digits: &str) -> String {
+    let mut out: Vec<u8> = digits.bytes().collect();
+    for byte in out.iter_mut().rev() {
+        if *byte == b'9' {
+            *byte = b'0';
+        } else {
+            *byte += 1;
+            return String::from_utf8(out).unwrap_or_else(|_| digits.to_string());
+        }
+    }
+    let mut carried = vec![b'1'];
+    carried.extend(out);
+    String::from_utf8(carried).unwrap_or_else(|_| digits.to_string())
 }
 
 pub struct DirectoryOptions {
@@ -498,7 +575,10 @@ pub fn targets_from_open_requests(cfg: &PushConfig) -> Result<Vec<AreaTarget>> {
         .header("apikey", &cfg.api_key)
         .header("Authorization", format!("Bearer {}", cfg.api_key))
         .query(&[
-            ("select", "market_id,plz,lat,lon"),
+            // `area_key` mitlesen, nicht nachrechnen: Die Zeile trägt seit
+            // Migration v22 ihren Schlüssel selbst, und er ist die einzige
+            // Zeichenkette, unter der die Fertigmeldung sie wiederfindet.
+            ("select", "market_id,plz,lat,lon,area_key"),
             ("last_synced", "is.null"),
             ("active", "eq.true"),
         ])
@@ -522,6 +602,7 @@ pub fn targets_from_open_requests(cfg: &PushConfig) -> Result<Vec<AreaTarget>> {
             },
             plz: text("plz"),
             anchor_market_id: text("market_id"),
+            area_key: text("area_key"),
         };
         // Weder Ort noch Lage — daraus lässt sich keine Suche bauen.
         if target.coords.is_none() && target.plz.is_none() {

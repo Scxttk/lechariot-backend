@@ -201,6 +201,37 @@ fn open_requests_carry_coordinates_not_just_a_postcode() {
     );
 }
 
+/// **Der Schlüssel wird gelesen, nicht nachgerechnet** (Migration v24). Die
+/// Zeile trägt ihren `area_key` seit v22 selbst; er ist die einzige
+/// Zeichenkette, unter der die Fertigmeldung sie wiederfindet. Wer ihn aus
+/// lat/lon neu bildet, muss auf 0,1° genau dieselbe Rundung treffen wie das
+/// SQL — und daran hing der stille Fehler vom 2026-07-31.
+///
+/// Hier trägt die Zeile absichtlich einen Schlüssel, den keine Rundung
+/// erzeugen würde: So kann der Test nicht zufällig durchgehen.
+#[test]
+fn the_open_request_brings_its_own_area_key() {
+    let (base_url, log) = spawn_mock(
+        r#"[{"market_id":"4030191","plz":"17373","lat":53.9440,"lon":14.1830,"area_key":"plz:17373"}]"#,
+    );
+
+    let targets = targets_from_open_requests(&cfg(&base_url)).unwrap();
+
+    assert_eq!(targets.len(), 1);
+    assert_eq!(
+        targets[0].dedup_key(),
+        "plz:17373",
+        "der Schlüssel der Zeile gilt, nicht die eigene Rechnung"
+    );
+    let log = log.lock().unwrap();
+    let req = log.iter().find(|r| r.method == "GET").expect("kein GET abgesetzt");
+    assert!(
+        req.target.contains("area_key"),
+        "ohne area_key im select kommt der Schlüssel gar nicht erst an: {}",
+        req.target
+    );
+}
+
 /// Die aufgelöste PLZ landet auf der Zeile **dieses Gebiets** — und **ohne**
 /// `last_synced`: Das Gebiet nachzutragen passiert vor den Ketten, fertig ist
 /// der Lauf da noch lange nicht.
@@ -217,6 +248,9 @@ fn the_resolved_postcode_is_written_back_to_the_row_of_this_area() {
         coords: Some((53.9440, 14.1830)), // Ahlbeck
         plz: Some("17373".into()),        // die Anker-PLZ, der Rückfall
         anchor_market_id: Some("4030191".into()),
+        // Von Hand gestartet: kein Schlüssel mitgegeben, also der Rückfall
+        // auf die eigene Rechnung.
+        area_key: None,
     };
     let changed = mark_area_resolved(&cfg(&base_url), &target, "17419").unwrap();
 
