@@ -201,21 +201,37 @@ fn open_requests_carry_coordinates_not_just_a_postcode() {
     );
 }
 
-/// Die aufgelöste PLZ landet auf der Ankerzeile — und **ohne** `last_synced`:
-/// Das Gebiet nachzutragen passiert vor den Ketten, fertig ist der Lauf da
-/// noch lange nicht.
+/// Die aufgelöste PLZ landet auf der Zeile **dieses Gebiets** — und **ohne**
+/// `last_synced`: Das Gebiet nachzutragen passiert vor den Ketten, fertig ist
+/// der Lauf da noch lange nicht.
+///
+/// Adressiert wird über die Rasterzelle, nicht über den Anker. Seit Migration
+/// v22 kann eine Filiale Zeilen für mehrere Orte tragen — Penny Am Haff ist
+/// die nächste Filiale sowohl für Ueckermünde als auch für Ahlbeck. Über den
+/// Anker zu filtern schriebe die PLZ dieses Laufs auf beide.
 #[test]
-fn the_resolved_postcode_is_written_back_to_the_anchor_row() {
+fn the_resolved_postcode_is_written_back_to_the_row_of_this_area() {
     let (base_url, log) = spawn_mock(r#"[{"market_id":"4030191"}]"#);
 
-    let changed = mark_area_resolved(&cfg(&base_url), "4030191", "17419").unwrap();
+    let target = lechariot::branches::AreaTarget {
+        coords: Some((53.9440, 14.1830)), // Ahlbeck
+        plz: Some("17373".into()),        // die Anker-PLZ, der Rückfall
+        anchor_market_id: Some("4030191".into()),
+    };
+    let changed = mark_area_resolved(&cfg(&base_url), &target, "17419").unwrap();
 
     assert!(changed);
     let log = log.lock().unwrap();
     let req = log.iter().find(|r| r.method == "PATCH").expect("kein PATCH abgesetzt");
     assert!(
-        req.target.contains("market_id=eq.4030191"),
-        "die Zeile wird über den Anker adressiert: {}",
+        req.target.contains("area_key=eq.cell%3A53.9%2C14.2")
+            || req.target.contains("area_key=eq.cell:53.9,14.2"),
+        "die Zeile wird über die Rasterzelle adressiert: {}",
+        req.target
+    );
+    assert!(
+        !req.target.contains("market_id=eq."),
+        "über den Anker gefiltert — das trifft auch die Nachbarstadt: {}",
         req.target
     );
     assert!(req.body.contains("17419"), "die echte PLZ fehlt im Rumpf: {}", req.body);
