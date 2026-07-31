@@ -841,6 +841,9 @@ fn fetch_all(zip: String, cert: String, key: String, dry_run: bool, db: &str) ->
         };
         println!("  {:<10} {:<28} {}", row.store, row.market, result);
     }
+    // Der Lidl-Prospekt liegt seit dem Cache bis zum Ende des Laufs im
+    // Temp-Verzeichnis; hier ist er zu Ende.
+    lechariot::scrapers::lidl_prospekt::release_leaflet();
     Ok(())
 }
 
@@ -860,6 +863,7 @@ fn fetch(zip: String, store: Store, cert: String, key: String, dry_run: bool, db
         println!("{} Angebote in '{}' gespeichert.", offers.len(), db);
     }
 
+    lechariot::scrapers::lidl_prospekt::release_leaflet();
     Ok(())
 }
 
