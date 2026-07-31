@@ -647,6 +647,23 @@ fn cluster(islands: Vec<Island>) -> Vec<Island> {
         }
     }
     let mut groups: HashMap<usize, Island> = HashMap::new();
+    // Reihenfolge der Kacheln, wie sie zuerst auftauchen. **Ohne diese Liste
+    // wäre das Ergebnis von Lauf zu Lauf verschieden:** `HashMap` iteriert in
+    // zufälliger Reihenfolge (RandomState je Instanz), und `into_values()`
+    // gäbe die Kacheln damit mal so, mal so heraus.
+    //
+    // Innerhalb einer Kachel war das nie ein Problem — dafür sorgt `order`
+    // unten. Aber die Reihenfolge der Kacheln *untereinander* entscheidet,
+    // welches Produkt zu welchem Preis gepaart wird: `pairs.sort_by` ist
+    // stabil, gleich weite Paare behalten also die Eingabereihenfolge. War die
+    // zufällig, war die Paarung es auch.
+    //
+    // Genau das war der Wackeltest, der drei PRs in dieser Nacht ein
+    // unklares Signal gegeben hat: `lidl_prospekt_builds_tiles_from_word_
+    // coordinates` fiel mit „weicher Trennstrich nicht zusammengezogen" um,
+    // weil „CELEBRATIONS" mal in einem Titel landete und mal nicht — bei
+    // byte-gleichem Commit.
+    let mut roots_in_order: Vec<usize> = Vec::new();
     // Nach Position sortiert zusammenfassen, damit Marke vor Beschreibung steht.
     let mut order: Vec<usize> = (0..n).collect();
     order.sort_by(|&a, &b| {
@@ -660,10 +677,16 @@ fn cluster(islands: Vec<Island>) -> Vec<Island> {
             Some(g) => g.merge(&islands[i]),
             None => {
                 groups.insert(root, islands[i].clone());
+                roots_in_order.push(root);
             }
         }
     }
-    groups.into_values().collect()
+    // Lesereihenfolge der Seite: die Kachel, deren erste Insel oben links
+    // steht, kommt zuerst.
+    roots_in_order
+        .into_iter()
+        .filter_map(|root| groups.remove(&root))
+        .collect()
 }
 
 // ------------------------------------------------------------ Rollenerkennung
