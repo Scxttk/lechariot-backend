@@ -263,6 +263,13 @@ mod tests {
         // verglichen, nicht wörtlich.
         assert_eq!(keys_cat("Bio Feine Creme zum Kochen", "Sahne, Schmand und Crème fraîche"), vec!["sahne"]);
 
+        // Wörterbuch-Runde 2026-07-31, Op 5: Lidls Aufstrich-/Dip-Regale
+        // sind zugeordnet — erledigt die letzte ungetaggte Zeile der
+        // Eval-DB („Antipasti Creme").
+        assert_eq!(keys_cat("Antipasti Creme", "herzhafte Aufstriche"), vec!["soßen"]);
+        // Titel-Treffer bleiben unberührt von der Kategorie.
+        assert_eq!(keys_cat("Zaziki", "Dips"), vec!["soßen"]);
+
         // Bewusst NICHT zugeordnet — die freie Wörterbuchsuche über die
         // Kategorie hätte hier danebengegriffen, und das ist der teurere
         // Fehler: ein falsches Tag legt jemandem das falsche Produkt in den
@@ -302,6 +309,11 @@ mod tests {
     fn regressionsfaelle() {
         assert_eq!(keys("Nadler Edle Matjesfilets"), vec!["fisch"]);
         assert_eq!(keys("Tomatenmark"), vec!["konserven"]);
+        // Wörterbuch-Runde 2026-07-31, Op 6: Diese Zeile war nicht bloß ein
+        // toter Eintrag, sondern die eine echte Abweichung zwischen den
+        // Maschinen — Rust blockte hier, Python nicht (Details bei
+        // `parity_with_eval_db`). Der Fix steht in der Python-Referenz; was
+        // Rust tut, stand schon immer hier und bleibt der Maßstab.
         let ts = keys("Thunfisch-Salat");
         assert!(ts.contains(&"fisch".to_string()) && !ts.contains(&"salat".to_string()), "{ts:?}");
         assert!(keys("Kirschtomaten").contains(&"tomaten".to_string()));
@@ -334,13 +346,61 @@ mod tests {
         assert!(keys("Lamm-Lachs mariniert").contains(&"lamm".to_string()));
         assert!(!keys("Schweinemedaillons").contains(&"hähnchen".to_string()));
         assert!(keys("Hähnchenmedaillons").contains(&"hähnchen".to_string()));
+        // Wörterbuch-Runde 2026-07-31, Op 3: Suffix `nuggets` flog aus
+        // `schwein` — im Korpus für 100 % seiner Treffer falsch (sieben
+        // Hähnchen, ein veganes, null Schwein). Damit verliert auch das
+        // Rügenwalder Veganes Mühlen-Schnitzel seinen Schweinefleisch-Tag.
+        let nuggets = keys("Chicken Nuggets XXL");
+        assert!(!nuggets.contains(&"schwein".to_string()), "{nuggets:?}");
+        assert!(nuggets.contains(&"hähnchen".to_string()));
+        let veggie = keys("Rügenwalder Mühle Veganes Mühlen Schnitzel*, Nuggets*");
+        assert!(!veggie.contains(&"schwein".to_string()), "{veggie:?}");
+        assert!(veggie.contains(&"tofu".to_string()));
+        // Gegenprobe: echtes Schwein hängt an exacts, nicht am Suffix.
+        assert!(keys("Schweineschnitzel").contains(&"schwein".to_string()));
         assert!(!keys("Tafeltrauben dunkel").contains(&"bier".to_string()));
         assert!(keys("Lausitzer Dunkel").contains(&"bier".to_string()));
+        // Wörterbuch-Runde 2026-07-31, Op 2: `weizen` flog aus dem bier-exact —
+        // im ganzen 11-Regionen-Korpus existiert kein Weizenbier-Angebot, die
+        // zwei Treffer waren Brötchen und Mehl. Gegenprobe: Weizenbier käme
+        // über das Suffix `bier` weiter an, Weißbier steht im exact.
+        let broetchen = keys("Weizen-Brötchen");
+        assert!(!broetchen.contains(&"bier".to_string()), "{broetchen:?}");
+        assert!(broetchen.contains(&"brot".to_string()));
+        let wmehl = keys("Alnatura Weizen Mehl");
+        assert!(!wmehl.contains(&"bier".to_string()), "{wmehl:?}");
+        assert!(wmehl.contains(&"mehl".to_string()));
+        assert!(keys("Erdinger Weizenbier").contains(&"bier".to_string()));
+        assert!(keys("Paulaner Weißbier").contains(&"bier".to_string()));
         assert!(keys("Kokosnussmilch").contains(&"kokosmilch".to_string()));
         assert!(!keys("Milch-Schnitte").contains(&"milch".to_string()));
         // Aus dem Alle-Regionen-Audit (2026-07-22, frische KW nach Neu-Scrape):
         // echte Food-Lücken geschlossen.
         assert!(keys("Zwetschgen, lose").contains(&"pfirsich".to_string()));
+        // Wörterbuch-Runde 2026-07-31, Op 4 — die Antwort auf die alte
+        // `pflaumen`-Frage: Der Begriff fehlt nicht, `pfirsich` fasst
+        // Steinobst bewusst zusammen. Der Defekt war die Kollision mit
+        // Pflaumentomaten; die zwei Blockeinträge lösen genau sie.
+        let minipfl = keys("Minipflaumen Tomaten");
+        assert!(!minipfl.contains(&"pfirsich".to_string()), "{minipfl:?}");
+        assert!(minipfl.contains(&"tomaten".to_string()));
+        let pfltom = keys("Mini Pflaumentomaten");
+        assert!(!pfltom.contains(&"pfirsich".to_string()), "{pfltom:?}");
+        assert!(pfltom.contains(&"tomaten".to_string()));
+        // Gegenprobe: echtes Steinobst behält `pfirsich`.
+        assert_eq!(keys("Pflaumen"), vec!["pfirsich"]);
+        assert_eq!(keys("Zwetschgen*"), vec!["pfirsich"]);
+        // Wörterbuch-Runde 2026-07-31, Op 7: Zwei Blocklisten führten je einen
+        // Fließtext statt eines Wortes („kartoffelchips fällt unter chips",
+        // „buttergemüse zulässig") — tote Einträge, denn eine Blockliste
+        // vergleicht Wörter, keine Sätze. Sie sind jetzt Kommentare; hier
+        // steht, was sie behaupteten, als Prüfung statt als Prosa.
+        let chips = keys("Kartoffelchips Paprika");
+        assert!(chips.contains(&"chips".to_string()), "{chips:?}");
+        assert!(!chips.contains(&"kartoffeln".to_string()), "{chips:?}");
+        let buttergem = keys("Buttergemüse");
+        assert!(buttergem.contains(&"tiefkühlgemüse".to_string()), "{buttergem:?}");
+        assert!(!buttergem.contains(&"butter".to_string()), "{buttergem:?}");
         assert!(keys("De Cecco italienische Teigwaren").contains(&"nudeln".to_string()));
         assert!(keys("Monopole Blue Top Champagner Brut").contains(&"wein".to_string()));
         assert!(keys("Norwegischer Räucherlachs XXL").contains(&"fisch".to_string()));
@@ -441,6 +501,19 @@ mod tests {
             .contains(&"käse".to_string()));
         assert!(match_keys("Rinderhack", None, Some("Fleisch, Geflügel, Wurst"))
             .contains(&"hackfleisch".to_string()));
+        // Wörterbuch-Runde 2026-07-31, Op 1: „Alles für die Schule" ist eine
+        // Non-Food-Warengruppe (79 der 515 ungetaggten Produkte des
+        // 11-Regionen-Korpus: EDURINO, LAMY, TIPP-EX, HERLITZ). Nebenbei
+        // verlieren zwei MATTEL-Spielzeuge ihr falsches `limonade` (Marke
+        // „monster" traf Monster Trucks / Monster High).
+        assert_eq!(
+            match_keys("EDURINO", Some("App-Lernspiel »Wörter & Sätze«"), Some("Alles für die Schule")),
+            vec![NONFOOD_KEY]
+        );
+        assert_eq!(
+            match_keys("MATTEL", Some("Haustier-Schlüsselanhänger »Monster High«"), Some("Alles für die Schule")),
+            vec![NONFOOD_KEY]
+        );
         // Beim Ausbau der Non-Food-Warengruppen einmal zu weit gegriffen und
         // gleich wieder zurückgenommen: „Sportnahrung" klingt nach Zubehör,
         // steht bei Lidl aber über Proteinriegeln, Protein-Chips und
@@ -477,43 +550,100 @@ mod tests {
         assert!(keys("Ciolino").is_empty()); // kontextloser Flyer-Titel → Review-Liste
     }
 
-    /// Paritäts-Check gegen die Python-Referenz auf der lokalen Nightly-DB:
+    /// Zeilenweiser Paritäts-Check gegen die Python-Referenz:
     /// `cargo test parity_with_eval_db -- --ignored --nocapture`
-    /// Die Zahlen müssen zur Ausgabe von `python3 docs/matching-woerterbuch-eval.py` passen.
+    /// Andere Basis: `LECHARIOT_PARITY_DB=~/.local/share/lechariot/testkorpus.db`.
+    ///
+    /// Hier standen bis 2026-07-31 drei Summen (nonfood/getaggt/ungetaggt),
+    /// die jemand von Hand mit der Ausgabe des Python-Skripts verglich. Summen
+    /// können strukturell nicht sehen, dass beide Maschinen DERSELBEN Zeile
+    /// verschiedene Tags geben: solange die Zeile hüben wie drüben als
+    /// „getaggt" zählt, bleibt jede Summe gleich. Genau so lag `thunfisch-salat`
+    /// — Python entschied „Phrase oder Wort" am Rohstring, Rust an der
+    /// normalisierten Form, „Thunfisch-Salat" bekam hier `fisch` und dort
+    /// `fisch, salat`, und die Summen schwiegen.
+    ///
+    /// Geprüft werden zwei Mengen, und die zweite ist nicht schmückendes
+    /// Beiwerk: Die Angebotszeilen allein hätten genau diesen Fund NICHT
+    /// gefunden. Im Korpus heißt das Produkt „Thunfischsalat" in einem Wort,
+    /// den Bindestrich trägt nur der Wörterbuch-Eintrag. Deshalb geht jeder
+    /// Eintrag des Wörterbuchs zusätzlich als eigener Fall durch beide
+    /// Maschinen — dort, in den Einträgen selbst, sitzt diese Fehlerklasse.
     #[test]
     #[ignore]
     fn parity_with_eval_db() {
-        let path = std::env::var("HOME").unwrap() + "/.local/share/lechariot/lechariot.db";
-        let conn = rusqlite::Connection::open(&path).unwrap();
-        let mut stmt = conn
-            .prepare(
-                "select o.title, coalesce(o.subtitle,''), coalesce(o.category,'')
-                 from offers o join markets m on m.id=o.market_id
-                 where o.valid_until >= date('now')",
-            )
-            .unwrap();
-        let rows: Vec<(String, String, String)> = stmt
-            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
-            .unwrap()
-            .map(|r| r.unwrap())
-            .collect();
-        let (mut nonfood, mut tagged, mut untagged) = (0, 0, 0);
-        for (title, sub, cat) in &rows {
-            let k = match_keys(title, Some(sub), Some(cat));
-            if k == [NONFOOD_KEY] {
-                nonfood += 1;
-            } else if k.is_empty() {
-                untagged += 1;
-            } else {
-                tagged += 1;
+        const QUERY: &str = "select o.title, coalesce(o.subtitle,''), coalesce(o.category,'') \
+                             from offers o where o.valid_until >= date('now') order by o.id";
+        let root = env!("CARGO_MANIFEST_DIR");
+        let db = std::env::var("LECHARIOT_PARITY_DB").unwrap_or_else(|_| {
+            std::env::var("HOME").unwrap() + "/.local/share/lechariot/lechariot.db"
+        });
+
+        // Der Treiber ruft `match_keys` der Referenz, nicht `term_hits`: sonst
+        // bliebe der Marken- und der Kategorie-Weg ungeprüft, und die stehen
+        // hinter jeder dritten getaggten Zeile. Er gibt den Fall mit aus, damit
+        // beide Maschinen nachweislich denselben Eingaben begegnen — verglichen
+        // wird die Ausgabe, nicht die Fähigkeit, dieselbe Liste zu bauen.
+        let driver = format!(
+            r#"
+import importlib.util, sqlite3, sys
+spec = importlib.util.spec_from_file_location("ev", r"{root}/docs/matching-woerterbuch-eval.py")
+ev = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(ev)
+faelle = [("db",) + r for r in sqlite3.connect(sys.argv[1]).execute("""{QUERY}""")]
+for exact, suffix, block in ev.V.values():
+    faelle += [("dict", e, "", "") for e in list(exact) + list(suffix) + list(block)]
+for quelle, title, sub, cat in faelle:
+    title, sub, cat = (f.replace("\t", " ") for f in (title, sub, cat))
+    tags = ",".join(sorted(ev.match_keys(title, sub, cat)[0]))
+    print("\t".join((quelle, title, sub, cat, tags)))
+"#
+        );
+        let out = std::process::Command::new("python3")
+            .arg("-c")
+            .arg(&driver)
+            .arg(&db)
+            .output()
+            .expect("python3 fehlt — ohne die Referenz gibt es keine Parität zu prüfen");
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        let stdout = String::from_utf8(out.stdout).unwrap();
+
+        // Verglichen wird sortiert: die Reihenfolge der Tags ist nirgends
+        // zugesichert, ihre Menge schon.
+        let (mut aus_db, mut aus_dict) = (0usize, 0usize);
+        let mut abweichungen = Vec::new();
+        for line in stdout.lines() {
+            let f: Vec<&str> = line.splitn(5, '\t').collect();
+            assert_eq!(f.len(), 5, "unerwartete Zeile der Referenz: {line}");
+            let (quelle, title, sub, cat, py) = (f[0], f[1], f[2], f[3], f[4]);
+            if quelle == "db" { aus_db += 1 } else { aus_dict += 1 }
+            let mut keys = match_keys(title, Some(sub), Some(cat));
+            keys.sort();
+            let rs = keys.join(",");
+            if rs != py {
+                abweichungen.push(format!(
+                    "  [{quelle}] „{title}“ | {sub} | {cat}\n      rust [{rs}]  python [{py}]"
+                ));
             }
         }
-        println!(
-            "gesamt {} | nonfood {} | getaggt {} | ungetaggt {}",
-            rows.len(),
-            nonfood,
-            tagged,
-            untagged
+
+        // Gegenprobe, dass die Referenz überhaupt gearbeitet hat: eine leere
+        // oder halbe Ausgabe wäre sonst der grünste Test der Welt.
+        let conn = rusqlite::Connection::open(&db).unwrap();
+        let erwartet: usize = conn
+            .query_row(&format!("select count(*) from ({QUERY})"), [], |r| r.get(0))
+            .map(|n: i64| n as usize)
+            .unwrap();
+        assert_eq!(aus_db, erwartet, "die Referenz sah nicht dieselben Angebotszeilen");
+        assert!(aus_dict > 0, "kein einziger Wörterbuch-Eintrag geprüft");
+
+        println!("{aus_db} Angebotszeilen aus {db} + {aus_dict} Wörterbuch-Einträge verglichen");
+        assert!(
+            abweichungen.is_empty(),
+            "{} von {} Fällen weichen ab:\n{}",
+            abweichungen.len(),
+            aus_db + aus_dict,
+            abweichungen.iter().take(20).cloned().collect::<Vec<_>>().join("\n")
         );
     }
 }
