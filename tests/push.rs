@@ -980,3 +980,63 @@ fn deferred_mirror_upserts_offers_before_mirroring() {
     assert!(first_upsert < done_pos, "Fertigmeldung vor den Angeboten: {reqs:#?}");
     assert!(done_pos < patch_pos, "Fertigmeldung erst nach dem Bild-Nachtrag: {reqs:#?}");
 }
+
+/// **Der Weg, den kein Live-Lauf hier prüfen kann.** Die Kachelbilder des
+/// Lidl-Prospekts entstehen als Datei und nicht hinter einer URL; ob sie
+/// tatsächlich im Bucket landen, hängt an einem Zweig in `storage::mirror`,
+/// den man ohne Service-Key nicht gegen Supabase ausprobieren kann.
+///
+/// Genau so sah der Fehler aus, gegen den dieses Projekt seine Lehren
+/// geschrieben hat: Ein Lauf meldet Erfolg, und niemand hat je nachgesehen, ob
+/// am Ende ein Bild ankommt. Also gegen den Mock-Server nachgesehen.
+#[test]
+fn a_leaflet_crop_is_uploaded_to_the_bucket() {
+    let dir = lechariot::scrapers::lidl_prospekt::crop_dir();
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("LIDL_TEST_upload_probe.png");
+    // Ein echtes PNG, damit der Weg über `downscale` derselbe ist wie im Lauf.
+    let img = image::DynamicImage::ImageRgb8(image::RgbImage::new(64, 64));
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+    std::fs::write(&file, bytes.into_inner()).unwrap();
+
+    let (base_url, log) = spawn_mock();
+    let cfg = PushConfig { base_url: base_url.clone(), api_key: "test-key".to_string() };
+    let client = reqwest::blocking::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
+
+    let source = format!("file://{}", file.display());
+    let public = storage::mirror(&client, &cfg, &source).expect("Kachelbild nicht gespiegelt");
+    let _ = std::fs::remove_file(&file);
+
+    // Die zurückgegebene URL zeigt in den öffentlichen Bucket, nicht auf die
+    // lokale Datei — sonst stünde ein `file://`-Pfad in der Datenbank.
+    assert!(public.starts_with(&base_url), "keine Bucket-URL: {public}");
+    assert!(public.contains("/storage/v1/object/public/offer-images/"));
+    assert!(!public.contains("file://"));
+
+    let log = log.lock().unwrap();
+    let upload = log
+        .iter()
+        .find(|r| r.method == "POST" && r.target.contains("/storage/v1/object/offer-images/"))
+        .expect("kein Upload angekommen");
+    assert!(!upload.body.is_empty(), "Upload ohne Bilddaten");
+    assert!(
+        upload
+            .headers
+            .iter()
+            .any(|(k, v)| k.eq_ignore_ascii_case("content-type") && v.starts_with("image/")),
+        "Upload ohne Bild-Content-Type: {:?}",
+        upload.headers
+    );
+    // Idempotent — ein zweiter Lauf darf dasselbe Objekt überschreiben.
+    assert!(
+        upload
+            .headers
+            .iter()
+            .any(|(k, v)| k.eq_ignore_ascii_case("x-upsert") && v == "true"),
+        "x-upsert fehlt"
+    );
+}
