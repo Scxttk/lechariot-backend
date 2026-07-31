@@ -111,9 +111,13 @@ impl Store {
 /// * `prospekt` — tiles built from word coordinates
 ///   (`scrapers::lidl_prospekt`). Needs `pdftotext`, nothing else. Default.
 /// * `prospekt-llm` — the same text layer, page by page through a language
-///   model (`scrapers::lidl_llm`). Additionally needs `ANTHROPIC_API_KEY`, and
-///   in exchange reads tiles without a clean brand-name-description structure
-///   (fruit, vegetables, non-food) where the geometry fails.
+///   model (`scrapers::lidl_llm`). Goes to GitHub Models
+///   (`models.github.ai`, `openai/gpt-4.1-mini`) with `GITHUB_MODELS_TOKEN`,
+///   else `GITHUB_TOKEN`, else the token of the `gh` CLI — **not** an
+///   Anthropic key; that line stood here until 2026-07-31 and named a variable
+///   this code has never read. In exchange it reads tiles without a clean
+///   brand-name-description structure (fruit, vegetables, non-food) where the
+///   geometry fails.
 ///
 /// The switch is deliberately an environment variable rather than a CLI flag:
 /// a single nightly run can be moved over without touching the call sites in
