@@ -393,6 +393,14 @@ fn mirror_images(
                 }
                 Err(e) => {
                     eprintln!("  Bild übersprungen ({src}): {e}");
+                    // Eine gescheiterte Händler-URL darf stehen bleiben — die
+                    // App kann sie laden. Ein gescheitertes Kachelbild nicht:
+                    // `file://` zeigt auf dieses Dateisystem und wäre auf dem
+                    // Telefon ein toter Link. Dann lieber kein Bild und das
+                    // Emoji, das die App ohnehin als Rückfall hat.
+                    if src.starts_with("file://") {
+                        row.image_url = None;
+                    }
                     failed += 1;
                 }
             }

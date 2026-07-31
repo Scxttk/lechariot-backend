@@ -248,10 +248,31 @@ pub fn mirror(
     cfg: &PushConfig,
     source_url: &str,
 ) -> Result<String> {
+    // Kachelbilder aus dem Lidl-Prospekt liegen als Datei vor, nicht hinter
+    // einer URL — sie werden lokal aus dem PDF geschnitten. Der Weg dahin ist
+    // derselbe wie für jedes Händlerbild (downscale -> WebP -> Bucket), nur die
+    // Quelle ist eine andere.
+    let local = local_crop_path(source_url)?;
+
     // SSRF-Schutz: Quelle prüfen, BEVOR irgendein Netzwerkzugriff erfolgt.
-    validate_source_url(source_url)?;
+    // Für eine lokale Datei gibt es keinen Netzwerkzugriff und keinen Host,
+    // dafür die Schranke in `local_crop_path`.
+    if local.is_none() {
+        validate_source_url(source_url)?;
+    }
 
     let path = object_path(source_url);
+
+    if let Some(file) = local {
+        let bytes = std::fs::read(&file)
+            .with_context(|| format!("Kachelbild nicht lesbar: {}", file.display()))?;
+        // Immer PNG: so schneidet `pdftoppm`. `downscale` macht daraus WebP.
+        let (body, content_type) = match downscale(&bytes, "image/png") {
+            Some((scaled, ct)) => (scaled, ct),
+            None => (bytes, "image/png"),
+        };
+        return upload(client, cfg, &path, body, content_type);
+    }
 
     // Bild vom Händler-CDN laden. `client` folgt bewusst keinen Redirects
     // (siehe `push::run`), damit ein 3xx nicht auf ein internes Ziel umgelenkt
@@ -283,7 +304,42 @@ pub fn mirror(
         None => (bytes.to_vec(), content_type),
     };
 
-    // In den Bucket hochladen (idempotent via x-upsert).
+    upload(client, cfg, &path, body, content_type)
+}
+
+/// `file://`-Quelle in einen Pfad auflösen, aber **nur** innerhalb des
+/// Kachelbild-Verzeichnisses.
+///
+/// Die Schranke ist der Ersatz für die Host-Allow-Liste: Ohne sie würde aus
+/// einer Bild-URL ein Leseprimitiv auf das ganze Dateisystem, und der Inhalt
+/// landete öffentlich im Bucket. Erlaubt ist deshalb genau das Verzeichnis,
+/// in das `lidl_prospekt` schneidet — und keine Pfadwechsel darin.
+fn local_crop_path(source_url: &str) -> Result<Option<std::path::PathBuf>> {
+    let Some(rest) = source_url.strip_prefix("file://") else {
+        return Ok(None);
+    };
+    let path = std::path::Path::new(rest);
+    let dir = crate::scrapers::lidl_prospekt::crop_dir();
+    if path.components().any(|c| c == std::path::Component::ParentDir) {
+        bail!("Kachelbild mit Pfadwechsel abgelehnt: {source_url}");
+    }
+    if !path.starts_with(&dir) {
+        bail!(
+            "Kachelbild außerhalb von {} abgelehnt: {source_url}",
+            dir.display()
+        );
+    }
+    Ok(Some(path.to_path_buf()))
+}
+
+/// In den Bucket hochladen (idempotent via x-upsert).
+fn upload(
+    client: &reqwest::blocking::Client,
+    cfg: &PushConfig,
+    path: &str,
+    body: Vec<u8>,
+    content_type: &str,
+) -> Result<String> {
     let upload_url = format!("{}/storage/v1/object/{BUCKET}/{path}", cfg.base_url);
     let resp = client
         .post(&upload_url)
@@ -301,12 +357,40 @@ pub fn mirror(
         bail!("Bild-Upload {path}: HTTP {status}: {excerpt}");
     }
 
-    Ok(public_url(&cfg.base_url, &path))
+    Ok(public_url(&cfg.base_url, path))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Aus einer Bild-URL darf kein Leseprimitiv auf das Dateisystem werden.
+    // `file://` gibt es nur für die Kachelbilder, die dieser Lauf selbst aus
+    // dem Prospekt-PDF geschnitten hat — alles andere fliegt raus, bevor
+    // irgendetwas gelesen und öffentlich in den Bucket gelegt wird.
+    #[test]
+    fn local_crops_are_confined_to_their_directory() {
+        let dir = crate::scrapers::lidl_prospekt::crop_dir();
+        let ok = format!("file://{}/LIDL_1988_abc.png", dir.display());
+        assert_eq!(
+            local_crop_path(&ok).unwrap(),
+            Some(dir.join("LIDL_1988_abc.png"))
+        );
+
+        // Woanders im Dateisystem: abgelehnt.
+        assert!(local_crop_path("file:///etc/passwd").is_err());
+        assert!(local_crop_path("file:///tmp/fremd/bild.png").is_err());
+
+        // Pfadwechsel aus dem erlaubten Verzeichnis heraus: ebenfalls.
+        let escape = format!("file://{}/../../etc/passwd", dir.display());
+        assert!(local_crop_path(&escape).is_err());
+
+        // http(s) bleibt unberührt und geht den normalen Weg.
+        assert_eq!(
+            local_crop_path("https://img.rewe-static.de/x.jpg").unwrap(),
+            None
+        );
+    }
 
     #[test]
     fn object_path_is_deterministic() {

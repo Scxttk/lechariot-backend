@@ -432,6 +432,88 @@ impl Island {
     }
 }
 
+/// Der Bildstreifen einer Kachel: das Rechteck über ihrem Text, in dem im
+/// Prospekt das Produktfoto steht. Koordinaten in PDF-Punkten, Ursprung oben
+/// links — dieselbe Ecke, aus der `pdftotext -bbox-layout` und `pdftoppm`
+/// rechnen.
+///
+/// **Warum überhaupt gerechnet und nicht gelesen?** Der Prospekt trägt seine
+/// Fotos nicht als benannte Objekte; die Textebene weiß nur, wo Wörter stehen.
+/// Das Foto ist der Platz *darüber* — begrenzt nach oben durch die nächste
+/// Kachel derselben Spalte. Nachgemessen an Seite 15 des Prospekts vom
+/// 2026-07-20: Für 7 der 13 Sternpreis-Kacheln bleibt so ein Streifen von
+/// 85-111 pt, und der enthält genau das Produktfoto (geprüft an Red Bull,
+/// Ben's Original, Leerdammer).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TileShot {
+    /// Die `Offer`-ID, zu der dieser Streifen gehört.
+    pub offer_id: String,
+    /// 1-basierte Seitenzahl im PDF.
+    pub page: usize,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+/// Unter dieser Höhe ist der Streifen kein Foto, sondern der Zeilenabstand zur
+/// Kachel darüber. 25 pt trennt an der Messung von Seite 15 sauber: die
+/// verworfenen Streifen liegen bei 8-24 pt, die echten ab 30 pt.
+const MIN_SHOT_PT: f64 = 25.0;
+
+/// Höchstverhältnis Höhe zu Breite eines Bildstreifens. Siehe `photo_rect` —
+/// der Deckel verhindert, dass ein Streifen die Kachel darüber verschluckt.
+const MAX_SHOT_ASPECT: f64 = 1.3;
+
+/// Auflösung, mit der die Streifen aus dem PDF gerastert werden. Der Prospekt
+/// ist 467 x 794 pt groß und der Viewer zeigt ihn mit 1415 x 2400 px, also
+/// rund 218 dpi — 150 dpi liegt darunter und reicht: `storage::downscale`
+/// kappt ohnehin auf `MAX_IMAGE_EDGE` und kodiert nach WebP.
+const RENDER_DPI: u32 = 150;
+
+/// Der Streifen über `tile`, begrenzt durch die nächste Kachel darüber, die
+/// sich mit ihr in der Waagerechten überschneidet. None, wenn zu flach.
+///
+/// `others` sind die umschließenden Rechtecke **aller** Kacheln der Seite,
+/// inklusive `tile` selbst — die eigene fällt über den `y1 <= tile.y0`-Test
+/// heraus.
+fn photo_rect(tile: &Island, others: &[(f64, f64, f64, f64)]) -> Option<(f64, f64, f64, f64)> {
+    let width = tile.x1 - tile.x0;
+    let top = others
+        .iter()
+        .filter(|(_, _, _, y1)| *y1 <= tile.y0 + 1.0)
+        // „Dieselbe Spalte" heißt: die Rechtecke überlappen sich in x deutlich.
+        // Ohne diesen Test begrenzt die Nachbarspalte den Streifen.
+        .filter(|(x0, _, x1, _)| {
+            let overlap = x1.min(tile.x1) - x0.max(tile.x0);
+            overlap > 0.2 * width.min(x1 - x0)
+        })
+        .map(|(_, _, _, y1)| *y1)
+        .fold(0.0_f64, f64::max);
+
+    // Ist der Platz über der Kachel **zu groß**, um ihr eigenes Foto zu sein,
+    // wird gar nichts geschnitten.
+    //
+    // Der Streifen reicht bis zur nächsten Textkachel darüber. Sitzt dazwischen
+    // eine bildfüllende Fläche ohne eigenen Text, gehört sie dem Nachbarn —
+    // und der Schnitt zeigt dessen Produkt. Nachgemessen an einem echten Lauf
+    // für 01219: „MILBONA Saure Sahne" bekam so das Zaziki-Foto der Kachel
+    // darüber. Ein FALSCHES Bild ist schlimmer als keines; es behauptet etwas
+    // über den Preis, der daneben steht.
+    //
+    // Deckeln statt verwerfen hilft hier nicht — der gekappte Streifen liegt
+    // dann immer noch im fremden Foto. Also: nur schneiden, wenn der Platz
+    // plausibel der eigene ist. 1,3 × Kachelbreite ist das Maß; Prospektfotos
+    // sind ungefähr quadratisch bis leicht hochkant, und das Foto einer Kachel
+    // sitzt unmittelbar über ihrem Text. Was das nicht besteht, bleibt ohne
+    // Bild und zeigt in der App weiter sein Emoji.
+    let height = tile.y0 - top;
+    if height > MAX_SHOT_ASPECT * width {
+        return None;
+    }
+    (height >= MIN_SHOT_PT).then_some((tile.x0, top, width, height))
+}
+
 /// `pdftotext -bbox-layout`-Ausgabe in Seiten aus Textinseln zerlegen.
 ///
 /// Bewusst ein Zeilenparser statt eines XML-Parsers: Das Format ist streng
@@ -779,7 +861,21 @@ pub fn extract_offers(
     valid_from: Option<&str>,
     valid_until: Option<&str>,
 ) -> Vec<Offer> {
+    extract_offers_with_shots(xml, market_id, valid_from, valid_until).0
+}
+
+/// Wie [`extract_offers`], liefert aber zusätzlich die Bildstreifen der
+/// Kacheln. Getrennt gehalten, weil das Rastern das PDF braucht und diese
+/// Funktion rein auf der Textebene arbeitet — so bleibt sie gegen die Fixture
+/// prüfbar.
+pub fn extract_offers_with_shots(
+    xml: &str,
+    market_id: &str,
+    valid_from: Option<&str>,
+    valid_until: Option<&str>,
+) -> (Vec<Offer>, Vec<TileShot>) {
     let mut offers = Vec::new();
+    let mut shots = Vec::new();
     let mut stats = Stats::default();
 
     for (page_index, islands) in parse_bbox_layout(xml).into_iter().enumerate() {
@@ -796,6 +892,10 @@ pub fn extract_offers(
         };
 
         let tiles = cluster(islands);
+        // Die Rechtecke aller Kacheln, bevor sie in Preise und Produkte
+        // aufgeteilt werden — sie begrenzen die Bildstreifen nach oben.
+        let page_rects: Vec<(f64, f64, f64, f64)> =
+            tiles.iter().map(|t| (t.x0, t.y0, t.x1, t.y1)).collect();
         let mut prices = Vec::new();
         let mut products = Vec::new();
         let mut badges = Vec::new();
@@ -942,12 +1042,31 @@ pub fn extract_offers(
                     .and_then(|c| parse_price(c.get(1)?.as_str()))
                     .filter(|r| *r > price);
 
+                let offer_id =
+                    Offer::build_id(market_id, &format!("{title}_{price:.2}"), valid_from);
+
+                // Der Bildstreifen der ganzen Kachel, also über Produkttext
+                // UND Preis — die beiden stehen im Prospekt nebeneinander, das
+                // Foto sitzt über beiden.
+                let mut tile_rect = product.clone();
+                tile_rect.merge(price_tile);
+                if let Some((x, y, w, h)) = photo_rect(&tile_rect, &page_rects) {
+                    shots.push(TileShot {
+                        offer_id: offer_id.clone(),
+                        page: page_index + 1,
+                        x,
+                        y,
+                        w,
+                        h,
+                    });
+                }
+
                 offers.push(Offer {
                     // Preis gehört in die ID: Zwei Kacheln derselben Seite
                     // tragen oft denselben Namen ("Versch. Sorten") bei
                     // verschiedenen Preisen — ohne ihn verschluckt das Dedup
                     // das zweite Angebot.
-                    id: Offer::build_id(market_id, &format!("{title}_{price:.2}"), valid_from),
+                    id: offer_id,
                     market_id: market_id.to_string(),
                     title: title.clone(),
                     subtitle: subtitle.clone(),
@@ -967,8 +1086,18 @@ pub fn extract_offers(
     }
 
     let offers = dedup(offers);
+    // Dedup wirft Kacheln weg; ihre Streifen dürfen nicht übrig bleiben, sonst
+    // rastert der Lauf Bilder für Angebote, die es nicht mehr gibt.
+    // Und je Angebot genau einer: Dieselbe ID entsteht mehrfach, wenn zwei
+    // Kacheln denselben Namen zum selben Preis tragen. `dedup` führt sie zu
+    // einem Angebot zusammen, ihre Streifen blieben sonst beide stehen und
+    // würden dasselbe Bild zweimal rastern und hochladen.
+    let kept: std::collections::HashSet<&str> = offers.iter().map(|o| o.id.as_str()).collect();
+    let mut seen = std::collections::HashSet::new();
+    shots.retain(|s| kept.contains(s.offer_id.as_str()) && seen.insert(s.offer_id.clone()));
+
     stats.report(offers.len());
-    offers
+    (offers, shots)
 }
 
 /// Untertitel aus Packungsgröße, Grundpreis und Lidl-Plus-Hinweis.
@@ -1161,11 +1290,70 @@ fn run_pdftotext(path: &std::path::Path, mode: &str) -> Result<String> {
 
 /// PDF laden und durch `pdftotext -bbox-layout` schicken (Wortkoordinaten für
 /// die Kachelbildung).
-fn pdf_to_layout(pdf_url: &str) -> Result<String> {
-    let path = download_pdf(pdf_url)?;
-    let result = run_pdftotext(&path, "-bbox-layout");
-    let _ = std::fs::remove_file(&path);
-    result
+/// Verzeichnis der gerasterten Kachelbilder.
+///
+/// Bewusst **ohne** Prozess-ID im Namen, anders als beim PDF: Der Dateiname
+/// wird zur Quell-URL des Bildes, und aus ihr leitet `storage::object_path`
+/// den Objektpfad im Bucket ab. Wäre er je Lauf verschieden, lüde jede Nacht
+/// dieselben Bilder unter neuen Namen hoch und der DB-Cache träfe nie.
+pub fn crop_dir() -> std::path::PathBuf {
+    std::env::temp_dir().join("lechariot-lidl-crops")
+}
+
+/// Die Bildstreifen aus dem PDF rastern und als PNG ablegen; liefert je
+/// Angebots-ID die `file://`-URL der Datei.
+///
+/// `pdftoppm` schneidet selbst zu (`-x -y -W -H`), es braucht also keine
+/// Bildbibliothek in diesem Modul. Die Umwandlung nach WebP macht später
+/// `storage::downscale` auf demselben Weg wie bei jedem Händlerbild.
+///
+/// Ein Fehlschlag einzelner Streifen ist kein Abbruchgrund: Dann bleibt das
+/// Angebot ohne Bild und die App zeigt ihr Emoji — genau wie heute.
+fn render_shots(pdf: &std::path::Path, shots: &[TileShot]) -> HashMap<String, String> {
+    if shots.is_empty() {
+        return HashMap::new();
+    }
+    let dir = crop_dir();
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("WARNUNG [Lidl] Kachelbilder nicht ablegbar ({e}) — Prospekt ohne Bilder.");
+        return HashMap::new();
+    }
+
+    let scale = RENDER_DPI as f64 / 72.0;
+    let mut out = HashMap::new();
+    let mut failed = 0usize;
+    for shot in shots {
+        let target = dir.join(format!("{}.png", shot.offer_id));
+        // `-singlefile` schreibt genau `<prefix>.png` statt `<prefix>-<seite>.png`.
+        let prefix = dir.join(&shot.offer_id);
+        let status = Command::new("pdftoppm")
+            .args(["-png", "-singlefile", "-r"])
+            .arg(RENDER_DPI.to_string())
+            .args(["-f", &shot.page.to_string(), "-l", &shot.page.to_string()])
+            .args(["-x", &((shot.x * scale) as i64).max(0).to_string()])
+            .args(["-y", &((shot.y * scale) as i64).max(0).to_string()])
+            .args(["-W", &((shot.w * scale) as i64).max(1).to_string()])
+            .args(["-H", &((shot.h * scale) as i64).max(1).to_string()])
+            .arg(pdf)
+            .arg(&prefix)
+            .status();
+        match status {
+            Ok(s) if s.success() && target.exists() => {
+                out.insert(shot.offer_id.clone(), format!("file://{}", target.display()));
+            }
+            _ => failed += 1,
+        }
+    }
+    println!(
+        "  {} Kachelbilder gerastert{}",
+        out.len(),
+        if failed > 0 {
+            format!(", {failed} fehlgeschlagen")
+        } else {
+            String::new()
+        }
+    );
+    out
 }
 
 /// Onlineshop-Artikel des Prospekts als Angebote.
@@ -1235,7 +1423,7 @@ pub fn products_as_offers(
 
 /// Prospekt der Woche plus seinen Text, seitenweise in Lesereihenfolge.
 ///
-/// Gegenstück zu [`pdf_to_layout`]: `-layout` statt `-bbox-layout`, weil hier
+/// `-layout` statt `-bbox-layout`, weil hier
 /// kein Programm Koordinaten braucht, sondern ein Sprachmodell die Seite
 /// lesen soll — die Spaltenausrichtung bleibt erhalten, die Wortkoordinaten
 /// entfallen. Genutzt von [`crate::scrapers::lidl_llm`].
@@ -1262,15 +1450,35 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
         flyer.offer_start_date.as_deref().unwrap_or("?"),
         flyer.offer_end_date.as_deref().unwrap_or("?")
     );
-    let xml = pdf_to_layout(pdf_url)?;
-    let mut offers = extract_offers(
+    // Das PDF bleibt hier liegen, bis auch die Kachelbilder geschnitten sind —
+    // es ein zweites Mal zu laden wären 83 MB für nichts.
+    let pdf_path = download_pdf(pdf_url)?;
+    let xml = run_pdftotext(&pdf_path, "-bbox-layout");
+    let xml = match xml {
+        Ok(xml) => xml,
+        Err(e) => {
+            let _ = std::fs::remove_file(&pdf_path);
+            return Err(e);
+        }
+    };
+
+    let (mut offers, shots) = extract_offers_with_shots(
         &xml,
         &market.id,
         flyer.offer_start_date.as_deref(),
         flyer.offer_end_date.as_deref(),
     );
     if offers.is_empty() {
+        let _ = std::fs::remove_file(&pdf_path);
         bail!("Prospekt gelesen, aber keine Angebote extrahiert — Layout geändert?");
+    }
+
+    let crops = render_shots(&pdf_path, &shots);
+    let _ = std::fs::remove_file(&pdf_path);
+    for offer in &mut offers {
+        if let Some(url) = crops.get(&offer.id) {
+            offer.images = vec![url.clone()];
+        }
     }
     offers.extend(merge_products(&flyer, &market.id, &offers));
     Ok(offers)
@@ -1461,4 +1669,41 @@ mod tests {
         assert!(offers.iter().all(|o| o.price.is_some()));
         assert!(offers.iter().any(|o| o.regular_price.is_some()));
     }
+
+    fn island(x0: f64, y0: f64, x1: f64, y1: f64) -> Island {
+        Island { x0, y0, x1, y1, lines: vec!["x".into()] }
+    }
+
+    /// Der Schnitt darf nur dort entstehen, wo der Platz über der Kachel
+    /// plausibel ihr eigenes Foto ist.
+    #[test]
+    fn photo_rect_skips_bands_too_tall_to_be_this_tiles_own_photo() {
+        let tile = island(100.0, 200.0, 200.0, 230.0); // 100 pt breit
+        let above = |y1: f64| vec![(100.0, 0.0, 200.0, y1), (100.0, 200.0, 200.0, 230.0)];
+
+        // Streifen von 90 pt bei 100 pt Breite: plausibel, wird geschnitten.
+        let (x, y, w, h) = photo_rect(&tile, &above(110.0)).expect("sollte schneiden");
+        assert_eq!((x, y, w), (100.0, 110.0, 100.0));
+        assert!((h - 90.0).abs() < 0.001);
+
+        // 180 pt bei 100 pt Breite: das ist die Nachbarkachel, kein eigenes
+        // Foto — lieber gar kein Bild als das falsche.
+        assert!(photo_rect(&tile, &above(20.0)).is_none());
+
+        // Und nichts Flaches: 10 pt ist der Zeilenabstand, kein Foto.
+        assert!(photo_rect(&tile, &above(190.0)).is_none());
+    }
+
+    /// Die Nachbarspalte begrenzt den Streifen nicht — sonst bekäme jede
+    /// Kachel die Höhe ihres Nachbarn.
+    #[test]
+    fn photo_rect_ignores_tiles_in_other_columns() {
+        let tile = island(100.0, 200.0, 200.0, 230.0);
+        // Kachel weit rechts, ohne nennenswerte Überlappung in x.
+        let others = vec![(400.0, 150.0, 500.0, 190.0), (100.0, 0.0, 200.0, 120.0)];
+        let (_, y, _, h) = photo_rect(&tile, &others).expect("sollte schneiden");
+        assert_eq!(y, 120.0, "die fremde Spalte hat den Streifen begrenzt");
+        assert!((h - 80.0).abs() < 0.001);
+    }
+
 }
