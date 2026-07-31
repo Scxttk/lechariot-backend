@@ -15,6 +15,47 @@ Angebotszahlen schwanken je Woche und Region.
 | Netto | Intershop-Filialsuche (JSON) + `/filialangebote/{1,2,4,5}`-HTML | Akamai → System-`curl`; Filiale über Cookie `netto_user_stores_id` | filialspezifisch | ~300 | `tests/fixtures/netto/filialangebote_1.html` |
 | ALDI Nord | `aldi-nord.de/angebote.html`, Daten im `__NEXT_DATA__`-JSON (`OFFER_GET.res.algoliaDataMap`) | plain reqwest | bundesweit (`ALDI_NORD_DE`) | ~230 | `tests/fixtures/aldi_nord/angebote.html` |
 | ALDI Süd | `api.aldi-sued.de/v3/product-search?categoryKey=1588161426582123` (paginiert) | Akamai → System-`curl`; Preise in **Cent**; keine Gültigkeitsdaten | Süd-Gebiet einheitlich (`ALDI_SUED_DE`) | ~75 | `tests/fixtures/aldi_sued/product_search.json` |
+| NORMA | `norma-online.de/de/angebote/` (Index) → je Themenseite `…/ab-<tag>,-<dd.mm.jj>/<thema>-t-<id>/` | plain reqwest, kein Key, kein Cookie; Preis maschinenlesbar im `aria-label` („0,99 Euro"), sichtbar steht dort `–,99`; **Marke und Produkt getrennt** (Offer-ID enthält deshalb die Marke); Laufzeit abgeleitet (siehe unten) | bundesweit (`NORMA_DE`) | ~215 (3 Termine) | `tests/fixtures/norma/angebote_index.html`, `…/thema_mehr_fuers_geld.html` |
+
+## NORMA: drei Termine pro Woche, ein abgeleitetes Enddatum
+
+NORMA startet **drei Angebotszyklen je Woche** (Montag, Mittwoch, Freitag), und
+der Index zeigt die laufenden *und* die kommenden. Am 2026-07-31 waren das vier
+Termine mit 22 Themenseiten und 216 Angeboten, 157 davon am Montagstermin. Ein
+Lauf kostet damit rund 23 Requests: den Index plus eine Seite je Thema.
+
+Gemessen am 2026-07-31 (PLZ 01219): **218 Angebote, 213 mit Preis (98 %), 91 mit
+Streichpreis.**
+
+**Das Enddatum ist abgeleitet, und das ist eine bewusste Ausnahme.** Auf der
+Themenseite steht nur der Start („ab Montag, 03.08."). Leer lassen ging nicht:
+Die App liest `valid_until` als **nicht-optionales** `Date`
+(`ios/LeChariot/Models/Offer.swift`) — ein `null` bricht nicht nur die
+NORMA-Zeile, sondern das Decoding der **ganzen** Angebotsantwort. Also sieben
+Tage ab Start (`norma::TERM_DAYS`).
+
+Die Zahl ist nicht geraten: Die **Artikel**-Detailseiten nennen den Zeitraum
+wörtlich („Aktionszeitraum: 03.08. bis 09.08.2026"). Sie an jedem Angebot
+abzufragen wäre 218 statt 23 Requests, deshalb steht die Laufzeit als Konstante
+im Code — und der Live-Test `valid_until_is_the_published_window` rechnet sie
+gegen zwei echte Detailseiten nach, damit ein geänderter Rhythmus auffällt:
+
+```sh
+cargo test --lib valid_until_is_the_published_window -- --ignored --nocapture
+```
+
+Zwei weitere Fallen, beide beim ersten Livelauf aufgefallen:
+
+1. **Marke und Produkt stehen getrennt** (`strong.supplier` = „Sheba",
+   `h3` = „Katzennassnahrung"). Ohne die Marke im Titel fallen zwei Marken
+   desselben Produkts auf dieselbe Offer-ID — Sheba und Whiskas hatten am
+   2026-07-31 beide eine „Katzennassnahrung" im selben Prospekt. Dieselbe
+   Falle wie bei Kaufland.
+2. **Textknoten ohne Leerraum dazwischen.** `…Tipo` + `je 520 g` ergab beim
+   bloßen Aneinanderhängen „Tipoje 520 g"; die Knoten werden deshalb mit
+   Leerzeichen verbunden. Ebenso schreibt NORMA das Pfand mal mit und mal ohne
+   Leerzeichen vors Komma (`je 6 x 0,5 l,zzgl. …`) — es fliegt aus der
+   Mengenangabe, damit `push::is_pure_quantity` sie als reine Menge erkennt.
 
 ## Bekannte NULL-Preise (diagnostiziert 2026-07)
 

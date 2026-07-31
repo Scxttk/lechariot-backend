@@ -150,7 +150,8 @@ enum Command {
         /// Bundesweit speichern statt an einer Filiale: die Zeilen bekommen
         /// `nationwide = true` und gelten für jede Filiale ihrer Kette. Nur
         /// für Ketten mit bundesweit identischem Katalog (ALDI Nord,
-        /// ALDI SÜD) — bei allen anderen wären die Angebote schlicht falsch.
+        /// ALDI SÜD, NORMA) — bei allen anderen wären die Angebote schlicht
+        /// falsch. Maßgeblich ist `Store::stores_nationally()`.
         #[arg(long, default_value_t = false)]
         national: bool,
 

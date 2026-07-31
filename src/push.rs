@@ -96,6 +96,7 @@ fn chain_from_name(market: &Market) -> Option<&'static str> {
         ("kaufland", Store::Kaufland.chain()),
         ("lidl", Store::Lidl.chain()),
         ("netto", Store::Netto.chain()),
+        ("norma", Store::Norma.chain()),
         ("edeka", Store::Edeka.chain()),
         // EDEKA-Vertriebsmarken tragen "edeka" nicht immer im Namen
         ("e center", Store::Edeka.chain()),

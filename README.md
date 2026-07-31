@@ -2,8 +2,8 @@
 
 A CLI tool that scrapes offers from German supermarkets, stores them in a
 SQLite database, and makes them searchable, comparable, and watchable.
-Eight chains are supported (Rewe, Penny, Kaufland, Lidl, Netto, ALDI Nord,
-ALDI Süd, EDEKA). The CLI output itself is in German.
+Nine chains are supported (Rewe, Penny, Kaufland, Lidl, Netto, ALDI Nord,
+ALDI Süd, EDEKA, NORMA). The CLI output itself is in German.
 
 ## Building & installing
 
@@ -280,6 +280,7 @@ editor. Refreshed weekly by `.github/workflows/branches.yml`.
 | ALDI Nord | no | national¹ | ~240 |
 | ALDI Süd | no (curl) | national¹ | ~75 |
 | EDEKA | no (curl) | store-specific (ZIP) | varies (not every region) |
+| NORMA | no | national¹ | ~215 (3 terms/week) |
 
 Ballpark numbers from a live fetch for ZIP 50667 (Cologne) on 2026-07-17;
 actual numbers vary per week and store. Kaufland and EDEKA returned no hits

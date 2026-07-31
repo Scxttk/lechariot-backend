@@ -14,10 +14,11 @@ pub enum Store {
     AldiNord,
     AldiSued,
     Edeka,
+    Norma,
 }
 
 impl Store {
-    pub const ALL: [Store; 8] = [
+    pub const ALL: [Store; 9] = [
         Store::Rewe,
         Store::Penny,
         Store::Kaufland,
@@ -26,6 +27,7 @@ impl Store {
         Store::AldiNord,
         Store::AldiSued,
         Store::Edeka,
+        Store::Norma,
     ];
 
     pub fn label(&self) -> &'static str {
@@ -38,6 +40,7 @@ impl Store {
             Store::AldiNord => "Aldi Nord",
             Store::AldiSued => "Aldi Süd",
             Store::Edeka => "Edeka",
+            Store::Norma => "Norma",
         }
     }
 
@@ -52,6 +55,7 @@ impl Store {
             Store::AldiNord => "ALDI Nord",
             Store::AldiSued => "ALDI SÜD",
             Store::Edeka => "EDEKA",
+            Store::Norma => "NORMA",
         }
     }
 
@@ -77,16 +81,22 @@ impl Store {
     /// aber seit der Prospekt-Quelle hängt der Katalog an der Filiale —
     /// `fetch_offers` bekommt die PLZ übergeben und lädt den Prospekt dieses
     /// Marktes.
+    ///
+    /// **NORMA gehört dazu.** Die Angebotsseiten auf norma-online.de kennen
+    /// keine Filialbindung — kein Cookie, kein Regionsparameter, für jede PLZ
+    /// dieselbe Seite (verifiziert 2026-07-31). Die Filialwahl auf der Website
+    /// steuert nur den Hinweis „erhältlich in Ihrer Filiale", nicht den Preis.
     pub fn stores_nationally(self) -> bool {
-        matches!(self, Store::AldiNord | Store::AldiSued)
+        matches!(self, Store::AldiNord | Store::AldiSued | Store::Norma)
     }
 
     /// Die synthetische National-Filiale einer solchen Kette
-    /// (`ALDI_NORD_DE` / `ALDI_SUED_DE`); None für alle übrigen.
+    /// (`ALDI_NORD_DE` / `ALDI_SUED_DE` / `NORMA_DE`); None für alle übrigen.
     pub fn national_market(self) -> Option<Market> {
         match self {
             Store::AldiNord => Some(scrapers::aldi_nord::national()),
             Store::AldiSued => Some(scrapers::aldi_sued::national()),
+            Store::Norma => Some(scrapers::norma::national()),
             _ => None,
         }
         .map(|m| m.with_chain(self.chain()))
@@ -176,6 +186,10 @@ pub fn find_market(store: Store, zip: &str, cert: &str, key: &str) -> Result<Opt
             Some(m) => m,
             None => return Ok(None),
         },
+        Store::Norma => match scrapers::norma::find_market(zip)? {
+            Some(m) => m,
+            None => return Ok(None),
+        },
     };
     // Kette hier einmal zentral stempeln: der Aufrufer kennt sie exakt, der
     // Push muss sie später nicht mehr aus ID und Filialname erraten.
@@ -218,6 +232,7 @@ pub fn fetch_offers(
         Store::AldiNord => scrapers::aldi_nord::fetch_offers(market)?,
         Store::AldiSued => scrapers::aldi_sued::fetch_offers(market)?,
         Store::Edeka => scrapers::edeka::fetch_offers(market)?,
+        Store::Norma => scrapers::norma::fetch_offers(market)?,
     })
 }
 

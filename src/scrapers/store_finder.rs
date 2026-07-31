@@ -1,6 +1,6 @@
 //! Filial-Lookup für die Ketten mit nationalem Angebotskatalog (Lidl,
-//! ALDI Nord, ALDI SÜD). Deren Angebots-APIs sind bundesweit — ob die Kette
-//! in einer Region überhaupt vertreten ist, klären die offiziellen
+//! ALDI Nord, ALDI SÜD, NORMA). Deren Angebots-APIs sind bundesweit — ob die
+//! Kette in einer Region überhaupt vertreten ist, klären die offiziellen
 //! Store-Finder der Ketten:
 //!
 //!   Lidl:      Bing Spatial Data Service (spatial.virtualearth.net), Dataset
@@ -9,6 +9,10 @@
 //!   ALDI Nord/SÜD: Uberall-Locator (uberall.com/api/storefinders/<key>),
 //!              die Plattform hinter den Filialfindern auf aldi-nord.de bzw.
 //!              aldi-sued.de. Sucht per lat/lng, liefert `distance` in Metern.
+//!   NORMA:     der eigene Filialfinder auf norma-online.de. Antwortet mit
+//!              HTML statt JSON und liefert **nur die nächste** Filiale, egal
+//!              welcher Radius gefragt wird — genug für „ist die Kette hier",
+//!              zu wenig für ein Verzeichnis (siehe `norma_branch`).
 //!
 //! Beide brauchen Koordinaten statt PLZ; die besorgt Nominatim
 //! (nominatim.openstreetmap.org, 1 Request pro Gebiet) in beide Richtungen:
@@ -506,6 +510,141 @@ pub fn parse_uberall_branches(
             )
         })
         .collect())
+}
+
+// ---------------------------------------------------------------- NORMA
+
+const NORMA_STORE_URL: &str = "https://www.norma-online.de/de/filialfinder/suchergebnis";
+
+/// Nächste NORMA-Filiale zur PLZ, oder None ohne Filiale im Umkreis.
+///
+/// Der Filialfinder von norma-online.de nimmt Koordinaten und einen Radius in
+/// **Metern** und antwortet mit server-gerendertem HTML. Gemessen 2026-07-31:
+/// Er liefert unabhängig vom Radius immer nur die **nächstgelegene** Filiale
+/// (Dresden, Nürnberg, Berlin, München, Hamburg, Köln, Fürth — überall genau
+/// eine). Für `find_market` ist das genau das Richtige; für ein vollständiges
+/// Verzeichnis reicht es nicht, siehe `parse_norma`.
+pub fn norma_branch(plz: &str) -> Result<Option<Market>> {
+    let (lat, lon) = geocode_plz(plz)?;
+    let radius_m = (CUTOFF_KM * 1000.0) as u32;
+    let url = format!("{NORMA_STORE_URL}?lng={lon}&lat={lat}&r={radius_m}");
+    util::polite_pause(&url);
+    let html = util::blocking_client()?
+        .get(&url)
+        .send()
+        .with_context(|| util::ctx("NORMA", "Filialsuche", &url))?
+        .error_for_status()
+        .with_context(|| util::ctx("NORMA", "Filialsuche (HTTP-Status)", &url))?
+        .text()
+        .with_context(|| util::ctx("NORMA", "Filialsuche lesen", &url))?;
+    Ok(parse_norma(&html).into_iter().next().map(|s| s.into_market()))
+}
+
+/// Eine Filiale aus der Filialfinder-Antwort.
+pub struct NormaStore {
+    pub id: String,
+    pub street: Option<String>,
+    pub plz: Option<String>,
+    pub city: Option<String>,
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
+    pub distance_km: f64,
+}
+
+impl NormaStore {
+    pub fn into_market(self) -> Market {
+        let name = match &self.city {
+            Some(c) => format!("NORMA {c}"),
+            None => "NORMA".to_string(),
+        };
+        Market::new(format!("NORMA_{}", self.id), name).with_geo(self.lat, self.lon)
+    }
+}
+
+/// Filialen aus der HTML-Antwort des NORMA-Filialfinders.
+///
+/// Nicht über die `<div>`-Verschachtelung geparst, obwohl der
+/// alltheplaces-Spider `norma_de` das tut: Jede Filialkarte trägt ihre Daten
+/// **zusätzlich** als URL-kodiertes JSON im `showMap(...)`-Link — mit
+/// Filial-ID, Straße, PLZ, Ort, Koordinaten und Entfernung in einem Stück.
+/// Das ist die belastbarere Quelle; ein Umbau des Kachel-Layouts bricht sie
+/// nicht.
+///
+/// Der Cutoff wird hier angewandt, weil der Server ihn nicht anwendet: Der
+/// `r`-Parameter hat im Test keine Wirkung gezeigt (siehe `norma_branch`).
+pub fn parse_norma(html: &str) -> Vec<NormaStore> {
+    let mut out = Vec::new();
+    for raw in html.split("showMap(").skip(1) {
+        let Some(encoded) = raw.split(')').next() else { continue };
+        let decoded = percent_decode(encoded);
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&decoded) else { continue };
+
+        let text = |key: &str| {
+            v.get(key)
+                .and_then(|x| x.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+        };
+        let Some(id) = text("fmsLocationId") else { continue };
+        // geoDistance steht in Metern; fehlt sie, gilt die Filiale als nah —
+        // dieselbe Abwägung wie bei Uberall (lieber ein zu breiter Eintrag als
+        // eine stumm verschwundene Kette).
+        let distance_km =
+            v.get("geoDistance").and_then(|x| x.as_f64()).map_or(0.0, |m| m / 1000.0);
+        if distance_km > CUTOFF_KM {
+            continue;
+        }
+        out.push(NormaStore {
+            id,
+            street: text("fmsGeoStreet"),
+            plz: text("fmsPostalCode"),
+            city: text("fmsCity"),
+            lat: v.pointer("/geoCoordinate/latitude").and_then(|x| x.as_f64()),
+            lon: v.pointer("/geoCoordinate/longitude").and_then(|x| x.as_f64()),
+            distance_km,
+        });
+    }
+    out.sort_by(|a, b| a.distance_km.total_cmp(&b.distance_km));
+    out
+}
+
+/// Prozent-Dekodierung im Formular-Stil (`+` ist ein Leerzeichen).
+///
+/// Von Hand statt per Crate, weil es die einzige Stelle im Repo ist, die das
+/// braucht — dieselbe Abwägung wie beim Jitter in `util.rs`, der ohne `rand`
+/// auskommt. Ungültige Sequenzen bleiben unverändert stehen, damit ein
+/// kaputtes Byte nicht die ganze Filiale kostet.
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => {
+                out.push(b' ');
+                i += 1;
+            }
+            b'%' if i + 2 < bytes.len() => {
+                let hex = &s[i + 1..i + 3];
+                match u8::from_str_radix(hex, 16) {
+                    Ok(byte) => {
+                        out.push(byte);
+                        i += 3;
+                    }
+                    Err(_) => {
+                        out.push(bytes[i]);
+                        i += 1;
+                    }
+                }
+            }
+            b => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 // ---------------------------------------------------------------- Fallback

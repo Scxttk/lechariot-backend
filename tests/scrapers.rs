@@ -913,3 +913,132 @@ fn the_backoff_stays_bounded() {
         "die Pausen müssen wachsen"
     );
 }
+
+// ---------------------------------------------------------------- NORMA
+
+#[test]
+fn norma_index_lists_every_theme_page_once() {
+    let themes =
+        scrapers::norma::parse_index(include_str!("fixtures/norma/angebote_index.html"));
+
+    assert_eq!(
+        themes,
+        vec![
+            "/de/angebote/ab-freitag,-31.07.26/wochenend-spezial-t-378267/",
+            "/de/angebote/ab-montag,-03.08.26/mehr-fuers-geld-t-379179/",
+            "/de/angebote/ab-montag,-03.08.26/unser-obst-und-gemuese-t-379181/",
+        ],
+        "Kampagnen-Query, Artikelseite, reiner Termin und /at/ gehören nicht dazu"
+    );
+}
+
+#[test]
+fn norma_theme_parses_tiles_with_prices_and_strike_prices() {
+    let mut offers = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    scrapers::norma::parse_theme(
+        include_str!("fixtures/norma/thema_mehr_fuers_geld.html"),
+        "/de/angebote/ab-montag,-03.08.26/mehr-fuers-geld-t-379179/",
+        "NORMA_DE",
+        &mut offers,
+        &mut seen,
+    );
+    assert_eq!(offers.len(), 5);
+
+    // Termin und Thema stehen nur im Pfad — beides muss an jedem Angebot hängen.
+    for o in &offers {
+        assert_eq!(o.valid_from.as_deref(), Some("2026-08-03"));
+        assert_eq!(o.category.as_deref(), Some("Mehr fürs Geld."));
+        // Laufzeit abgeleitet (7 Tage, siehe norma::TERM_DAYS) — die App liest
+        // valid_until als nicht-optionales Date, null bricht das Decoding.
+        assert_eq!(o.valid_until.as_deref(), Some("2026-08-09"));
+    }
+
+    // Marke vor den Produktnamen; Preis aus dem aria-label, nicht aus dem
+    // sichtbaren "–,99"; "statt 1,59" ist der Streichpreis; das Pfand fliegt
+    // aus der Mengenangabe, damit sie als reine Menge durchgeht.
+    let cola = &offers[0];
+    assert_eq!(cola.title, "Coca-Cola/ Fanta/ Sprite/ MezzoMix Erfrischungsgetränk");
+    assert_eq!(cola.price, Some(0.99));
+    assert_eq!(cola.regular_price, Some(1.59));
+    assert_eq!(cola.subtitle.as_deref(), Some("je 1,25 l"));
+    assert_eq!(cola.overline.as_deref(), Some("Aus unserem Sortiment (1 l = –,79)"));
+    assert_eq!(
+        cola.images,
+        vec![
+            "https://www.norma-online.de/ext/img/product/angebote/26_08_03/900_erfrischungsgetraenk_wo.png"
+        ]
+    );
+
+    // Leere <strong class="supplier"> -> kein Markenpräfix; "UVP 2,49" zählt
+    // genauso als Streichpreis wie "statt".
+    let waffeln = offers.iter().find(|o| o.title == "Kakaowaffeln").unwrap();
+    assert_eq!(waffeln.price, Some(1.99));
+    assert_eq!(waffeln.regular_price, Some(2.49));
+    assert_eq!(waffeln.subtitle.as_deref(), Some("je 225 g"));
+
+    // …-uvp-spacer ist eine andere Klasse als …-uvp: kein Streichpreis.
+    let kekse = offers.iter().find(|o| o.title == "Butterkekse").unwrap();
+    assert_eq!(kekse.price, Some(4.99));
+    assert_eq!(kekse.regular_price, None);
+}
+
+#[test]
+fn norma_same_product_from_two_brands_keeps_both() {
+    let mut offers = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    scrapers::norma::parse_theme(
+        include_str!("fixtures/norma/thema_mehr_fuers_geld.html"),
+        "/de/angebote/ab-montag,-03.08.26/mehr-fuers-geld-t-379179/",
+        "NORMA_DE",
+        &mut offers,
+        &mut seen,
+    );
+
+    // Der eigentliche Grund, warum die Marke im Titel steht: Sheba und
+    // Whiskas verkaufen im selben Prospekt beide "Katzennassnahrung". Ohne
+    // Marke fielen beide auf dieselbe Offer-ID und eines verschwände still.
+    let katze: Vec<_> = offers.iter().filter(|o| o.title.contains("Katzennassnahrung")).collect();
+    assert_eq!(katze.len(), 2, "beide Marken müssen überleben");
+    assert_eq!(katze[0].title, "Sheba Katzennassnahrung");
+    assert_eq!(katze[1].title, "Whiskas Katzennassnahrung");
+    assert_ne!(katze[0].id, katze[1].id);
+    assert_eq!(katze[0].price, Some(15.99));
+    assert_eq!(katze[1].price, Some(11.99));
+    // "UVP = 13,95" — das Gleichheitszeichen darf den Parser nicht stören.
+    assert_eq!(katze[1].regular_price, Some(13.95));
+}
+
+#[test]
+fn norma_store_finder_reads_the_showmap_payload() {
+    // Gekürzte Live-Antwort des NORMA-Filialfinders (2026-07-31, Dresden):
+    // Die Filialdaten stehen als URL-kodiertes JSON im showMap-Link.
+    let html = r#"<div class="item"><div class="row">
+        <h2>Entfernung <span title="2962 m">3 km</span></h2>
+        <p>Paradiesstraße 40<br>01217 Dresden</p>
+        <a href="javascript:showMap(%7B%22fmsCity%22%3A%22Dresden%22%2C%22fmsGeoStreet%22%3A%22Paradiesstra%5Cu00dfe+40%22%2C%22fmsLocationId%22%3A%222131%22%2C%22fmsPostalCode%22%3A%2201217%22%2C%22geoCoordinate%22%3A%7B%22longitude%22%3A13.74388%2C%22latitude%22%3A51.02408%7D%2C%22geoDistance%22%3A2962%7D)">Karte</a>
+    </div></div>"#;
+
+    let stores = scrapers::store_finder::parse_norma(html);
+    assert_eq!(stores.len(), 1);
+    assert_eq!(stores[0].id, "2131");
+    // "+" ist ein Leerzeichen, %5Cu00df wird zum ß der JSON-Ebene.
+    assert_eq!(stores[0].street.as_deref(), Some("Paradiesstraße 40"));
+    assert_eq!(stores[0].plz.as_deref(), Some("01217"));
+    assert_eq!(stores[0].city.as_deref(), Some("Dresden"));
+    assert_eq!(stores[0].lat, Some(51.02408));
+    assert_eq!(stores[0].lon, Some(13.74388));
+
+    let market = stores.into_iter().next().unwrap().into_market();
+    assert_eq!(market.id, "NORMA_2131");
+    assert_eq!(market.name, "NORMA Dresden");
+}
+
+#[test]
+fn norma_store_finder_drops_branches_beyond_the_cutoff() {
+    // Der `r`-Parameter der Filialsuche filtert serverseitig nicht — eine
+    // Filiale 40 km entfernt darf die Kette nicht in der Region vertreten
+    // machen (gemessen 2026-07-31, siehe store_finder::norma_branch).
+    let html = r#"<a href="javascript:showMap(%7B%22fmsCity%22%3A%22Bautzen%22%2C%22fmsLocationId%22%3A%229999%22%2C%22geoCoordinate%22%3A%7B%22longitude%22%3A14.42%2C%22latitude%22%3A51.18%7D%2C%22geoDistance%22%3A48000%7D)">Karte</a>"#;
+    assert!(scrapers::store_finder::parse_norma(html).is_empty());
+}
