@@ -294,6 +294,70 @@ fn is_layout_text(title: &str) -> bool {
         || LEAD_DATE.is_match(title)
 }
 
+/// Fußnoten, Fotobeschriftungen und nackte Plakettenwörter, die den Weg bis
+/// zum fertigen Titel überstanden haben.
+///
+/// Gegen die Produktion gemessen (Lauf vom 31.07.2026, 371 verschiedene
+/// Lidl-Produkte): „Woche", „XXL", „DELUXE", „Stall + Platz", „Bester
+/// Backshop lohnt sich", „Dieses Druckerzeugnis …", „Zubereitung von 190 g
+/// Crushed Ice", „Mit Bio-Baumwolle Sneaker", „Spare € n Akku", „2 in 1:
+/// Manuell/Maschinell". Der Preis dieser Zeilen stimmt, der Name benennt
+/// keine Ware — in der Einkaufsliste sind sie schlimmer als eine Lücke.
+///
+/// **Warum eine eigene Funktion und nicht `LAYOUT_TEXT`?** Wegen der Stelle,
+/// an der sie greift. [`is_layout_text`] läuft schon bei der Rollenzuteilung,
+/// damit eine Layout-Kachel keinen Preis belegt. Dieselben Wörter dort
+/// einzusetzen, verschiebt die Paarung: am Prospekt vom 27.07. gemessen
+/// kostete es **vier echte Artikel** (CROWN-FIELD Cerealien XXL, beide
+/// FLORALYS-Zeilen, LUPILU Bio Quetschbeutel) und brachte dafür „Gültig am
+/// 1.8. R" und „Breite Form für hohe Kippstabilität CRIVIT" herein. Diese
+/// Prüfung läuft deshalb erst ganz am Ende, wenn die Paarung steht: Sie kann
+/// nur Zeilen wegnehmen, nie welche umhängen.
+fn is_layout_remnant(title: &str) -> bool {
+    let lower = title.trim().to_lowercase();
+    REMNANT_TEXT.iter().any(|n| lower.contains(n))
+        || QUALIFIER_ONLY.contains(&lower.as_str())
+        || REMNANT_LEAD.is_match(title)
+}
+
+/// Textbausteine, die einen ganzen Titel als Fußnote ausweisen.
+const REMNANT_TEXT: &[&str] = &[
+    // Der Druckvermerk der letzten Seite, in beiden Schreibweisen, die
+    // pdftotext daraus macht.
+    "druckerzeugnis",
+    "druck -erzeugnis",
+    // Werbeclaim der Backtheke („Bester Backshop lohnt sich").
+    "lohnt sich",
+    // Rest der Haltungsform-Plakette („Mehr Stall + Platz"), dieselbe
+    // zerlegte Grafik wie „AUS UT HER LAN".
+    "stall + platz",
+];
+
+/// Titel, die aus **einem** Wort bestehen, das für sich nichts benennt: eine
+/// Größenangabe, ein Zeitraum, eine nackte Eigenmarke ohne Ware dahinter.
+///
+/// Verglichen wird der ganze Titel, nicht ein Teilstück — „XXL-Pack NORDSEE
+/// Fischstäbchen" und „DELUXE Fond" sind echte Artikel.
+///
+/// Und bewusst eine Liste statt der Regel „ein Wort ist kein Produktname":
+/// Unter den 235 Titeln des Prospekts vom 27.07. stehen 14 einwortige, davon
+/// **acht echte Artikel** — BABYBEL, Petersilie, Gartenhortensie,
+/// Grünpflanze, Chrysanthemen, Johannisbeer-Streuseltaler, Trolley-Boardcase,
+/// Unterlegscheiben-Sortiment. Die allgemeine Regel kostet mehr, als sie
+/// einbringt, und sie kostet genau dort, wo der Prospekt keine Marke druckt:
+/// bei Obst, Gemüse und Pflanzen.
+const QUALIFIER_ONLY: &[&str] = &["xxl", "woche", "deluxe"];
+
+/// Anfangswörter, mit denen der Prospekt das Foto beschriftet statt ein
+/// Produkt zu benennen.
+///
+/// Vier Fälle im Lauf vom 31.07.: „Mit Bio-Baumwolle Sneaker", „Zubereitung
+/// von 190 g Crushed Ice", „Spare € n Akku", „2 in 1: Manuell/Maschinell".
+/// Kein echter Titel desselben Prospekts fängt so an — „PARKSIDE Buntlack
+/// 2 in 1: Lack" trägt seine Marke davor und bleibt deshalb stehen.
+static REMNANT_LEAD: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^(?i)(mit\b|zubereitung\b|spare\b|\d+\s*in\s*\d+\s*:)").unwrap());
+
 static SLUG: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"aktionsprospekt-[A-Za-z0-9-]+").unwrap());
 static SLUG_RANGE: LazyLock<Regex> = LazyLock::new(|| {
@@ -1667,7 +1731,7 @@ fn extract_offers_shots_and_open(
             sources.extend(own_badges.iter().map(|(_, b)| b.text()));
 
             let title = tile_title(product);
-            if !is_plausible_title(&title) || is_layout_text(&title) {
+            if !is_plausible_title(&title) || is_layout_text(&title) || is_layout_remnant(&title) {
                 stats.bad_title += usable.len();
                 if debug_enabled() {
                     eprintln!(
@@ -3042,6 +3106,64 @@ mod tests {
         );
     }
 
+    // ------------------------------------------------------ Layout-Reste
+
+    /// Die dreizehn Zeilen, die am 2026-07-31 in der Produktion standen und
+    /// keine Ware benennen — gezählt unter 371 verschiedenen Lidl-Produkten
+    /// des Laufs vom 31.07.
+    #[test]
+    fn layout_reste_aus_der_produktion_sind_keine_produkte() {
+        for zeile in [
+            "Woche",
+            "XXL",
+            "DELUXE",
+            "Stall + Platz",
+            "Bester Backshop lohnt sich",
+            "Dieses Druckerzeugnis wurde mit dem Blauen Engel ausgezeichnet!",
+            "Dieses Druck -erzeugnis ist auf FSC®",
+            "Zubereitung von 190 g Crushed Ice",
+            "Mit Bio-Baumwolle Sneaker",
+            "Spare € n Akku",
+            "2 in 1: Manuell/Maschinell",
+        ] {
+            assert!(is_layout_remnant(zeile), "sollte Layout-Rest sein: {zeile:?}");
+        }
+    }
+
+    /// **Die Gegenprobe, und sie wiegt hier schwerer als die Regel selbst.**
+    ///
+    /// Zu streng gefiltert kostet echte Angebote, und der Prospekt druckt
+    /// gerade bei Obst, Gemüse und Pflanzen gar keine Marke. Unter den 235
+    /// Titeln des Prospekts vom 27.07. stehen 14 einwortige — acht davon sind
+    /// echte Artikel. Eine Regel „ein Wort ist kein Produktname" hätte sie
+    /// alle verworfen.
+    #[test]
+    fn echte_produkte_mit_ungewoehnlichem_namen_bleiben_stehen() {
+        for zeile in [
+            // Einwortig und ohne Marke.
+            "Petersilie",
+            "Gartenhortensie",
+            "Grünpflanze",
+            "Chrysan-themen",
+            "Johannisbeer-Streuseltaler",
+            "Trolley-Boardcase",
+            "Unterlegscheiben-Sortiment",
+            "BABYBEL",
+            // Dieselben Wörter wie die Reste, aber mit Ware dahinter.
+            "XXL-Pack NORDSEE Fischstäbchen",
+            "XXL-Basilikum im Topf",
+            "DELUXE Fond",
+            "CROWN-FIELD Cerealien XXL",
+            // „Mit" und „2 in 1" mitten im Namen, nicht am Anfang.
+            "SILVERCREST Tritan-Trinkflasche Mit einsetzbarem Frucht",
+            "MILBONA Crème Fraîche XXL 30 % Fett. Gekühlt",
+            "PARKSIDE Buntlack 2 in 1: Lack",
+            "SILVERCREST Wassersprudler-Set 2-teilig",
+        ] {
+            assert!(!is_layout_remnant(zeile), "echtes Produkt verworfen: {zeile:?}");
+        }
+    }
+
     // ------------------------------------------------------- Streichpreise
 
     /// Lidl schneidet den Rabatt ab, statt ihn zu runden. Die drei Fälle
@@ -3560,6 +3682,14 @@ mod tests {
         let xml = run_pdftotext(std::path::Path::new(&pdf), "-bbox-layout").expect("pdftotext");
         let (offers, _) = extract_offers_with_shots(&xml, "MESSUNG", None, None);
         eprintln!("ANGEBOTE\t{}", offers.len());
+        if std::env::var("LIDL_TITEL").is_ok() {
+            let mut titles: Vec<&str> = offers.iter().map(|o| o.title.as_str()).collect();
+            titles.sort_unstable();
+            titles.dedup();
+            for t in titles {
+                eprintln!("TITEL\t{t}");
+            }
+        }
         let mit: Vec<&Offer> = offers.iter().filter(|o| o.regular_price.is_some()).collect();
         eprintln!("STREICHPREISE\t{}", mit.len());
         for o in mit {

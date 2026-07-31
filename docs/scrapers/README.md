@@ -220,6 +220,28 @@ Bekannte Grenze: Vereinzelt landet eine Werbezeile als Produktname in den
 Daten („Woche", „Kernarm") — rund 2 % der Zeilen. Die Preise dieser Zeilen
 sind korrekt, nur der Name taugt nicht zum Matchen.
 
+Am 2026-07-31 gegen die Produktion nachgezählt: Von **371 verschiedenen
+Lidl-Produkten** des Laufs vom 31.07. benennen dreizehn keine Ware. Elf davon
+fängt `is_layout_remnant` ab („Woche", „XXL", „DELUXE", „Stall + Platz",
+„Bester Backshop lohnt sich", der Druckvermerk in beiden Schreibweisen,
+„Zubereitung von 190 g Crushed Ice", „Mit Bio-Baumwolle Sneaker", „Spare € n
+Akku", „2 in 1: Manuell/Maschinell").
+
+**Die Prüfung läuft erst auf dem fertigen Titel**, nicht schon bei der
+Rollenzuteilung. Dieselben Wörter in `is_layout_text` zu setzen verschiebt die
+Paarung und kostete am Prospekt vom 27.07. vier echte Artikel (CROWN-FIELD
+Cerealien XXL, beide FLORALYS-Zeilen, LUPILU Bio Quetschbeutel), während
+„Gültig am 1.8. R" neu hereinkam.
+
+Was **nicht** abgefangen wird, und warum: Beschriftungen, die auf ein Teil des
+Produktfotos zeigen — „Rohrschneider", „Sechskant-aufnahme", „Fugendüse und
+Polsterdüse", „Keramikbeschichtete Bügelsohle Bodendüse", „Farbdisplay
+Auflösung Speicher", „Flexibler Schwanen-hals zur genauen Ausrichtung". Sie
+sind vom Text her nicht von einem Produktnamen zu unterscheiden: Auf denselben
+Seiten stehen „Unterlegscheiben-Sortiment", „Fugenmesser-Set" und
+„Trolley-Boardcase" als echte Artikel. Eine Regel, die die einen trifft,
+trifft die anderen mit.
+
 ### Streichpreise: der gedruckte Rabatt ist der Beweis
 
 Der Prospekt druckt den alten Preis in vier Schreibweisen (gezählt am
