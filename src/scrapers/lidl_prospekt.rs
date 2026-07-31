@@ -2487,24 +2487,15 @@ mod tests {
     }
 
 
-    /// Messgerät, kein Test: nur der Textweg, damit die Verwurfsgründe je
-    /// Kachel sichtbar werden. Ohne `pdftohtml`, also in Sekunden statt Minuten.
-    #[test]
-    #[ignore]
-    fn measure_dropped_tiles() {
-        let pdf = std::env::var("LIDL_PDF").expect("LIDL_PDF fehlt");
-        let xml = run_pdftotext(std::path::Path::new(&pdf), "-bbox-layout").expect("pdftotext");
-        let (offers, _, _) = extract_offers_shots_and_open(&xml, "MESSUNG", None, None);
-        eprintln!("ANGEBOTE\t{}", offers.len());
-    }
-
     /// Messgerät, kein Test: Abdeckung mit und ohne eingebettete Bilder,
     /// gegen dasselbe PDF. `LIDL_PDF` zeigt auf eine lokale Prospekt-PDF.
     ///
     /// Beide Zahlen müssen aus demselben Prospekt stammen — ein Vorher/Nachher
-    /// aus zwei Wochen ist keins.
+    /// aus zwei Wochen ist keins. Der Nenner sind die Kacheln, die überhaupt
+    /// ein Bild brauchen (`shots` + `open`); Angebote ohne Kachelrechteck
+    /// gehören nicht in eine Quote, die sie gar nicht verfehlen können.
     #[test]
-    #[ignore]
+    #[ignore = "Messgerät — braucht LIDL_PDF mit lokaler Prospekt-PDF"]
     fn measure_union_coverage() {
         let pdf = std::env::var("LIDL_PDF").expect("LIDL_PDF fehlt");
         let path = std::path::Path::new(&pdf);
@@ -2845,11 +2836,10 @@ mod tests {
         }
     }
 
-    /// Messgerät, kein Test (portiert von `lidl-xobjekte`, `6c239f4`): nur der
-    /// Textweg, damit die Verwurfsgründe je Kachel sichtbar werden. Ohne
-    /// Netz und ohne Rastern, also in Sekunden. `LIDL_PDF` zeigt auf eine
-    /// lokale Prospekt-PDF; `LIDL_PROSPEKT_DEBUG=1` druckt jede verworfene
-    /// Kachel mit Grund.
+    /// Messgerät, kein Test: nur der Textweg, damit die Verwurfsgründe je
+    /// Kachel sichtbar werden. Ohne Netz und ohne Rastern, also in Sekunden.
+    /// `LIDL_PDF` zeigt auf eine lokale Prospekt-PDF;
+    /// `LIDL_PROSPEKT_DEBUG=1` druckt jede verworfene Kachel mit Grund.
     #[test]
     #[ignore = "Messgerät — braucht LIDL_PDF mit lokaler Prospekt-PDF"]
     fn measure_dropped_tiles() {
