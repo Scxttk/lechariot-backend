@@ -199,6 +199,11 @@ jobs:
 
       - name: Store summary + zero-offer check
         if: always()
+        env:
+          # Muss hier eigens gesetzt werden: Der Sync-Schritt hat sein eigenes
+          # `env`, und ohne diese Zeile wäre `$ONLY_MARKET` unten leer — die
+          # Fallunterscheidung liefe dann nie an, ohne dass etwas fehlschlägt.
+          ONLY_MARKET: ${{ inputs.market_id }}
         run: |
           # Übersprungene Filialen zuerst und als Annotation — dieselbe
           # Behandlung wie in branches.yml (#16). Am 31.07.2026 hat ein grüner
@@ -268,7 +273,25 @@ jobs:
           [ -f "$DB" ] && COUNT=$(sqlite3 "$DB" 'SELECT COUNT(*) FROM offers')
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**Angebote in der lokalen DB (letzte Region): $COUNT**" >> "$GITHUB_STEP_SUMMARY"
+          # Null Angebote heißt nicht immer dasselbe. Beim vollen Lauf ist es
+          # der Alarm, für den diese Prüfung gebaut wurde: acht Ketten
+          # gleichzeitig stumm, dann blockt sehr wahrscheinlich Akamai die
+          # Runner-IP. Bei einem Lauf für **eine** Filiale ist es dagegen eine
+          # ganz gewöhnliche Auskunft — EDEKA Böse (216653) etwa veröffentlicht
+          # auf edeka.de überhaupt keine Angebotsseite, bekannt und behandelt
+          # seit #4, und die App sagt es dem Nutzer auch so.
+          #
+          # Am 2026-07-31 hat genau das einen roten Lauf erzeugt und ihm die
+          # falsche Ursache angeheftet: „alle Stores fehlgeschlagen (Akamai)"
+          # für einen Markt, der schlicht nichts zu holen hat. Dieselbe Form
+          # wie #20/#27/#31 — die Regel beschreibt ihre Klasse richtig und
+          # prüft sie zu wörtlich.
           if [ "$COUNT" -eq 0 ]; then
+            if [ -n "$ONLY_MARKET" ]; then
+              echo "::warning title=Nightly sync::Filiale $ONLY_MARKET lieferte keine Angebote. Das ist kein Fehler des Laufs — diese Filiale veröffentlicht online nichts (oder der Prospekt ist gerade abgelaufen)."
+              echo "> ℹ️ **Filiale $ONLY_MARKET veröffentlicht keine Angebote** — der Lauf selbst war in Ordnung." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
             echo "::error::0 Angebote in der DB — alle Stores fehlgeschlagen (Akamai blockt evtl. Runner-IPs, siehe docs/ci.md)."
             exit 1
           fi
