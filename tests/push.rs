@@ -75,6 +75,36 @@ fn map_skips_offers_without_price() {
     assert!(map_offer(&offer("Gouda", None), "REWE", false).is_none());
 }
 
+/// Ein Streichpreis, der keine Ersparnis beschreiben *kann*, fliegt raus —
+/// das Angebot bleibt. Die Zahlen unten sind gemessen: alle 3732
+/// Produktionszeilen mit Preis und Streichpreis am 2026-07-31.
+#[test]
+fn map_drops_a_strike_price_that_is_no_saving() {
+    let with_regular = |price: f64, regular: f64| {
+        let mut o = offer("Gouda", Some(price));
+        o.regular_price = Some(regular);
+        map_offer(&o, "REWE", false).unwrap()
+    };
+
+    // Die beiden NORMA-Lesefehler, die den Ausschlag gaben: 182× und 125×
+    // über dem Angebotspreis.
+    assert_eq!(with_regular(4.99, 909.0).regular_price, None);
+    assert_eq!(with_regular(0.79, 99.0).regular_price, None);
+    // Unter dem Angebotspreis (NORMA las "z.B. 1,1 kg" als 1,10 €).
+    assert_eq!(with_regular(5.99, 1.10).regular_price, None);
+    // Gleich dem Angebotspreis — 0 % Rabatt ist kein Rabatt. Stand so als
+    // "59,99 statt 59,99" bei Kaufland in der Datenbank.
+    assert_eq!(with_regular(59.99, 59.99).regular_price, None);
+
+    // …und die echten steilen Rabatte überleben. Das sind die beiden
+    // steilsten der gesamten Produktion, beide aus den APIs der Ketten
+    // selbst: Penny 6,0× und Kaufland 5,0×.
+    assert_eq!(with_regular(4.00, 24.00).regular_price, Some(24.00));
+    assert_eq!(with_regular(9.99, 49.99).regular_price, Some(49.99));
+    // Der Preis bleibt in jedem Fall stehen, auch wenn der Streichpreis fällt.
+    assert_eq!(with_regular(4.99, 909.0).price, 4.99);
+}
+
 #[test]
 fn map_appends_informative_subtitle() {
     // Kaufland-Stil: Marke im Titel, Produkt im Untertitel
