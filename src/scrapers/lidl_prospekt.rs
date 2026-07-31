@@ -165,6 +165,21 @@ static LEADING_BANNER: LazyLock<Regex> = LazyLock::new(|| {
             # ("Tiefpreis Wohnen & Einrichtung Garantie LIVARNO ...").
             tiefpreis(?:\s+garantie)? | garantie
           | wohnen\s*&\s*einrichtung
+          | # Plaketten der Frischetheke und des Dauersortiments. Sie stehen
+            # in `BOILERPLATE` — dort wirken sie aber auf den *ganzen* Titel,
+            # und weil sie über dem Produktnamen gedruckt sind, rissen sie ihn
+            # mit (gemessen am Prospekt vom 27.07.: METZGERFRISCH Rinder-
+            # Minutensteaks, GRILLMEISTER Puten-Grillies, MILBONA Creme
+            # Joghurt). Vorn abgeschnitten bleibt der Name stehen; steht sonst
+            # nichts da, greift `BOILERPLATE` weiter wie bisher.
+            frischluftstall | dauerhaft\s+im\s+sortiment
+          | # Gebindeplakette über dem Namen: "42er- Pack … TEMPO Taschen-
+            # tücher", "9er-/8er-Netz … BABYBEL". `PACK_ONLY` verwirft solche
+            # Titel schon heute komplett, es geht hier also kein bestehendes
+            # Angebot verloren — nur das Produkt dahinter kommt dazu. Bleibt
+            # nach dem Schnitt nichts übrig ("5er-Pack" allein), greift
+            # `PACK_ONLY` unverändert.
+            \d+\s*er[-\s]*(?:/\s*\d+\s*er[-\s]*)*(?:pack|netz)?
           | weitere\s+farben?:?\s+\S+
           | für\s+(?:drinnen|draußen)(?:\s*/\s*(?:drinnen|draußen))?
           | mit\s+lidl\s+plus
@@ -1080,6 +1095,30 @@ pub fn trim_leading_banner(title: &str) -> String {
     out
 }
 
+/// Der fertige Titel einer Kachel — genau der, der später im Angebot steht.
+///
+/// Bis 2026-07-31 stand diese Kette nur an einer Stelle, mitten in
+/// [`extract_offers_shots_and_open`]. Die Auswahl der *selbsttragenden*
+/// Preiskacheln — Kacheln, die ihren Namen selbst mitbringen — prüfte
+/// dagegen den rohen [`title_of`], also den Titel **vor** dem Bannerschnitt
+/// aus #31. Ergebnis: „Tiefpreis Garantie METZGERFRISCH Frisches
+/// Rinder-Hackfleisch" fiel schon an der Auswahl durch, obwohl der Schnitt
+/// daraus ein sauberes „METZGERFRISCH Frisches Rinder-Hackfleisch" gemacht
+/// hätte.
+///
+/// Beide Stellen rufen jetzt dieselbe Funktion. Beurteilt wird damit
+/// derselbe Text, der am Ende im Angebot steht.
+fn tile_title(island: &Island) -> String {
+    let title = title_after_leading_banner(island);
+    // "Mit Lidl Plus" steht mitunter in derselben Zeile wie der Name.
+    let title = title.trim_end_matches("Mit Lidl Plus").trim().to_string();
+    // Vorangeklebte Banner abschneiden — sonst reißen sie in
+    // `is_layout_text` und `is_boilerplate` den ganzen Titel mit.
+    let title = trim_leading_banner(&title);
+    // Abgeschnittene Sätze am Ende kürzen, statt sie mitzuschleppen.
+    trim_dangling_tail(&title)
+}
+
 pub fn is_plausible_title(title: &str) -> bool {
     if title.len() < 3 || is_boilerplate(title) {
         return false;
@@ -1355,9 +1394,18 @@ fn extract_offers_shots_and_open(
         // Manche Kacheln sind so eng gesetzt, dass Preis und Produkttext im
         // selben Cluster landen. Die haben oben keinen Partner bekommen,
         // tragen ihren Namen aber selbst — sie sind ihre eigene Kachel.
+        //
+        // Gemessen wird am **fertigen** Titel ([`tile_title`]), nicht am
+        // rohen: Über dem Namen klebt oft eine Plakette, und diese Prüfung
+        // lief bisher vor dem Schnitt aus #31.
+        //
+        // Gefahrlos für die Paarung, anders als eine Änderung an der
+        // Rollenzuteilung weiter oben: Diese Liste entsteht erst, wenn alle
+        // Paare stehen, und enthält nur Preiskacheln, die ohnehin niemand
+        // mehr bekommt. Sie kann keiner anderen Kachel den Preis wegnehmen.
         let self_contained: Vec<usize> = (0..prices.len())
             .filter(|j| !used_price[*j])
-            .filter(|j| is_plausible_title(&title_of(&prices[*j])))
+            .filter(|j| is_plausible_title(&tile_title(&prices[*j])))
             .collect();
 
         stats.anchors += prices
@@ -1404,14 +1452,7 @@ fn extract_offers_shots_and_open(
                 .join(" ");
             let context = format!("{} {} {near}", product.text(), price_tile.text());
 
-            let title = title_after_leading_banner(product);
-            // "Mit Lidl Plus" steht mitunter in derselben Zeile wie der Name.
-            let title = title.trim_end_matches("Mit Lidl Plus").trim().to_string();
-            // Vorangeklebte Banner abschneiden — sonst reißen sie gleich
-            // unten in `is_layout_text` den ganzen Titel mit.
-            let title = trim_leading_banner(&title);
-            // Abgeschnittene Sätze am Ende kürzen, statt sie mitzuschleppen.
-            let title = trim_dangling_tail(&title);
+            let title = tile_title(product);
             if !is_plausible_title(&title) || is_layout_text(&title) {
                 stats.bad_title += usable.len();
                 if debug_enabled() {
@@ -2369,6 +2410,34 @@ mod tests {
         // "Je 200/250 g" mit zwei Grundpreisen: beide Lesarten sind gültig.
         let text = "MULINO BIANCO Gebäck Versch. Sorten. Je 200/250 g 1 kg = 11.10";
         assert_eq!(arithmetic_check(text, 2.22), Some(true));
+    }
+
+    /// Die Rechenprobe liest **nur den ersten** Grundpreis einer Kachel, und
+    /// das ist Absicht.
+    ///
+    /// Am 2026-07-31 wurde am Prospekt vom 27.07. nachgemessen, was ein
+    /// „liest halt alle Grundpreise der Kachel" kosten würde: Auf Seite 61
+    /// hängen JOHNNIE WALKER (0,7 l, 1 l = 15.70 -> 10.99 €), LENOR, WODKA
+    /// GORBATSCHOW (1.827 l, 1 l = 2.55 -> 4.66 €) und ein vierter Artikel
+    /// (0,7 l, 1 l = 9.27 -> 6.49 €) in **einer** Kachel. Der Titel ist
+    /// „JOHNNIE WALKER Red Label Blended Scotch Whisky". Dürfte die Probe
+    /// jeden Grundpreis der Kachel benutzen, gingen 4.65 € und 6.49 € als
+    /// Whiskypreis durch — genau die Fehlpaarung, gegen die es sie gibt.
+    ///
+    /// Dieser Test ist die Bremse dafür. Er darf nur fallen, wenn jemand eine
+    /// Regel mitbringt, die 4.65 € und 6.49 € weiterhin ablehnt.
+    #[test]
+    fn the_arithmetic_check_only_trusts_the_first_base_price() {
+        let seite61 = "JOHNNIE WALKER Red Label Blended Scotch Whisky LENOR Weichspüler \
+                       40 % vol Je 0,7 l 1 l = 15.70 Normalpreis: 15.99 1 l = 22.84 \
+                       Mit Lidl Plus WODKA GORBATSCHOW Versch. Sorten. Je 1.827 ml \
+                       1 l = 2.55 37,5 % vol Je 0,7 l 1 l = 9.27";
+        // Der Whisky selbst geht durch.
+        assert_eq!(arithmetic_check(seite61, 10.99), Some(true));
+        // Die Preise der Nachbarn nicht — obwohl beide gegen *irgendeinen*
+        // Grundpreis derselben Kachel aufgehen.
+        assert_eq!(arithmetic_check(seite61, 4.65), Some(false));
+        assert_eq!(arithmetic_check(seite61, 6.49), Some(false));
     }
 
     #[test]
