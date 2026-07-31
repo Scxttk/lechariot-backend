@@ -127,6 +127,7 @@ seit Schema v2, gefüllt wird sie je Kette so:
 | Kaufland | ja, eigener Selektor | seit jeher |
 | Netto | ja, `strike`-Element | seit jeher |
 | ALDI Nord / Süd | ja, im Preis-Objekt | seit jeher |
+| NORMA | ja | 91 von 221 Angeboten (31.07.2026) |
 | **REWE** | **nein** | siehe unten |
 | **EDEKA** | **nein** | siehe unten |
 
