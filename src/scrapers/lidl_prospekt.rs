@@ -1470,6 +1470,26 @@ fn extract_offers_shots_and_open(
                 // Foto sitzt über beiden.
                 let mut tile_rect = product.clone();
                 tile_rect.merge(price_tile);
+                if let Ok(path) = std::env::var("LIDL_RECT_DUMP") {
+                    use std::io::Write;
+                    if let Ok(mut f) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&path)
+                    {
+                        let _ = writeln!(
+                            f,
+                            "{}\t{}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{}",
+                            offer_id,
+                            page_index + 1,
+                            tile_rect.x0,
+                            tile_rect.y0,
+                            tile_rect.x1,
+                            tile_rect.y1,
+                            title
+                        );
+                    }
+                }
                 if let Some((x, y, w, h)) = photo_rect(&tile_rect, &page_rects) {
                     shots.push(TileShot {
                         offer_id: offer_id.clone(),
@@ -2887,4 +2907,155 @@ mod tests {
         assert!(!c.separated);
     }
 
+    /// Messgerät, kein Test: baut aus einer Liste von Bildpfaden
+    /// (`LIDL_SHEET_LIST`, ein Pfad je Zeile) eine Kontaktbogen-PNG, damit die
+    /// Zuordnung mit dem Auge geprüft werden kann statt nur mit Zahlen.
+    #[test]
+    #[ignore]
+    fn build_contact_sheet() {
+        use image::{GenericImage, Rgba, RgbaImage};
+        let list = std::env::var("LIDL_SHEET_LIST").expect("LIDL_SHEET_LIST fehlt");
+        let out = std::env::var("LIDL_SHEET_OUT").expect("LIDL_SHEET_OUT fehlt");
+        let paths: Vec<String> = std::fs::read_to_string(&list)
+            .expect("liste")
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(str::to_string)
+            .collect();
+        const CELL: u32 = 150;
+        const COLS: u32 = 6;
+        let rows = paths.len().div_ceil(COLS as usize) as u32;
+        let mut sheet = RgbaImage::from_pixel(COLS * CELL, rows * CELL, Rgba([255, 255, 255, 255]));
+        for (i, p) in paths.iter().enumerate() {
+            let Ok(img) = image::open(p) else { continue };
+            let thumb = img.resize(CELL - 8, CELL - 8, image::imageops::FilterType::Triangle);
+            let thumb = thumb.to_rgba8();
+            let ox = (i as u32 % COLS) * CELL + 4;
+            let oy = (i as u32 / COLS) * CELL + 4;
+            // Transparenz auf Weiss legen, sonst ist das Produkt nicht zu sehen.
+            for (x, y, px) in thumb.enumerate_pixels() {
+                let al = px[3] as f32 / 255.0;
+                let mix = |c: u8| (c as f32 * al + 255.0 * (1.0 - al)) as u8;
+                sheet.put_pixel(
+                    ox + x,
+                    oy + y,
+                    Rgba([mix(px[0]), mix(px[1]), mix(px[2]), 255]),
+                );
+            }
+        }
+        sheet.save(&out).expect("speichern");
+        eprintln!("KONTAKTBOGEN\t{}\t{} bilder", out, paths.len());
+    }
+
+    /// Messgerät, kein Test: zählt, wie viele der zugeordneten Bilder gar keine
+    /// Fotos sind, sondern Masken — poppler gibt die Alphamaske eines Bildes als
+    /// eigenes `<image>` aus, und die ist einfarbig schwarz/weiß.
+    #[test]
+    #[ignore]
+    fn count_flat_images() {
+        let list = std::env::var("LIDL_SHEET_LIST").expect("LIDL_SHEET_LIST fehlt");
+        let paths: Vec<String> = std::fs::read_to_string(&list)
+            .expect("liste")
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(str::to_string)
+            .collect();
+        let (mut flat, mut ok, mut bad) = (0usize, 0usize, 0usize);
+        for p in &paths {
+            let Ok(img) = image::open(p) else {
+                bad += 1;
+                continue;
+            };
+            let rgb = img.to_rgb8();
+            // Grau heißt hier: R, G und B liegen dicht beieinander. Eine Maske
+            // besteht nur aus solchen Pixeln, ein Produktfoto nicht.
+            let total = rgb.pixels().len().max(1);
+            let grey = rgb
+                .pixels()
+                .filter(|px| {
+                    let (r, g, b) = (px[0] as i32, px[1] as i32, px[2] as i32);
+                    (r - g).abs() <= 8 && (g - b).abs() <= 8 && (r - b).abs() <= 8
+                })
+                .count();
+            if grey * 100 / total >= 98 {
+                flat += 1;
+                println!("MASKE\t{p}");
+            } else {
+                ok += 1;
+            }
+        }
+        eprintln!("FARBIG\t{ok}\tMASKE\t{flat}\tUNLESBAR\t{bad}\tGESAMT\t{}", paths.len());
+    }
+
+    /// Messgerät, kein Test: Kennzahlen je Bild, um Bedienelemente (Knöpfe,
+    /// Siegel, Logos) von Produktfotos zu trennen.
+    ///
+    /// Die Maskenprobe oben reicht dafür nicht: Ein blauer Knopf mit weißer
+    /// Schrift ist nicht grau, er ist nur **arm an Farben**. Gemessen werden
+    /// deshalb die Zahl belegter Farbeimer (4 bit je Kanal) und der Anteil der
+    /// zwei häufigsten — ein Foto verteilt sich, ein Knopf nicht.
+    #[test]
+    #[ignore]
+    fn colour_metrics_per_image() {
+        let list = std::env::var("LIDL_SHEET_LIST").expect("LIDL_SHEET_LIST fehlt");
+        let paths: Vec<String> = std::fs::read_to_string(&list)
+            .expect("liste")
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(str::to_string)
+            .collect();
+        println!("datei\teimer\ttop2%\tkanten%\tbreite\thoehe");
+        for p in &paths {
+            let Ok(img) = image::open(p) else { continue };
+            let rgb = img.to_rgb8();
+            let (w, h) = rgb.dimensions();
+            let mut bins: HashMap<(u8, u8, u8), u32> = HashMap::new();
+            for px in rgb.pixels() {
+                *bins.entry((px[0] / 16, px[1] / 16, px[2] / 16)).or_default() += 1;
+            }
+            let total = (w * h).max(1);
+            let mut counts: Vec<u32> = bins.values().copied().collect();
+            counts.sort_unstable_by(|a, b| b.cmp(a));
+            let top2: u32 = counts.iter().take(2).sum();
+            // Kantenanteil: Nachbarpixel, die sich deutlich unterscheiden. Ein
+            // Foto ist überall leicht unruhig, eine Fläche nur an ihrem Rand.
+            let mut edges = 0u32;
+            for y in 0..h {
+                for x in 1..w {
+                    let a = rgb.get_pixel(x - 1, y).0;
+                    let b = rgb.get_pixel(x, y).0;
+                    let d = (0..3).map(|i| (a[i] as i32 - b[i] as i32).abs()).max().unwrap_or(0);
+                    if d > 24 {
+                        edges += 1;
+                    }
+                }
+            }
+            let name = p.rsplit('/').next().unwrap_or(p);
+            println!(
+                "{name}\t{}\t{}\t{}\t{w}\t{h}",
+                counts.len(),
+                top2 * 100 / total,
+                edges * 100 / total,
+            );
+        }
+    }
+
+    /// Messgerät, kein Test: liest ein lokales Prospekt-PDF und meldet, wie
+    /// viele Angebote es trägt und für wie viele der Schnitt einen Streifen
+    /// findet. `#[ignore]`, weil es eine Datei von außen braucht.
+    #[test]
+    #[ignore]
+    fn measure_local_pdf() {
+        let pdf = std::env::var("LIDL_PDF").expect("LIDL_PDF fehlt");
+        let xml = run_pdftotext(std::path::Path::new(&pdf), "-bbox-layout").expect("pdftotext");
+        let (offers, shots) = extract_offers_with_shots(&xml, "MEASURE", None, None);
+        if let Ok(path) = std::env::var("LIDL_SHOT_DUMP") {
+            let body: String = shots
+                .iter()
+                .map(|s| format!("{}\t{}\n", s.offer_id, s.page))
+                .collect();
+            std::fs::write(path, body).expect("streifen schreiben");
+        }
+        eprintln!("ANGEBOTE\t{}\tSTREIFEN\t{}", offers.len(), shots.len());
+    }
 }
