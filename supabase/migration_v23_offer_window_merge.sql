@@ -20,6 +20,24 @@
 -- 2.158 Zeilen; diese Regel entfernt 523 Zeilen — alle bei Kaufland, alle
 -- nach dem Muster „Wochenfenster plus Aktionstag zum selben Preis".
 --
+-- NACHGEMESSEN am 2026-07-31, 19:40 UTC (`cargo run --example dubletten`,
+-- read-only): 38.413 Zeilen — 287 mehr, ein Netto-Lauf. Die Dubletten-Zahlen
+-- sind unverändert: 1.079 Kombinationen mit 2.158 Zeilen, 523 zu löschende
+-- Zeilen, weiterhin ausschließlich Kaufland. Von selbst geheilt ist also
+-- nichts. Zwei Dinge kamen dabei heraus, die vorher nicht dastanden:
+--
+--   * Das UPDATE unten ist ein Leerlauf: In allen 523 Clustern trägt die
+--     bleibende Zeile schon `min(valid_from)` UND `max(valid_until)`. Der
+--     ganze Effekt der Migration ist das DELETE.
+--   * Die jüngste zu löschende Zeile wurde am 2026-07-31 um 07:27:22 UTC
+--     angelegt (70 Stück, Kaufland DE3260) — rund sieben Stunden VOR dem
+--     Merge des Push-Fixes um 14:33:54 UTC. Seither hat genau ein Lauf
+--     geschrieben (Nightly 30657704942, 19:05 UTC): eine einzige
+--     Netto-Filiale, 287 Zeilen, null Dubletten. Netto war nie betroffen,
+--     das ist also KEIN Beleg. Vor dem Ausführen dieser Migration einen
+--     Kaufland-Lauf abwarten und `--example dubletten` erneut laufen
+--     lassen; bleibt es bei 523, greift der Fix und der Bestand darf weg.
+--
 -- Ohne diese Bereinigung heilt der Bestand auch von selbst, nur langsamer:
 -- Der Push löscht je Filiale alle Zeilen mit valid_from vor dem neuesten
 -- Start des Laufs, spätestens mit der Folgewoche sind die Altzeilen weg.
