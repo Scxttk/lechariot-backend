@@ -652,6 +652,47 @@ fn a_crossed_out_price_belongs_to_exactly_one_product_of_its_tile() {
     assert_eq!(jw.regular_price, None, "mehrdeutiger Streichpreis übernommen");
 }
 
+/// Layout-Reste, die es bis in die Produktion geschafft haben.
+///
+/// Am 2026-07-31 gegen die Produktion gezählt: Von 371 verschiedenen
+/// Lidl-Produkten des Laufs vom 31.07. benennen dreizehn keine Ware, sondern
+/// beschriften das Foto oder stehen im Kleingedruckten. „0 Fragmente" vom
+/// 2026-07-30 beschrieb einen Lauf, nicht den Dauerzustand.
+///
+/// Fixture ist die ungekürzte Seite 39 des Prospekts vom 27.07. — die
+/// SILVERCREST-Küchengeräteseite, auf der „Zubereitung von 190 g Crushed
+/// Ice" zweimal als eigener Artikel in der Datenbank landete (9.99 € und
+/// 17.99 €).
+#[test]
+fn a_caption_on_the_photo_is_not_a_product() {
+    let offers = scrapers::lidl_prospekt::extract_offers(
+        include_str!("fixtures/lidl/prospekt_layoutrest.xml"),
+        "LIDL_1988",
+        Some("2026-07-27"),
+        Some("2026-08-01"),
+    );
+    let titles: Vec<&str> = offers.iter().map(|o| o.title.as_str()).collect();
+    assert!(
+        !titles.iter().any(|t| t.starts_with("Zubereitung")),
+        "Fotobeschriftung als Artikel: {titles:?}"
+    );
+
+    // **Die Gegenprobe ist hier die eigentliche Prüfung.** Zu streng gefiltert
+    // kostet echte Angebote, und diese Seite trägt genau die Namen, an denen
+    // eine zu breite Regel scheitern würde: einer beginnt mit „Mit" mitten im
+    // Namen, einer ist eine reine Inhaltsangabe ohne Marke.
+    for erwartet in [
+        "GSW Edelstahl-Kochtopf-Set",
+        "SILVERCREST Tritan-Trinkflasche Mit einsetzbarem Frucht",
+        "3 Kochtöpfe mit Deckel",
+    ] {
+        assert!(
+            titles.iter().any(|t| t.starts_with(erwartet)),
+            "{erwartet:?} verschluckt, übrig: {titles:?}"
+        );
+    }
+}
+
 #[test]
 fn lidl_prospekt_marks_loyalty_prices_as_such() {
     let offers = scrapers::lidl_prospekt::extract_offers(
