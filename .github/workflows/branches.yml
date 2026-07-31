@@ -146,9 +146,29 @@ jobs:
       - name: Zusammenfassung
         if: always()
         run: |
+          # Eine übersprungene Filiale ist stiller Datenverlust: Der Lauf bleibt
+          # grün, "13 Filialen geschrieben" liest sich vollständig, und die
+          # fehlende steht nirgends. Genau so ist EDEKA Böse in Ahlbeck am
+          # 30.07. zweimal durchgefallen (Markt-Redirect leer — von einem Mac
+          # antwortet dieselbe URL sofort mit 308, es ist die Runner-IP an
+          # Akamai). Deshalb wandert die Zahl NACH OBEN und jede Warnung wird
+          # zusätzlich als Annotation ausgegeben: Die steht am Kopf des Laufs,
+          # ohne dass jemand die Zusammenfassung aufklappt.
+          warnungen=$(grep -c "^WARNUNG" branches.log || true)
+          uebersprungen=$(grep -c "^WARNUNG.*übersprungen" branches.log || true)
+
+          # Annotationen zuerst, damit sie auch bei leerem Summary auffallen.
+          while IFS= read -r zeile; do
+            echo "::warning title=Filialverzeichnis::${zeile#WARNUNG }"
+          done < <(grep "^WARNUNG" branches.log || true)
+
           {
             echo "## Filialverzeichnis"
             echo ""
+            if [ "$uebersprungen" -gt 0 ]; then
+              echo "> ⚠️ **$uebersprungen Filiale(n) übersprungen** — die Liste unten ist unvollständig."
+              echo ""
+            fi
             echo "| Quelle | Ergebnis |"
             echo "|---|---|"
             # Zeilen der Form "[01219] Lidl: 35 Filialen (35 mit Koordinaten)."
@@ -157,8 +177,8 @@ jobs:
             echo ""
             grep -E "nach Supabase geschrieben" branches.log || echo "_Nichts geschrieben._"
             echo ""
-            if grep -q "^WARNUNG" branches.log; then
-              echo "### Warnungen"
+            if [ "$warnungen" -gt 0 ]; then
+              echo "### Warnungen ($warnungen)"
               echo ""
               grep "^WARNUNG" branches.log | sed 's/^/- /'
             fi
