@@ -491,6 +491,39 @@ fn lidl_prospekt_builds_tiles_from_word_coordinates() {
     }
 }
 
+// Die Fixture ist echte `pdftotext -bbox-layout`-Ausgabe des Prospekts vom
+// 27.07. (Seiten 3 und 7, Absatzregion von 01219): zwei Kacheln, denen ein
+// mehrzeiliges Banner vor dem Titel klebt — eine mit echtem Produkt dahinter,
+// eine ohne.
+#[test]
+fn lidl_prospekt_rescues_a_title_behind_a_leading_banner() {
+    let offers = scrapers::lidl_prospekt::extract_offers(
+        include_str!("fixtures/lidl/prospekt_banner_titel.xml"),
+        "LIDL_1988",
+        Some("2026-07-27"),
+        Some("2026-08-01"),
+    );
+
+    // Der Lavendel hat „Erhältlich ab Do. 30.7. Für draußen" vor dem Namen
+    // und wurde bis 2026-07-31 deshalb komplett verworfen. Das Banner wird
+    // abgeschnitten, das Produkt bleibt.
+    let lavendel = offers
+        .iter()
+        .find(|o| o.title == "Lavendel angustifolia")
+        .expect("Lavendel trotz Banner nicht gerettet");
+    assert_eq!(lavendel.price, Some(1.69));
+
+    // Gegenprobe: Die zweite Kachel trägt dasselbe Banner und dahinter NUR
+    // den Preis (2.49*) — sie ist wirklich namenlos und bleibt verworfen.
+    // Ein Banner als Produktname wäre schlimmer als ein fehlendes Angebot.
+    assert_eq!(
+        offers.len(),
+        1,
+        "die namenlose Banner-Kachel wurde gerettet: {:?}",
+        offers.iter().map(|o| &o.title).collect::<Vec<_>>()
+    );
+}
+
 #[test]
 fn lidl_prospekt_marks_loyalty_prices_as_such() {
     let offers = scrapers::lidl_prospekt::extract_offers(
