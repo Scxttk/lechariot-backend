@@ -171,8 +171,14 @@ enum Command {
     /// (fetch + push). Die Filialen kommen aus `branch_requests` und
     /// `user_profiles.branch_ids` — der Regionsweg ist mit Migration v16 weg.
     Sync {
-        /// Höchstens so viele Filialen pro Lauf syncen
-        #[arg(long, default_value_t = 25)]
+        /// Höchstens so viele Filialen pro Lauf syncen.
+        ///
+        /// 60 statt der früheren 25: Der nächtliche Lauf 30612619727 brauchte
+        /// für 25 Filialen 5 min 15 s (07:22:43 bis 07:27:58), also gut 12 s
+        /// je Filiale — 60 kosten damit rund 13 min, weit unter dem
+        /// Job-Zeitlimit. Die 25 haben nicht Laufzeit gespart, sondern jede
+        /// Nacht dieselben sieben Filialen hinten abgeschnitten.
+        #[arg(long, default_value_t = 60)]
         max_branches: usize,
 
         /// Nur diese eine Filiale syncen (ID aus `public.branches`).

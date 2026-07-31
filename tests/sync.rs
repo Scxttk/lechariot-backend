@@ -297,6 +297,157 @@ fn the_branch_cap_limits_one_run() {
     assert_eq!(*calls.lock().unwrap(), 2);
 }
 
+/// Der Fall vom 31.07.2026, mit den echten IDs und Zeitstempeln aus
+/// `branch_requests`.
+///
+/// Lauf 30612619727 war grün und meldete „32 Filialen angefordert, Limit 25 —
+/// übersprungen: DE3413, DE4600, DE6330, DE7380, LIDL_1988, LIDL_3636,
+/// LIDL_5745". Übersprungen wurden damit genau die sieben Filialen, die am
+/// längsten nicht dran gewesen waren: Alle anderen trugen `last_synced` vom
+/// 31.07., diese sieben vom 30.07. Das Limit hat also nicht irgendwen
+/// abgeschnitten, sondern zielsicher die Bedürftigsten — `LIDL_*` sortiert
+/// hinter `DE*`, und geschnitten wurde alphabetisch.
+///
+/// Der Test hält fest, dass die Warteschlange sie jetzt **vorn** führt.
+#[test]
+fn the_longest_unsynced_branches_come_first() {
+    static ROUTES: [(&str, &str); 2] = [
+        (
+            "branch_requests",
+            r#"[
+              {"market_id":"021868","requested_at":"2026-07-27T06:07:34+00:00","last_synced":"2026-07-31T07:23:52+00:00"},
+              {"market_id":"DE3260","requested_at":"2026-07-26T08:17:34+00:00","last_synced":"2026-07-31T07:27:19+00:00"},
+              {"market_id":"DE3413","requested_at":"2026-07-27T06:07:53+00:00","last_synced":"2026-07-30T07:57:42+00:00"},
+              {"market_id":"LIDL_1988","requested_at":"2026-07-25T20:08:28+00:00","last_synced":"2026-07-30T07:58:45+00:00"},
+              {"market_id":"LIDL_3636","requested_at":"2026-07-30T19:45:43+00:00","last_synced":"2026-07-30T19:46:49+00:00"},
+              {"market_id":"LIDL_5745","requested_at":"2026-07-26T09:43:51+00:00","last_synced":"2026-07-30T07:59:10+00:00"}
+            ]"#,
+        ),
+        ("user_profiles", "[]"),
+    ];
+    let (base_url, _log) = spawn_routed_mock(&ROUTES);
+
+    let branches = sync::fetch_chosen_branches(&cfg(&base_url)).unwrap();
+
+    assert_eq!(
+        branches,
+        vec!["DE3413", "LIDL_1988", "LIDL_5745", "LIDL_3636", "021868", "DE3260"],
+        "nach Stand des letzten Syncs, nicht nach Alphabet"
+    );
+    // Die Probe aufs Exempel: Bei einem Limit von 3 überlebt jetzt Lidl.
+    assert_eq!(&branches[..3], &["DE3413", "LIDL_1988", "LIDL_5745"]);
+}
+
+/// Wer noch nie gesynct wurde, steht vorn — auf den wartet die App gerade.
+///
+/// `branch_requests.last_synced` ist die Spalte, die die App pollt (Migration
+/// v14); solange sie null ist, zeigt der Picker „wird geholt". Eine nie
+/// gesyncte Filiale hinten anzustellen hieße, genau den einen Nutzer warten
+/// zu lassen, der gerade zusieht.
+#[test]
+fn never_synced_branches_outrank_stale_ones() {
+    static ROUTES: [(&str, &str); 2] = [
+        (
+            "branch_requests",
+            r#"[
+              {"market_id":"laengst-fertig","requested_at":"2026-07-01T00:00:00+00:00","last_synced":"2026-07-30T07:00:00+00:00"},
+              {"market_id":"neu-spaeter","requested_at":"2026-07-31T09:00:00+00:00","last_synced":null},
+              {"market_id":"neu-frueher","requested_at":"2026-07-31T08:00:00+00:00","last_synced":null}
+            ]"#,
+        ),
+        ("user_profiles", "[]"),
+    ];
+    let (base_url, _log) = spawn_routed_mock(&ROUTES);
+
+    let branches = sync::fetch_chosen_branches(&cfg(&base_url)).unwrap();
+
+    assert_eq!(branches, vec!["neu-frueher", "neu-spaeter", "laengst-fertig"]);
+}
+
+/// Eine Filiale, die nur in einem Profil steht, hat noch keine
+/// `branch_requests`-Zeile und damit keinen Zeitstempel. Sie gilt als nie
+/// gesynct — aber hinter den ausdrücklichen Anforderungen: Hinter einer
+/// Anforderung wartet jemand, hinter einem Profileintrag niemand.
+#[test]
+fn profile_only_branches_queue_behind_explicit_requests() {
+    static ROUTES: [(&str, &str); 2] = [
+        (
+            "branch_requests",
+            r#"[
+              {"market_id":"angefordert","requested_at":"2026-07-31T08:00:00+00:00","last_synced":null},
+              {"market_id":"gesynct","requested_at":"2026-07-01T00:00:00+00:00","last_synced":"2026-07-30T07:00:00+00:00"}
+            ]"#,
+        ),
+        ("user_profiles", r#"[{"branch_ids":["nur-im-profil","gesynct"]}]"#),
+    ];
+    let (base_url, _log) = spawn_routed_mock(&ROUTES);
+
+    let branches = sync::fetch_chosen_branches(&cfg(&base_url)).unwrap();
+
+    // „gesynct" steht in beiden Quellen und darf trotzdem nur einmal
+    // vorkommen — mit dem Zeitstempel aus der Anforderung, nicht als Neuling.
+    assert_eq!(branches, vec!["angefordert", "nur-im-profil", "gesynct"]);
+}
+
+/// Ein Zeitstempel, den niemand parsen kann, darf nicht wie „nie gesynct"
+/// aussehen.
+///
+/// Sonst stünde diese Filiale in **jedem** Lauf vorn — unlesbar bleibt sie ja
+/// auch nach dem Sync — und schnitte die Übrigen ab. Das wäre derselbe stille
+/// Datenverlust wie der, den dieser Commit behebt. Sie kommt deshalb hinter
+/// die echten Neuzugänge und vor alles Gesyncte.
+#[test]
+fn an_unreadable_timestamp_does_not_win_the_queue_forever() {
+    static ROUTES: [(&str, &str); 2] = [
+        (
+            "branch_requests",
+            r#"[
+              {"market_id":"kaputter-stempel","requested_at":"2026-07-01T00:00:00+00:00","last_synced":"gestern abend"},
+              {"market_id":"nie-gesynct","requested_at":"2026-07-31T08:00:00+00:00","last_synced":null},
+              {"market_id":"frisch","requested_at":"2026-07-01T00:00:00+00:00","last_synced":"2026-07-31T07:00:00+00:00"}
+            ]"#,
+        ),
+        ("user_profiles", "[]"),
+    ];
+    let (base_url, _log) = spawn_routed_mock(&ROUTES);
+
+    let branches = sync::fetch_chosen_branches(&cfg(&base_url)).unwrap();
+
+    assert_eq!(branches, vec!["nie-gesynct", "kaputter-stempel", "frisch"]);
+}
+
+/// Zwei Läufe über denselben Daten müssen dieselbe Liste ergeben. Ohne
+/// letzte Stufe im Vergleich hinge die Reihenfolge gleich alter Filialen an
+/// der Antwortreihenfolge der Datenbank — dieselbe Flake-Klasse wie in #21
+/// und #22, nur eine Ebene höher.
+///
+/// Ehrlich benannt: Dieser Test schlägt vor dem Fix **nicht** fehl. Bei
+/// gleichem `last_synced` ist die ID die einzige Stufe, die bleibt, und dann
+/// stimmt alphabetisch mit richtig überein. Er ist ein Wächter gegen künftige
+/// Änderungen an [`sync::queue_order`], kein Beleg für die jetzige.
+#[test]
+fn the_queue_is_the_same_on_every_read() {
+    static ROUTES: [(&str, &str); 2] = [
+        (
+            "branch_requests",
+            r#"[
+              {"market_id":"c","requested_at":"2026-07-01T00:00:00+00:00","last_synced":"2026-07-30T07:00:00+00:00"},
+              {"market_id":"a","requested_at":"2026-07-01T00:00:00+00:00","last_synced":"2026-07-30T07:00:00+00:00"},
+              {"market_id":"b","requested_at":"2026-07-01T00:00:00+00:00","last_synced":"2026-07-30T07:00:00+00:00"}
+            ]"#,
+        ),
+        ("user_profiles", "[]"),
+    ];
+    let (base_url, _log) = spawn_routed_mock(&ROUTES);
+    let cfg = cfg(&base_url);
+
+    let first = sync::fetch_chosen_branches(&cfg).unwrap();
+    for _ in 0..5 {
+        assert_eq!(sync::fetch_chosen_branches(&cfg).unwrap(), first);
+    }
+    assert_eq!(first, vec!["a", "b", "c"]);
+}
+
 /// Eine kaputte Filiale darf den Lauf nicht abbrechen — die übrigen haben mit
 /// ihr nichts zu tun.
 #[test]
