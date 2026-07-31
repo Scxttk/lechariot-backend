@@ -992,3 +992,161 @@ fn the_backoff_stays_bounded() {
         "die Pausen müssen wachsen"
     );
 }
+
+// ---------------------------------------------------------------- NORMA
+
+#[test]
+fn norma_index_lists_every_theme_page_once() {
+    let themes =
+        scrapers::norma::parse_index(include_str!("fixtures/norma/angebote_index.html"));
+
+    assert_eq!(
+        themes,
+        vec![
+            "/de/angebote/ab-freitag,-31.07.26/wochenend-spezial-t-378267/",
+            "/de/angebote/ab-montag,-03.08.26/mehr-fuers-geld-t-379179/",
+            "/de/angebote/ab-montag,-03.08.26/unser-obst-und-gemuese-t-379181/",
+        ],
+        "Kampagnen-Query, Artikelseite, reiner Termin und /at/ gehören nicht dazu"
+    );
+}
+
+#[test]
+fn norma_theme_parses_tiles_with_prices_and_strike_prices() {
+    let mut offers = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    scrapers::norma::parse_theme(
+        include_str!("fixtures/norma/thema_mehr_fuers_geld.html"),
+        "/de/angebote/ab-montag,-03.08.26/mehr-fuers-geld-t-379179/",
+        "NORMA_DE",
+        &mut offers,
+        &mut seen,
+    );
+    assert_eq!(offers.len(), 5);
+
+    // Termin und Thema stehen nur im Pfad — beides muss an jedem Angebot hängen.
+    for o in &offers {
+        assert_eq!(o.valid_from.as_deref(), Some("2026-08-03"));
+        assert_eq!(o.category.as_deref(), Some("Mehr fürs Geld."));
+        // Laufzeit abgeleitet (7 Tage, siehe norma::TERM_DAYS) — die App liest
+        // valid_until als nicht-optionales Date, null bricht das Decoding.
+        assert_eq!(o.valid_until.as_deref(), Some("2026-08-09"));
+    }
+
+    // Marke vor den Produktnamen; Preis aus dem aria-label, nicht aus dem
+    // sichtbaren "–,99"; "statt 1,59" ist der Streichpreis; das Pfand fliegt
+    // aus der Mengenangabe, damit sie als reine Menge durchgeht.
+    let cola = &offers[0];
+    assert_eq!(cola.title, "Coca-Cola/ Fanta/ Sprite/ MezzoMix Erfrischungsgetränk");
+    assert_eq!(cola.price, Some(0.99));
+    assert_eq!(cola.regular_price, Some(1.59));
+    assert_eq!(cola.subtitle.as_deref(), Some("je 1,25 l"));
+    assert_eq!(cola.overline.as_deref(), Some("Aus unserem Sortiment (1 l = –,79)"));
+    assert_eq!(
+        cola.images,
+        vec![
+            "https://www.norma-online.de/ext/img/product/angebote/26_08_03/900_erfrischungsgetraenk_wo.png"
+        ]
+    );
+
+    // Leere <strong class="supplier"> -> kein Markenpräfix; "UVP 2,49" zählt
+    // genauso als Streichpreis wie "statt".
+    let waffeln = offers.iter().find(|o| o.title == "Kakaowaffeln").unwrap();
+    assert_eq!(waffeln.price, Some(1.99));
+    assert_eq!(waffeln.regular_price, Some(2.49));
+    assert_eq!(waffeln.subtitle.as_deref(), Some("je 225 g"));
+
+    // …-uvp-spacer ist eine andere Klasse als …-uvp: kein Streichpreis.
+    let kekse = offers.iter().find(|o| o.title == "Butterkekse").unwrap();
+    assert_eq!(kekse.price, Some(4.99));
+    assert_eq!(kekse.regular_price, None);
+}
+
+#[test]
+fn norma_same_product_from_two_brands_keeps_both() {
+    let mut offers = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    scrapers::norma::parse_theme(
+        include_str!("fixtures/norma/thema_mehr_fuers_geld.html"),
+        "/de/angebote/ab-montag,-03.08.26/mehr-fuers-geld-t-379179/",
+        "NORMA_DE",
+        &mut offers,
+        &mut seen,
+    );
+
+    // Der eigentliche Grund, warum die Marke im Titel steht: Sheba und
+    // Whiskas verkaufen im selben Prospekt beide "Katzennassnahrung". Ohne
+    // Marke fielen beide auf dieselbe Offer-ID und eines verschwände still.
+    let katze: Vec<_> = offers.iter().filter(|o| o.title.contains("Katzennassnahrung")).collect();
+    assert_eq!(katze.len(), 2, "beide Marken müssen überleben");
+    assert_eq!(katze[0].title, "Sheba Katzennassnahrung");
+    assert_eq!(katze[1].title, "Whiskas Katzennassnahrung");
+    assert_ne!(katze[0].id, katze[1].id);
+    assert_eq!(katze[0].price, Some(15.99));
+    assert_eq!(katze[1].price, Some(11.99));
+    // "UVP = 13,95" — das Gleichheitszeichen darf den Parser nicht stören.
+    assert_eq!(katze[1].regular_price, Some(13.95));
+}
+
+/// Die Filialdaten stehen als URL-kodiertes JSON im showMap-Link — die
+/// belastbarere Quelle als die Kachel-Verschachtelung daneben.
+#[test]
+fn norma_store_finder_reads_the_showmap_payload() {
+    let stores = scrapers::store_finder::parse_norma(
+        include_str!("fixtures/norma/filialfinder_01219.html"),
+        50.0,
+    );
+    assert_eq!(stores.len(), 3);
+    // Nach Entfernung sortiert, nicht nach der Reihenfolge im HTML.
+    assert_eq!(stores[0].id, "2131");
+    // "+" ist ein Leerzeichen, %5Cu00df wird zum ß der JSON-Ebene.
+    assert_eq!(stores[0].street.as_deref(), Some("Paradiesstraße 40"));
+    assert_eq!(stores[0].plz.as_deref(), Some("01217"));
+    assert_eq!(stores[0].city.as_deref(), Some("Dresden"));
+    assert_eq!(stores[0].lat, Some(51.02408));
+    assert_eq!(stores[0].lon, Some(13.74388));
+
+    let market = stores.into_iter().next().unwrap().into_market();
+    assert_eq!(market.id, "NORMA_2131");
+    assert_eq!(market.name, "NORMA Dresden");
+}
+
+/// Jede Zeile im Verzeichnis braucht Koordinaten und Adresse, sonst kann die
+/// App sie weder auf die Karte noch in die Auswahlliste setzen.
+#[test]
+fn norma_store_finder_fills_the_directory_row() {
+    let branch = scrapers::store_finder::parse_norma(
+        include_str!("fixtures/norma/filialfinder_01219.html"),
+        50.0,
+    )
+    .into_iter()
+    .next()
+    .unwrap()
+    .into_branch();
+
+    assert_eq!(branch.market_id, "NORMA_2131");
+    // Dieselbe Schreibweise wie `Store::Norma.chain()` — sonst findet die App
+    // die Angebote der Kette nicht zu ihrer Filiale.
+    assert_eq!(branch.chain, "NORMA");
+    assert_eq!(branch.name, "NORMA Dresden");
+    assert_eq!(branch.street.as_deref(), Some("Paradiesstraße 40"));
+    assert_eq!(branch.plz.as_deref(), Some("01217"));
+    assert_eq!(branch.lat, Some(51.02408));
+    assert_eq!(branch.lon, Some(13.74388));
+    assert_eq!(branch.source, "norma-filialfinder");
+}
+
+#[test]
+fn norma_store_finder_drops_branches_beyond_the_radius() {
+    // Dieselbe Antwort, nur mit dem Umkreis der Gebietssuche: Großharthau
+    // liegt 25.547 m entfernt und fällt bei 25 km heraus. Der Server hält den
+    // Radius zwar ein — aber `geoDistance` steht an jeder Filiale, und der
+    // Tag, an dem er es nicht mehr tut, darf keine Filiale aus dem
+    // Nachbarkreis ins Verzeichnis spülen.
+    let stores = scrapers::store_finder::parse_norma(
+        include_str!("fixtures/norma/filialfinder_01219.html"),
+        lechariot::branches::AREA_RADIUS_KM,
+    );
+    assert_eq!(stores.len(), 2);
+    assert!(stores.iter().all(|s| s.id != "2411"));
+}

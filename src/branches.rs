@@ -15,6 +15,7 @@
 //! | Penny | 1 Request für alle 2120 Märkte | landesweit |
 //! | Lidl, ALDI Nord/SÜD | Umkreissuche um Koordinaten | je Gebiet |
 //! | REWE, Netto | Textsuche je PLZ | je Gebiet |
+//! | NORMA | Textsuche je PLZ, **plus ein Request für die Sitzung** | je Gebiet |
 //! | EDEKA | Textsuche je PLZ **plus ein Redirect je Filiale** | je Gebiet |
 //!
 //! Deshalb ist das Verzeichnis nicht flächendeckend, sondern bedarfsgesteuert:
@@ -276,7 +277,7 @@ fn resolve_area(target: &AreaTarget) -> ResolvedArea {
 
 /// Verzeichnis befüllen. Liefert die Zahl der geschriebenen Zeilen.
 ///
-/// Fehler einzelner Ketten warnen nur: Ein Verzeichnis mit sieben von acht
+/// Fehler einzelner Ketten warnen nur: Ein Verzeichnis mit acht von neun
 /// Ketten ist brauchbar, ein Abbruch wegen EDEKA wäre es nicht.
 pub fn sync(cfg: &PushConfig, opts: &DirectoryOptions) -> Result<usize> {
     let mut all: Vec<Branch> = Vec::new();
@@ -373,6 +374,14 @@ pub fn sync(cfg: &PushConfig, opts: &DirectoryOptions) -> Result<usize> {
                 netto::find_branches(plz, opts.radius_km as u32),
             );
             collect(&format!("[{area}] EDEKA"), &mut area_branches, edeka::find_branches(plz));
+            // NORMA sucht nach PLZ-Text wie REWE/Netto/EDEKA, obwohl sein
+            // Angebotskatalog bundesweit ist: Sein Filialfinder nimmt keine
+            // Koordinaten entgegen, sondern das Formularfeld „Postleitzahl".
+            collect(
+                &format!("[{area}] NORMA"),
+                &mut area_branches,
+                store_finder::norma_branches(plz, opts.radius_km, MAX_PER_CHAIN),
+            );
         } else {
             eprintln!(
                 "WARNUNG [{area}] REWE, Netto und EDEKA übersprungen: keine PLZ für die Textsuche"

@@ -584,15 +584,35 @@ fn national_chains_are_pushed_once_and_marked_nationwide() {
         .flat_map(|v| v.as_array().cloned().unwrap_or_default())
         .collect();
 
-    assert_eq!(rows.len(), 4, "je 2 Angebote für Nord und SÜD: {rows:#?}");
+    // Erwartung aus `Store::ALL` ableiten statt sie abzuschreiben: Was hier
+    // geprüft wird, ist "jede bundesweite Kette landet genau einmal unter
+    // ihrer National-Filiale" — nicht, wie viele es gerade sind. Eine neue
+    // Kette (NORMA, 2026-07) darf diesen Test nicht rot machen, eine falsch
+    // gespeicherte schon.
+    let national_ids: std::collections::BTreeSet<String> = lechariot::stores::Store::ALL
+        .into_iter()
+        .filter(|s| s.stores_nationally())
+        .filter_map(|s| s.national_market().map(|m| m.id))
+        .collect();
+    assert!(
+        ["ALDI_NORD_DE", "ALDI_SUED_DE", "NORMA_DE"]
+            .iter()
+            .all(|id| national_ids.contains(*id)),
+        "erwartete National-Filialen fehlen: {national_ids:?}"
+    );
+
+    assert_eq!(
+        rows.len(),
+        national_ids.len() * 2,
+        "je 2 Angebote pro bundesweiter Kette: {rows:#?}"
+    );
     for row in &rows {
         assert_eq!(row["nationwide"], true, "{row}");
     }
-    let ids: std::collections::BTreeSet<&str> =
-        rows.iter().filter_map(|r| r["market_id"].as_str()).collect();
+    let ids: std::collections::BTreeSet<String> =
+        rows.iter().filter_map(|r| r["market_id"].as_str()).map(String::from).collect();
     assert_eq!(
-        ids,
-        ["ALDI_NORD_DE", "ALDI_SUED_DE"].into_iter().collect(),
+        ids, national_ids,
         "unter der National-Filiale gespeichert, nicht unter einer echten"
     );
 }

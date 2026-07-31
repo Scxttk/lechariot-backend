@@ -15,6 +15,92 @@ Angebotszahlen schwanken je Woche und Region.
 | Netto | Intershop-Filialsuche (JSON) + `/filialangebote/{1,2,4,5}`-HTML | Akamai → System-`curl`; Filiale über Cookie `netto_user_stores_id` | filialspezifisch | ~300 | `tests/fixtures/netto/filialangebote_1.html` |
 | ALDI Nord | `aldi-nord.de/angebote.html`, Daten im `__NEXT_DATA__`-JSON (`OFFER_GET.res.algoliaDataMap`) | plain reqwest | bundesweit (`ALDI_NORD_DE`) | ~230 | `tests/fixtures/aldi_nord/angebote.html` |
 | ALDI Süd | `api.aldi-sued.de/v3/product-search?categoryKey=1588161426582123` (paginiert) | Akamai → System-`curl`; Preise in **Cent**; keine Gültigkeitsdaten | Süd-Gebiet einheitlich (`ALDI_SUED_DE`) | ~75 | `tests/fixtures/aldi_sued/product_search.json` |
+| NORMA | `norma-online.de/de/angebote/` (Index) → je Themenseite `…/ab-<tag>,-<dd.mm.jj>/<thema>-t-<id>/` | plain reqwest, kein Key, kein Cookie; Preis maschinenlesbar im `aria-label` („0,99 Euro"), sichtbar steht dort `–,99`; **Marke und Produkt getrennt** (Offer-ID enthält deshalb die Marke); Laufzeit abgeleitet (siehe unten) | bundesweit (`NORMA_DE`) | ~220 (3 Termine) | `tests/fixtures/norma/angebote_index.html`, `…/thema_mehr_fuers_geld.html`, `…/filialfinder_01219.html` |
+
+## NORMA: drei Termine pro Woche, ein abgeleitetes Enddatum
+
+NORMA startet **drei Angebotszyklen je Woche** (Montag, Mittwoch, Freitag), und
+der Index zeigt die laufenden *und* die kommenden. Am 2026-07-31 waren das vier
+Termine mit 22 Themenseiten und 216 Angeboten, 157 davon am Montagstermin. Ein
+Lauf kostet damit rund 23 Requests: den Index plus eine Seite je Thema.
+
+Gemessen am 2026-07-31, 21:20 Uhr: **221 Angebote, 215 mit Preis (97 %), 91 mit
+Streichpreis, 221 mit Bild, 221 mit Rohkategorie.** Davon bekommen 137 (62 %)
+von `enrich` eine echte Kategorie; die übrigen sind fast alle Non-Food
+(Heimwerker, Garten, Fahrrad), siehe [docs/marktabdeckung.md](../marktabdeckung.md).
+
+Die PLZ steht hier bewusst nicht dabei: Der Katalog ist bundesweit. Nachgeprüft
+am 2026-07-31, indem dieselbe Themenseite dreimal geholt wurde — ohne
+Filialcookie, mit `NORMA_clid=2131` (Dresden) und mit einer anderen Filiale. Die
+drei Antworten unterscheiden sich in **einem Akamai-Beacon-Token** und sonst in
+keinem Byte; Preise und Kacheln sind identisch. Die Filialwahl auf der Website
+schaltet nur einen „Meine Filiale"-Kasten frei, keinen anderen Preis.
+
+**Das Enddatum ist abgeleitet, und das ist eine bewusste Ausnahme.** Auf der
+Themenseite steht nur der Start („ab Montag, 03.08."). Leer lassen ging nicht:
+Die App liest `valid_until` als **nicht-optionales** `Date`
+(`ios/LeChariot/Models/Offer.swift`) — ein `null` bricht nicht nur die
+NORMA-Zeile, sondern das Decoding der **ganzen** Angebotsantwort. Also sieben
+Tage ab Start (`norma::TERM_DAYS`).
+
+Die Zahl ist nicht geraten: Die **Artikel**-Detailseiten nennen den Zeitraum
+wörtlich („Aktionszeitraum: 03.08. bis 09.08.2026"). Sie an jedem Angebot
+abzufragen wäre 218 statt 23 Requests, deshalb steht die Laufzeit als Konstante
+im Code — und der Live-Test `valid_until_is_the_published_window` rechnet sie
+gegen zwei echte Detailseiten nach, damit ein geänderter Rhythmus auffällt:
+
+```sh
+cargo test --lib valid_until_is_the_published_window -- --ignored --nocapture
+```
+
+Zwei weitere Fallen, beide beim ersten Livelauf aufgefallen:
+
+1. **Marke und Produkt stehen getrennt** (`strong.supplier` = „Sheba",
+   `h3` = „Katzennassnahrung"). Ohne die Marke im Titel fallen zwei Marken
+   desselben Produkts auf dieselbe Offer-ID — Sheba und Whiskas hatten am
+   2026-07-31 beide eine „Katzennassnahrung" im selben Prospekt. Dieselbe
+   Falle wie bei Kaufland.
+2. **Textknoten ohne Leerraum dazwischen.** `…Tipo` + `je 520 g` ergab beim
+   bloßen Aneinanderhängen „Tipoje 520 g"; die Knoten werden deshalb mit
+   Leerzeichen verbunden. Ebenso schreibt NORMA das Pfand mal mit und mal ohne
+   Leerzeichen vors Komma (`je 6 x 0,5 l,zzgl. …`) — es fliegt aus der
+   Mengenangabe, damit `push::is_pure_quantity` sie als reine Menge erkennt.
+
+## NORMA-Filialfinder: ein POST-Formular mit Sitzungspflicht
+
+Die Filialliste kommt aus einem anderen Loch als die Angebote, und der
+naheliegende Weg ist der falsche.
+
+| Weg | Requests | Ergebnis |
+|---|---|---|
+| `GET /de/filialfinder/suchergebnis?lat=…&lng=…&r=…` | 1 (+1 Nominatim) | **immer genau eine** Filiale, `r` wirkungslos |
+| `POST /de/filialfinder/` mit `filialfinder[suche][plz]` | 2 | alle Filialen im Radius, keine Geokodierung nötig |
+
+Der GET-Weg sieht bequemer aus und ist es nicht: An sieben Orten geprüft
+(Dresden, Nürnberg, Berlin, München, Hamburg, Köln, Fürth) kam jedes Mal genau
+eine Filiale zurück, egal welcher Radius gefragt war. Für „ist die Kette hier
+vertreten" reicht das, für den Filial-Picker der App nicht.
+
+Der POST-Weg braucht **zwei** Requests, und der erste ist kein Versehen: Die
+Suche landet in einer PHP-Sitzung, die Trefferseite hinter dem 302 liest sie von
+dort, und ohne `PHPSESSID` antwortet der Server mit `?info=nosearch` — also mit
+einer leeren Seite und HTTP 200, nicht mit einem Fehler. Ein Sitzungscookie gibt
+es auf norma-online.de an genau einer Stelle: `/ext/ajax/get_wishlist.php`.
+Weder `/de/filialfinder/`, noch `/de/angebote/`, noch die Trefferseite selbst
+setzen eines (alle vier am 2026-07-31 geprüft). Deshalb steht dieser Handschlag
+in `store_finder::norma_search` vor der Suche.
+
+Gemessen am 2026-07-31, Radius 25 km (`branches::AREA_RADIUS_KM`):
+
+| PLZ | Filialen | mit Koordinaten | mit Straße |
+|---|---:|---:|---:|
+| 01219 Dresden | 9 | 9 | 9 |
+| 90402 Nürnberg | 60 | 60 | 60 |
+
+Die 60 sind der Deckel, nicht die Wahrheit: `branches::MAX_PER_CHAIN` steht auf
+60, und NORMAs Server kappt bei derselben Zahl (bei 15 km lieferte 90402 bereits
+59, bei 50 km 60). In Nürnberg — NORMA sitzt in Fürth — ist die Liste also
+abgeschnitten, wie bei jeder anderen Kette in einer Großstadt auch.
 
 ## Bekannte NULL-Preise (diagnostiziert 2026-07)
 

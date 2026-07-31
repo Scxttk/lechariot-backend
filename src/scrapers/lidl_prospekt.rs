@@ -1,6 +1,6 @@
 //! Lidl-Angebote aus Lidls eigenem Wochenprospekt — ohne marktguru.
 //!
-//! Lidl war die einzige der acht Ketten, deren Angebote über einen Dritten
+//! Lidl war die einzige der neun Ketten, deren Angebote über einen Dritten
 //! (api.marktguru.de) kamen, und mit ~30 % aller Zeilen zugleich die größte
 //! Quelle. Dieser Weg holt dieselben Angebote beim Händler selbst:
 //!

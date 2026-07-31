@@ -5,6 +5,7 @@ pub mod kaufland;
 pub mod netto;
 pub mod lidl_llm;
 pub mod lidl_prospekt;
+pub mod norma;
 pub mod penny;
 pub mod rewe;
 pub mod store_finder;
