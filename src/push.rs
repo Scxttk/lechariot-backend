@@ -263,11 +263,13 @@ pub struct PushOptions {
     /// **Händler-Bilder** in den Supabase-Storage-Bucket spiegeln (Händler-URL
     /// -> Bucket-URL). Bei --dry-run wird ohnehin nicht gespiegelt.
     ///
-    /// Gilt ausdrücklich **nicht** für die selbst geschnittenen Kachelbilder:
-    /// Ein Händler-Bild zu spiegeln ist eine Entscheidung (seit 2026-07-27
-    /// verneint — die App lädt die CDN-URL direkt), ein Kachelbild
-    /// hochzuladen ist keine. Es liegt als Datei auf dem Runner und hat
-    /// keinen anderen Ort. Siehe [`MirrorScope`].
+    /// Gilt ausdrücklich **nicht** für die selbst geschnittenen Kachelbilder
+    /// und nicht für Netto: Ein Händler-Bild zu spiegeln ist eine
+    /// Entscheidung (seit 2026-07-27 verneint — die App lädt die CDN-URL
+    /// direkt), ein Kachelbild hochzuladen ist keine (es liegt als Datei auf
+    /// dem Runner und hat keinen anderen Ort), und ein Netto-Bild auch nicht
+    /// (das CDN weist die App mit 403 ab — die URL ist dort ein toter Link).
+    /// Siehe [`MirrorScope`].
     pub mirror_images: bool,
     /// Bilder erst NACH dem Offers-Upsert spiegeln (On-Demand-Pfad): Phase 1
     /// upsertet sofort mit Händler-URL bzw. null (Emoji-Fallback der App),
@@ -378,8 +380,30 @@ enum MirrorScope {
     /// Nur die selbst aus dem Prospekt geschnittenen Kachelbilder
     /// (`file://`). **Immer**, unabhängig von `mirror_images`.
     LocalCrops,
-    /// Nur Händler-URLs (http/https). Nur wenn `mirror_images` gesetzt ist.
+    /// Händler-URLs, deren CDN **jeden** schlichten Client mit 403 abweist —
+    /// die App eingeschlossen (Netto/Akamai, gemessen 2026-07-31: 8 von 8
+    /// URLs 403, auch mit Referer und iPhone-UA; kein Hotlink-Schutz).
+    /// **Immer**, unabhängig von `mirror_images` — derselbe Fall wie
+    /// [`MirrorScope::LocalCrops`]: Ein Bild, dessen Host es nicht
+    /// herausgibt, hat kein anderes Zuhause. Läuft NACH dem Upsert und der
+    /// Fertigmeldung (die Angebote sollen nicht auf Bilder warten).
+    UnfetchableRemotes,
+    /// Alle übrigen Händler-URLs (http/https, App kann sie laden). Nur wenn
+    /// `mirror_images` gesetzt ist.
     RemoteImages,
+}
+
+/// Welchen Durchgang eine Bild-URL braucht. Die Zuordnung ist die eine
+/// Stelle, an der entschieden wird, ob ein Bild Pflicht (Kachel, Netto) oder
+/// Option (übrige Händler) ist.
+fn scope_of(url: &str) -> MirrorScope {
+    if url.starts_with("file://") {
+        MirrorScope::LocalCrops
+    } else if storage::is_client_blocked_url(url) {
+        MirrorScope::UnfetchableRemotes
+    } else {
+        MirrorScope::RemoteImages
+    }
 }
 
 /// Bild-URLs in den Storage-Bucket hochladen und die Zeilen auf die
@@ -399,8 +423,7 @@ fn mirror_images(
     for (_chain, g) in groups.iter_mut() {
         for row in g.rows.iter_mut() {
             let Some(src) = row.image_url.clone() else { continue };
-            let is_local = src.starts_with("file://");
-            if is_local != (scope == MirrorScope::LocalCrops) {
+            if scope_of(&src) != scope {
                 continue;
             }
             // Schon eine Bucket-URL (z. B. erneuter Lauf ohne DB-Cache-Treffer)?
@@ -421,7 +444,9 @@ fn mirror_images(
                 Err(e) => {
                     eprintln!("  Bild übersprungen ({src}): {e}");
                     // Eine gescheiterte Händler-URL darf stehen bleiben — die
-                    // App kann sie laden. Ein gescheitertes Kachelbild nicht:
+                    // App kann sie laden (bei Netto nicht, aber dort ist der
+                    // tote Link der Status quo und der nächste Lauf versucht
+                    // es erneut). Ein gescheitertes Kachelbild nicht:
                     // `file://` zeigt auf dieses Dateisystem und wäre auf dem
                     // Telefon ein toter Link. Dann lieber kein Bild und das
                     // Emoji, das die App ohnehin als Rückfall hat.
@@ -674,24 +699,55 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
     let scope = if opts.nationwide { "bundesweit" } else { "je Filiale" };
     println!("Fertig: {total} Angebote nach Supabase gepusht ({scope}).");
 
-    // Phase 2 (defer_mirror): Bilder jetzt spiegeln und die betroffenen Zeilen
-    // erneut upserten — die App zeigt die Angebote längst, hier kommen nur noch
-    // die stabilen Bucket-URLs nach.
+    // Phase 2: Bilder spiegeln, die die App selbst nie laden könnte, und die
+    // betroffenen Zeilen erneut upserten — die App zeigt die Angebote längst,
+    // hier kommen nur noch die stabilen Bucket-URLs nach.
+    //
+    // `UnfetchableRemotes` (Netto) läuft IMMER, unabhängig von
+    // `mirror_images`: Die Händler-URL ist für die App ein toter Link (403
+    // für jeden schlichten Client), die Zeile also faktisch bilderlos —
+    // gemessen am 2026-07-31: 1.722 gültige Angebote ohne Bild in der App.
+    // `RemoteImages` läuft hier nur im defer-Modus (sonst schon vor dem
+    // Upsert, oben).
+    //
+    // Merken, welche Zeilen schon vor Phase 2 eine Bucket-URL trugen
+    // (Kachelbilder): Die stehen bereits richtig in der Datenbank, der
+    // Nachtrag soll nur die in Phase 2 gespiegelten Zeilen anfassen.
+    let bucket_marker = format!("/{}/", storage::BUCKET);
+    let already_mirrored: HashSet<(String, String, Option<String>)> = groups
+        .values()
+        .flat_map(|g| &g.rows)
+        .filter(|r| r.image_url.as_deref().is_some_and(|u| u.contains(&bucket_marker)))
+        .map(|r| (r.market_id.clone(), r.product.clone(), r.valid_from.clone()))
+        .collect();
+
+    let mut phase2 = vec![(MirrorScope::UnfetchableRemotes, "Netto-Bilder")];
     if opts.mirror_images && opts.defer_mirror {
+        phase2.push((MirrorScope::RemoteImages, "Bilder (Phase 2)"));
+    }
+    for (scope, label) in phase2 {
         let (fresh, cached, failed) =
-            mirror_images(&mut groups, cfg, &opts.db_path, &mirror_client, MirrorScope::RemoteImages)?;
-        println!("Bilder (Phase 2): {fresh} neu gespiegelt, {cached} aus Cache, {failed} fehlgeschlagen.");
-        let bucket_marker = format!("/{}/", storage::BUCKET);
-        let mirrored: Vec<SupabaseRow> = groups
-            .values()
-            .flat_map(|g| &g.rows)
-            .filter(|r| r.image_url.as_deref().is_some_and(|u| u.contains(&bucket_marker)))
-            .cloned()
-            .collect();
-        if !mirrored.is_empty() {
-            upsert_offer_rows(&client, cfg, &mirrored, "Bild-Nachtrag")?;
-            println!("Bild-Nachtrag: {} Zeilen mit Bucket-URLs aktualisiert.", mirrored.len());
+            mirror_images(&mut groups, cfg, &opts.db_path, &mirror_client, scope)?;
+        if fresh + cached + failed > 0 {
+            println!("{label}: {fresh} neu gespiegelt, {cached} aus Cache, {failed} fehlgeschlagen.");
         }
+    }
+    let mirrored: Vec<SupabaseRow> = groups
+        .values()
+        .flat_map(|g| &g.rows)
+        .filter(|r| r.image_url.as_deref().is_some_and(|u| u.contains(&bucket_marker)))
+        .filter(|r| {
+            !already_mirrored.contains(&(
+                r.market_id.clone(),
+                r.product.clone(),
+                r.valid_from.clone(),
+            ))
+        })
+        .cloned()
+        .collect();
+    if !mirrored.is_empty() {
+        upsert_offer_rows(&client, cfg, &mirrored, "Bild-Nachtrag")?;
+        println!("Bild-Nachtrag: {} Zeilen mit Bucket-URLs aktualisiert.", mirrored.len());
     }
     Ok(())
 }

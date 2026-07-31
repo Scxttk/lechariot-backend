@@ -41,6 +41,38 @@ const ALLOWED_IMAGE_HOST_SUFFIXES: &[&str] = &[
     "edeka",
 ];
 
+/// Bild-Hosts, die **jeden** schlichten HTTP-Client mit 403 abweisen — auch
+/// die App. Gemessen am 2026-07-31 gegen `www.netto-online.de/media_nfs/…`:
+///
+/// * iPhone-UA + `Referer: netto-online.de` → 403 (kein Hotlink-Schutz),
+/// * curl mit Chrome-UA allein → 403,
+/// * reqwest mit **komplettem** Browser-Header-Satz → 403 (Akamai
+///   fingerprintet den TLS-Stack, wie schon beim Scraper, siehe
+///   `scrapers::util`),
+/// * System-curl mit UA + Accept-Language + Accept-Encoding + Sec-Fetch-Trio
+///   → 200. Jeder dieser Header ist notwendig; einer allein reicht nicht.
+///
+/// Für diese Hosts gilt beides zugleich: Die App kann das Bild nie laden
+/// (Spiegeln ist Pflicht, nicht Option), und der Download beim Spiegeln muss
+/// über System-curl laufen statt über reqwest.
+const CLIENT_BLOCKED_HOST_SUFFIXES: &[&str] = &["netto-online.de"];
+
+/// True, wenn die URL auf einen Host zeigt, dessen CDN schlichte Clients
+/// (App eingeschlossen) mit 403 abweist — siehe
+/// [`CLIENT_BLOCKED_HOST_SUFFIXES`]. `push::mirror_images` spiegelt solche
+/// Bilder immer, unabhängig vom `mirror_images`-Schalter.
+pub fn is_client_blocked_url(url: &str) -> bool {
+    reqwest::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_string))
+        .is_some_and(|host| {
+            let host = host.trim_end_matches('.').to_ascii_lowercase();
+            CLIENT_BLOCKED_HOST_SUFFIXES
+                .iter()
+                .any(|suffix| host == *suffix || host.ends_with(&format!(".{suffix}")))
+        })
+}
+
 /// Deterministischer Objektpfad: sha256(Quell-URL) + Datei-Endung der Quelle.
 pub fn object_path(source_url: &str) -> String {
     let hash = Sha256::digest(source_url.as_bytes());
@@ -274,37 +306,100 @@ pub fn mirror(
         return upload(client, cfg, &path, body, content_type);
     }
 
-    // Bild vom Händler-CDN laden. `client` folgt bewusst keinen Redirects
-    // (siehe `push::run`), damit ein 3xx nicht auf ein internes Ziel umgelenkt
-    // werden kann.
-    let resp = client
-        .get(source_url)
-        .send()
-        .with_context(|| format!("Bild-Download fehlgeschlagen: {source_url}"))?;
-    if !resp.status().is_success() {
-        bail!("Bild-Download {source_url}: HTTP {}", resp.status());
-    }
+    // Bild vom Händler-CDN laden. Beide Wege folgen bewusst keinen Redirects,
+    // damit ein 3xx nicht auf ein internes Ziel umgelenkt werden kann:
+    // `client` ist entsprechend gebaut (siehe `push::run`), und `curl_download`
+    // ruft curl ohne `-L` auf.
+    let (bytes, remote_ct) = if is_client_blocked_url(source_url) {
+        // Akamai blockt den reqwest-TLS-Stack (403, gemessen 2026-07-31 mit
+        // identischen Headern) — derselbe Befund wie beim Netto-Scraper.
+        // System-curl mit vollem Browser-Header-Satz kommt durch.
+        curl_download(source_url)?
+    } else {
+        let resp = client
+            .get(source_url)
+            .send()
+            .with_context(|| format!("Bild-Download fehlgeschlagen: {source_url}"))?;
+        if !resp.status().is_success() {
+            bail!("Bild-Download {source_url}: HTTP {}", resp.status());
+        }
+        let ct = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string();
+        let bytes = resp.bytes().context("Bild-Bytes lesen fehlgeschlagen")?.to_vec();
+        (bytes, ct)
+    };
     // Content-Type gegen die Bild-Allow-Liste prüfen statt den Remote-Header
     // blind weiterzureichen; Nicht-Bilder werden nicht hochgeladen.
-    let remote_ct = resp
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    let Some(content_type) = allowed_image_content_type(remote_ct) else {
+    let Some(content_type) = allowed_image_content_type(&remote_ct) else {
         bail!("Bild-Download {source_url}: unerlaubter Content-Type '{remote_ct}'");
     };
-    let bytes = resp.bytes().context("Bild-Bytes lesen fehlgeschlagen")?;
 
     // Überdimensionierte Bilder vor dem Upload verkleinern, damit der Bucket
     // unter dem Storage-Free-Limit bleibt. Bei zu kleinen Bildern, anderen
     // Formaten oder Fehlern bleibt das Original (und sein Content-Type).
     let (body, content_type): (Vec<u8>, &str) = match downscale(&bytes, content_type) {
         Some((scaled, ct)) => (scaled, ct),
-        None => (bytes.to_vec(), content_type),
+        None => (bytes, content_type),
     };
 
     upload(client, cfg, &path, body, content_type)
+}
+
+/// Bild-Download über System-curl mit vollem Browser-Header-Satz — für Hosts,
+/// deren Akamai-Schutz den reqwest-TLS-Stack blockt (siehe
+/// [`CLIENT_BLOCKED_HOST_SUFFIXES`]). Liefert (Bytes, Content-Type).
+///
+/// Bewusst **ohne** `-L`: Redirects nicht folgen, dieselbe SSRF-Schranke wie
+/// beim reqwest-Client in `push::run`. Der Body landet in einer Temp-Datei
+/// statt auf stdout, damit sich Binärdaten nicht mit dem `-w`-Statusreport
+/// mischen.
+fn curl_download(url: &str) -> Result<(Vec<u8>, String)> {
+    // Präzedenzfall `scrapers::util::curl_get` — inklusive der höflichen
+    // Pause zwischen Requests an denselben Host.
+    crate::scrapers::util::polite_pause(url);
+    let tmp = std::env::temp_dir().join(format!(
+        "lechariot-bild-{}-{}.part",
+        std::process::id(),
+        object_path(url)
+    ));
+    let output = std::process::Command::new("curl")
+        .arg("-s")
+        .arg("--max-time")
+        .arg("30")
+        .arg("-o")
+        .arg(&tmp)
+        .arg("-w")
+        .arg("%{http_code}\t%{content_type}")
+        // Der volle Satz ist notwendig: UA, Accept-Language, Accept-Encoding
+        // UND das Sec-Fetch-Trio — fehlt einer, antwortet Akamai mit 403
+        // (einzeln durchgemessen am 2026-07-31).
+        .args(["-H", &format!("User-Agent: {}", crate::scrapers::util::USER_AGENT)])
+        .args(["-H", "Accept-Language: de-DE,de;q=0.9,en;q=0.8"])
+        .args(["-H", "Accept-Encoding: gzip, deflate, br"])
+        .arg("--compressed")
+        .args(["-H", "Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"])
+        .args(["-H", "Sec-Fetch-Site: same-origin"])
+        .args(["-H", "Sec-Fetch-Mode: no-cors"])
+        .args(["-H", "Sec-Fetch-Dest: image"])
+        .arg(url)
+        .output()
+        .context("curl nicht gefunden — wird fürs Spiegeln von Netto-Bildern benötigt")?;
+
+    let report = String::from_utf8_lossy(&output.stdout);
+    let (status, content_type) = report.trim().split_once('\t').unwrap_or((report.trim(), ""));
+    let bytes = std::fs::read(&tmp).unwrap_or_default();
+    let _ = std::fs::remove_file(&tmp);
+    if status != "200" {
+        bail!("Bild-Download {url}: HTTP {status} (curl)");
+    }
+    if bytes.is_empty() {
+        bail!("Bild-Download {url}: leerer Body (curl)");
+    }
+    Ok((bytes, content_type.to_string()))
 }
 
 /// `file://`-Quelle in einen Pfad auflösen, aber **nur** innerhalb des
@@ -390,6 +485,74 @@ mod tests {
             local_crop_path("https://img.rewe-static.de/x.jpg").unwrap(),
             None
         );
+    }
+
+    // Netto-URLs (und nur sie) gelten als client-blockiert: Das CDN weist
+    // jeden schlichten Client mit 403 ab, die App eingeschlossen. Diese
+    // Zuordnung entscheidet in push::scope_of, ob ein Bild Pflicht ist.
+    #[test]
+    fn client_blocked_hosts_are_exactly_the_netto_cdn() {
+        assert!(is_client_blocked_url(
+            "https://www.netto-online.de/media_nfs/images/2026-31/42-450x450-n.webp"
+        ));
+        assert!(is_client_blocked_url("https://netto-online.de/bild.webp"));
+        // Alle anderen Ketten liefern an die App aus (gemessen 2026-07-31,
+        // iPhone-UA: REWE/EDEKA/Kaufland/Penny/beide ALDIs -> 200).
+        for url in [
+            "https://img.rewe-static.de/x.jpg",
+            "https://cdn.penny.de/x.jpg",
+            "https://kaufland.media.schwarz/x.png",
+            "https://dm.emea.cms.aldi.cx/x.jpg",
+            "https://s7g10.scene7.com/x.jpg",
+            "https://offer-images.api.edeka/x.jpg",
+        ] {
+            assert!(!is_client_blocked_url(url), "fälschlich blockiert: {url}");
+        }
+        // Trick-Hosts zählen nicht als Netto.
+        assert!(!is_client_blocked_url("https://netto-online.de.attacker.tld/x.jpg"));
+        assert!(!is_client_blocked_url("file:///tmp/x.png"));
+        assert!(!is_client_blocked_url("kaputt"));
+    }
+
+    /// Lokaler HTTP-Server mit einer festen Antwort, für die curl-Downloads.
+    fn spawn_static_server(status: &'static str, headers: &'static str, body: &'static [u8]) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { break };
+                let mut buf = [0u8; 8192];
+                let _ = stream.read(&mut buf);
+                let head = format!(
+                    "HTTP/1.1 {status}\r\n{headers}content-length: {}\r\nconnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = stream.write_all(head.as_bytes());
+                let _ = stream.write_all(body);
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    // Der curl-Weg muss Binärdaten unversehrt liefern und den Content-Type
+    // mitbringen — er ersetzt reqwest für Hosts, deren Akamai-Schutz den
+    // reqwest-TLS-Stack blockt (gemessen 2026-07-31: 403 trotz identischer
+    // Header).
+    #[test]
+    fn curl_download_returns_bytes_and_content_type() {
+        let body: &[u8] = &[0x52, 0x49, 0x46, 0x46, 0x00, 0xFF, 0x10, 0x20];
+        let base = spawn_static_server("200 OK", "content-type: image/webp\r\n", body);
+        let (bytes, ct) = curl_download(&format!("{base}/bild.webp")).unwrap();
+        assert_eq!(bytes, body, "Binärdaten müssen unversehrt ankommen");
+        assert_eq!(ct, "image/webp");
+    }
+
+    #[test]
+    fn curl_download_fails_on_non_200() {
+        let base = spawn_static_server("403 Forbidden", "content-type: text/html\r\n", b"Access Denied");
+        let err = curl_download(&format!("{base}/bild.webp")).unwrap_err().to_string();
+        assert!(err.contains("403"), "{err}");
     }
 
     #[test]
