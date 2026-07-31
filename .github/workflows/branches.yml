@@ -158,7 +158,11 @@ jobs:
           uebersprungen=$(grep -c "^WARNUNG.*übersprungen" branches.log || true)
 
           # Annotationen zuerst, damit sie auch bei leerem Summary auffallen.
+          # Zwei Schreibweisen: sync.rs schreibt "WARNUNG: …", die Scraper
+          # "WARNUNG [EDEKA] …". Der Doppelpunkt muss zuerst weg, sonst fängt
+          # die Annotation der ersten Sorte mit einem Doppelpunkt an.
           while IFS= read -r zeile; do
+            zeile="${zeile#WARNUNG: }"
             echo "::warning title=Filialverzeichnis::${zeile#WARNUNG }"
           done < <(grep "^WARNUNG" branches.log || true)
 
