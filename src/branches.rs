@@ -58,10 +58,12 @@ const DRY_RUN_FULL_LIST: usize = 200;
 /// * `plz` — ohne `coords` der Suchbegriff, mit `coords` der **Rückfall**,
 ///   falls Nominatim nichts liefert. Ein Teilausfall (Lidl/ALDI richtig,
 ///   Textsuchen auf der Anker-PLZ) ist besser als gar kein Lauf.
-/// * `anchor_market_id` — die `area_requests`-Zeile, die die aufgelöste PLZ
-///   und die Fertigmeldung bekommt. Ohne sie wüsste der Lauf nicht, welche
-///   Zeile er in Ordnung bringen soll: `market_id` ist deren Primärschlüssel,
-///   die PLZ darin ist zum Zeitpunkt des Dispatches noch die falsche.
+/// * `anchor_market_id` — die Ankerfiliale der Anforderung. Sie sagt, WELCHE
+///   Filiale es gibt, nicht welches Gebiet gemeint ist: Seit Migration v22 ist
+///   der Schlüssel einer Anforderung ihre Rasterzelle (`area_key`), und ein
+///   Anker kann Zeilen in mehreren Zellen tragen — Penny Am Haff ist die
+///   nächste Filiale sowohl für Ueckermünde als auch für Ahlbeck. Die
+///   Fertigmeldung geht deshalb über [`AreaTarget::dedup_key`].
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct AreaTarget {
     pub coords: Option<(f64, f64)>,
@@ -226,7 +228,7 @@ pub fn sync(cfg: &PushConfig, opts: &DirectoryOptions) -> Result<usize> {
         if let (false, Some(anchor), Some(plz)) =
             (opts.dry_run, &target.anchor_market_id, &resolved.plz)
         {
-            match mark_area_resolved(cfg, anchor, plz) {
+            match mark_area_resolved(cfg, target, plz) {
                 Ok(true) => println!("[{area}] Gebiet auf Anforderung {anchor} nachgetragen."),
                 Ok(false) => {}
                 Err(e) => eprintln!("WARNUNG [{area}] Gebiet nachtragen fehlgeschlagen: {e:#}"),
@@ -402,13 +404,24 @@ pub fn mark_areas_synced(cfg: &PushConfig, areas: &[String]) -> Result<usize> {
 /// und die App zeigt im Hinweis den Ort, in dem der Nutzer wirklich steht.
 ///
 /// Liefert `true`, wenn eine Zeile geändert wurde.
-pub fn mark_area_resolved(cfg: &PushConfig, anchor: &str, plz: &str) -> Result<bool> {
+pub fn mark_area_resolved(cfg: &PushConfig, target: &AreaTarget, plz: &str) -> Result<bool> {
+    // **Über die Zelle, nicht über den Anker.** Vor Migration v22 war
+    // `market_id` der Primärschlüssel, eine Filiale trug also höchstens eine
+    // Zeile. Jetzt kann sie mehrere tragen, die zu verschiedenen Orten gehören
+    // — die PLZ dieses Laufs auf alle zu schreiben, wäre der Fehler aus dem
+    // Ahlbeck-Vorfall, nur andersherum.
+    let key = target.dedup_key();
     let n = patch_area_requests(
         cfg,
-        ("market_id", format!("eq.{anchor}")),
+        ("area_key", format!("eq.{key}")),
         serde_json::json!({ "plz": plz }),
         "Gebiet auf der Anforderung nachtragen",
     )?;
+    if n == 0 {
+        // Kein Abbruchgrund, aber sichtbar: Der Lauf lief für ein Gebiet, zu
+        // dem keine offene Zeile passt. Still bliebe genau das unbemerkt.
+        eprintln!("WARNUNG [Gebiet] keine Anforderungszeile mit area_key {key} gefunden");
+    }
     Ok(n > 0)
 }
 
