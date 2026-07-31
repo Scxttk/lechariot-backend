@@ -524,6 +524,55 @@ fn lidl_prospekt_rescues_a_title_behind_a_leading_banner() {
     );
 }
 
+// Dieselbe Machart wie die Banner-Fixture: echte `pdftotext -bbox-layout`-
+// Ausgabe des Prospekts vom 27.07., Seite 12 (Fleischtheke) und Seite 17
+// (TEMPO). Drei Preiskacheln, denen eine Plakette vor dem Namen klebt —
+// „Tiefpreis Garantie", „Frischluftstall", „42er- Pack".
+#[test]
+fn lidl_prospekt_rescues_a_price_tile_behind_a_plaque() {
+    let offers = scrapers::lidl_prospekt::extract_offers(
+        include_str!("fixtures/lidl/prospekt_plakette.xml"),
+        "LIDL_1988",
+        Some("2026-07-27"),
+        Some("2026-08-01"),
+    );
+    let titles: Vec<&str> = offers.iter().map(|o| o.title.as_str()).collect();
+
+    // Diese drei Kacheln tragen ihren Preis und ihren Namen selbst; bis
+    // 2026-07-31 fielen sie an der Auswahl der selbsttragenden Kacheln durch,
+    // weil dort der Titel VOR dem Plakettenschnitt geprüft wurde.
+    for erwartet in [
+        "METZGERFRISCH Frisches Rinder-Hackfleisch",
+        "METZGERFRISCH Rinder-Minuten-steaks",
+        "TEMPO Taschen tücher",
+    ] {
+        assert!(
+            titles.contains(&erwartet),
+            "{erwartet:?} nicht gerettet, gefunden: {titles:?}"
+        );
+    }
+
+    // Und der Preis gehört zum Produkt, nicht zur Plakette.
+    let hack = offers
+        .iter()
+        .find(|o| o.title.starts_with("METZGERFRISCH Frisches"))
+        .unwrap();
+    assert_eq!(hack.price, Some(9.99));
+    let tempo = offers.iter().find(|o| o.title.starts_with("TEMPO")).unwrap();
+    assert_eq!(tempo.price, Some(3.99));
+
+    // Keine Plakette ist selbst zum Angebot geworden.
+    for t in &titles {
+        let lower = t.to_lowercase();
+        assert!(
+            !lower.contains("tiefpreis")
+                && !lower.contains("frischluftstall")
+                && !lower.starts_with("42er"),
+            "Plakette als Produktname: {t:?}"
+        );
+    }
+}
+
 #[test]
 fn lidl_prospekt_marks_loyalty_prices_as_such() {
     let offers = scrapers::lidl_prospekt::extract_offers(
