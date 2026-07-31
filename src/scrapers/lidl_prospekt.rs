@@ -123,6 +123,21 @@ static LEAD_DATE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^(?i)(erhältlich\s+)?ab\s+(mo|di|mi|do|fr|sa|so)\.\s*\d{1,2}\.\d{1,2}\.?\s*")
         .unwrap()
 });
+/// Menge plus Einheit und sonst nichts — die Zeile unter dem Produkt, nicht
+/// das Produkt. Gemessen am Lauf für 01219 vom 2026-07-31: „10 Paar" stand
+/// dreimal als eigenes Angebot in der Liste.
+static QUANTITY_ONLY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(?i)\d+\s*[-\s]?\s*(paar|stück|stk\.?|teilig|er[-\s]?pack)\.?$").unwrap()
+});
+
+/// Bindewörter, die am Ende eines Titels hängen bleiben, wenn die Kachel den
+/// Rest der Zeile nicht mehr eingefangen hat: „ESMARA MEN Slips/Boxer
+/// Baumwolle und", „TRONIC Knopfzellen Multipack mit". Das Produkt ist
+/// erkennbar, nur der Satz ist abgeschnitten — also kürzen statt verwerfen.
+static DANGLING_TAIL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)[\s,]+(und|oder|mit|für|in|aus|von|zum|zur|sowie|inkl\.?)$").unwrap()
+});
+
 /// Zeilen, die eine Eigenschaft beschreiben statt ein Produkt zu benennen.
 /// Ein Produktname im Prospekt fängt nicht mit „Für" oder „Inkl." an.
 static DESCRIPTIVE_LEAD: LazyLock<Regex> = LazyLock::new(|| {
@@ -711,12 +726,65 @@ fn title_of(island: &Island) -> String {
 /// Mengenangaben („5er-Pack"), abgeschnittene Dekoschrift („aren"),
 /// Werbezeilen. In einer Preisvergleichs-App ist so ein Eintrag schlimmer
 /// als gar keiner, weil er in der Einkaufsliste auf nichts passt.
+/// Beginnt der Titel mit einem gewöhnlichen kleingeschriebenen Wort — also
+/// ohne Punkt und ohne Ziffer darin?
+///
+/// Der Punkt ist die Ausnahme, die `f.a.n.` durchlässt (siehe
+/// `is_plausible_title`); Ziffern lassen Schreibweisen wie `2in1` stehen.
+fn first_word_is_plain_lowercase(title: &str) -> bool {
+    let Some(word) = title.split_whitespace().next() else {
+        return false;
+    };
+    word.chars().next().is_some_and(char::is_lowercase)
+        && word.chars().all(|c| c.is_alphabetic() || c == '-')
+}
+
+/// Ein am Ende hängendes Bindewort abschneiden — mehrfach, denn der Prospekt
+/// bricht auch mal „… Baumwolle und mit" ab.
+///
+/// Bewusst eine Reparatur und kein Ausschluss: Das Produkt steht da
+/// („ESMARA MEN Slips/Boxer Baumwolle"), abgeschnitten ist nur der
+/// Beschreibungssatz dahinter. Es wegzuwerfen kostete ein echtes Angebot.
+pub fn trim_dangling_tail(title: &str) -> String {
+    let mut out = title.trim().to_string();
+    // Der Prospekt hängt selten mehr als zwei solche Wörter aneinander; die
+    // Schranke verhindert trotzdem, dass hier je eine Endlosschleife entsteht.
+    for _ in 0..3 {
+        let trimmed = DANGLING_TAIL.replace(&out, "").trim().to_string();
+        if trimmed == out {
+            break;
+        }
+        out = trimmed;
+    }
+    out
+}
+
 pub fn is_plausible_title(title: &str) -> bool {
     if title.len() < 3 || is_boilerplate(title) {
         return false;
     }
     // Reine Gebindeangaben: "5er-Pack", "8er", "3 Stk"
     if PACK_ONLY.is_match(title) {
+        return false;
+    }
+    // Fängt der Titel mit einem gewöhnlichen kleingeschriebenen Wort an, hat
+    // die Kachelbildung mitten in einem Wort oder Satz angesetzt: „aren
+    // 4er-Pack ALPRO", „eben braucht Ales", „moderne Waffel struktur" —
+    // allesamt aus einem echten Lauf für 01219 am 2026-07-31. Der Test auf ein
+    // großgeschriebenes Wort unten fängt sie nicht, weil die Marke ja *im*
+    // Fragment steht.
+    //
+    // **Punkte im ersten Wort retten die Kleinschreibung**, und zwar wegen
+    // eines echten Falls: `f.a.n.` ist eine Matratzenmarke und schreibt sich
+    // so. Eine Regel „klein = Fragment" verwürfe sie. Ein abgeschnittenes Wort
+    // trägt dagegen nie einen Punkt.
+    if first_word_is_plain_lowercase(title) {
+        return false;
+    }
+    // Menge plus Einheit und sonst nichts: „10 Paar", „3 Stück". Das ist die
+    // Zeile unter dem Produkt, nicht das Produkt. Mit Marke daneben bleibt sie
+    // stehen — „62-teilig SILVERCREST Kombiservice" ist ein echter Artikel.
+    if QUANTITY_ONLY.is_match(title.trim()) {
         return false;
     }
     // Mindestens ein großgeschriebenes Wort — Marken und Produktnamen im
@@ -992,6 +1060,8 @@ pub fn extract_offers_with_shots(
             let title = title_of(product);
             // "Mit Lidl Plus" steht mitunter in derselben Zeile wie der Name.
             let title = title.trim_end_matches("Mit Lidl Plus").trim().to_string();
+            // Abgeschnittene Sätze am Ende kürzen, statt sie mitzuschleppen.
+            let title = trim_dangling_tail(&title);
             if !is_plausible_title(&title) || is_layout_text(&title) {
                 stats.bad_title += usable.len();
                 if debug_enabled() {
@@ -1704,6 +1774,63 @@ mod tests {
         let (_, y, _, h) = photo_rect(&tile, &others).expect("sollte schneiden");
         assert_eq!(y, 120.0, "die fremde Spalte hat den Streifen begrenzt");
         assert!((h - 80.0).abs() < 0.001);
+    }
+
+
+    /// Die Kachelbildung setzt mitunter mitten im Wort an. Was so entsteht,
+    /// trägt die Marke im Fragment und besteht deshalb jede Prüfung, die nur
+    /// nach einem großgeschriebenen Wort sucht.
+    #[test]
+    fn titles_cut_mid_word_are_rejected() {
+        for junk in [
+            "aren 4er-Pack ALPRO (1 l · 1 kg = 18.69 €)",
+            "eben braucht Ales",
+            "moderne Waffel struktur",
+        ] {
+            assert!(!is_plausible_title(junk), "durchgelassen: {junk}");
+        }
+    }
+
+    /// Und die Gegenprobe, an einem echten Fall: `f.a.n.` ist eine
+    /// Matratzenmarke und schreibt sich klein. Eine Regel „klein = Fragment"
+    /// verwürfe ein gültiges Angebot.
+    #[test]
+    fn lowercase_brands_with_dots_survive() {
+        assert!(is_plausible_title(
+            "f.a.n. 7-Zonen-Kaltschaummatratze »Sweet Dream XXL«"
+        ));
+    }
+
+    /// „10 Paar" stand dreimal als eigenes Angebot in der Liste — das ist die
+    /// Zeile unter dem Produkt, nicht das Produkt.
+    #[test]
+    fn bare_quantities_are_not_products() {
+        assert!(!is_plausible_title("10 Paar"));
+        assert!(!is_plausible_title("3 Stück"));
+        // Mit Marke daneben ist es ein echter Artikel und bleibt stehen.
+        assert!(is_plausible_title("62-teilig SILVERCREST Kombiservice"));
+    }
+
+    /// Abgeschnittene Sätze werden gekürzt, nicht verworfen: Das Produkt steht
+    /// da, nur der Beschreibungssatz dahinter fehlt.
+    #[test]
+    fn dangling_conjunctions_are_trimmed_not_dropped() {
+        assert_eq!(
+            trim_dangling_tail("ESMARA MEN Slips/Boxer Baumwolle und"),
+            "ESMARA MEN Slips/Boxer Baumwolle"
+        );
+        assert_eq!(
+            trim_dangling_tail("TRONIC Knopfzellen Multipack mit"),
+            "TRONIC Knopfzellen Multipack"
+        );
+        // Mehrfach hängende Wörter ebenfalls.
+        assert_eq!(trim_dangling_tail("PARKSIDE Zwingen-Set zum Einspannen und"),
+                   "PARKSIDE Zwingen-Set zum Einspannen");
+        // Ein Bindewort mitten im Namen bleibt unangetastet.
+        assert_eq!(
+            trim_dangling_tail("Brot und Butter Aufstrich"),
+            "Brot und Butter Aufstrich"
+        );
     }
 
 }
