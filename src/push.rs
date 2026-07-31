@@ -260,8 +260,14 @@ pub struct PushOptions {
     /// Gesetzt nur im Filial-Sync; None beim bundesweiten Lauf.
     pub branch_id: Option<String>,
     pub dry_run: bool,
-    /// Produktbilder in den Supabase-Storage-Bucket spiegeln (Händler-URL ->
-    /// Bucket-URL). Bei --dry-run wird ohnehin nicht gespiegelt.
+    /// **Händler-Bilder** in den Supabase-Storage-Bucket spiegeln (Händler-URL
+    /// -> Bucket-URL). Bei --dry-run wird ohnehin nicht gespiegelt.
+    ///
+    /// Gilt ausdrücklich **nicht** für die selbst geschnittenen Kachelbilder:
+    /// Ein Händler-Bild zu spiegeln ist eine Entscheidung (seit 2026-07-27
+    /// verneint — die App lädt die CDN-URL direkt), ein Kachelbild
+    /// hochzuladen ist keine. Es liegt als Datei auf dem Runner und hat
+    /// keinen anderen Ort. Siehe [`MirrorScope`].
     pub mirror_images: bool,
     /// Bilder erst NACH dem Offers-Upsert spiegeln (On-Demand-Pfad): Phase 1
     /// upsertet sofort mit Händler-URL bzw. null (Emoji-Fallback der App),
@@ -359,16 +365,33 @@ fn check_response(what: &str, resp: reqwest::blocking::Response) -> Result<()> {
     bail!("{what} fehlgeschlagen (HTTP {status}): {excerpt}");
 }
 
-/// Händler-Bild-URLs in den Storage-Bucket spiegeln und die Zeilen auf die
+/// Welche Bilder ein Durchgang anfasst.
+///
+/// Die Trennung ist der Kern von #26: Beides lief bis dahin unter einem
+/// einzigen Schalter, und als Scott am 27.07. das Spiegeln der Händler-Bilder
+/// abschaltete (Hotlinking statt eigener Kopien), schaltete er damit
+/// unbemerkt auch den Upload der Kachelbilder ab. Die haben aber keine
+/// Händler-URL, auf die man zurückfallen könnte — sie liegen als Datei auf
+/// dem Runner, der nach dem Lauf verschwindet.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MirrorScope {
+    /// Nur die selbst aus dem Prospekt geschnittenen Kachelbilder
+    /// (`file://`). **Immer**, unabhängig von `mirror_images`.
+    LocalCrops,
+    /// Nur Händler-URLs (http/https). Nur wenn `mirror_images` gesetzt ist.
+    RemoteImages,
+}
+
+/// Bild-URLs in den Storage-Bucket hochladen und die Zeilen auf die
 /// Bucket-URL umschreiben. Bekannte Bilder liefert der lokale Cache ohne
-/// Netzwerkzugriff; Fehler eines einzelnen Bildes lassen die Händler-URL stehen
-/// (Emoji bleibt der letzte Fallback) und brechen den Push nicht ab.
-/// Liefert (neu gespiegelt, aus Cache, fehlgeschlagen).
+/// Netzwerkzugriff; Fehler eines einzelnen Bildes brechen den Push nicht ab.
+/// Liefert (neu hochgeladen, aus Cache, fehlgeschlagen).
 fn mirror_images(
     groups: &mut BTreeMap<&'static str, ChainRows>,
     cfg: &PushConfig,
     db_path: &str,
     client: &reqwest::blocking::Client,
+    scope: MirrorScope,
 ) -> Result<(usize, usize, usize)> {
     let conn = db::open(db_path)?;
     let (mut fresh, mut cached, mut failed) = (0usize, 0usize, 0usize);
@@ -376,6 +399,10 @@ fn mirror_images(
     for (_chain, g) in groups.iter_mut() {
         for row in g.rows.iter_mut() {
             let Some(src) = row.image_url.clone() else { continue };
+            let is_local = src.starts_with("file://");
+            if is_local != (scope == MirrorScope::LocalCrops) {
+                continue;
+            }
             // Schon eine Bucket-URL (z. B. erneuter Lauf ohne DB-Cache-Treffer)?
             if src.contains(&format!("/{}/", storage::BUCKET)) {
                 continue;
@@ -539,11 +566,26 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
         .build()
         .context("HTTP-Client fürs Bild-Spiegeln konnte nicht erstellt werden")?;
 
+    // Kachelbilder IMMER zuerst und IMMER vor dem Upsert — sie sind der eine
+    // Fall, in dem eine Zeile ohne Upload schlicht falsch wäre. `file://`
+    // zeigt auf das Dateisystem des Runners; im Telefon ist das ein toter
+    // Link, und weil die App `.empty` und `.failure` auf dasselbe
+    // Kategorie-Symbol abbildet, sieht er aus wie „kein Bild" und meldet sich
+    // nie. Deshalb auch nicht `defer_mirror`: Eine Zeile, die zwischendurch
+    // eine Lüge trägt, wollen wir gar nicht erst schreiben. Der Upload ist
+    // billig — die Datei liegt lokal, es entfällt der Download.
+    let (fresh, cached, failed) =
+        mirror_images(&mut groups, cfg, &opts.db_path, &mirror_client, MirrorScope::LocalCrops)?;
+    if fresh + cached + failed > 0 {
+        println!("Kachelbilder: {fresh} neu hochgeladen, {cached} aus Cache, {failed} fehlgeschlagen.");
+    }
+
     // Produktbilder in den Storage-Bucket spiegeln, bevor die Zeilen hochgeladen
     // werden — so trägt image_url die stabile Bucket-URL statt der Händler-URL.
     // Im defer_mirror-Modus passiert das erst NACH dem Upsert (Phase 2 unten).
     if opts.mirror_images && !opts.defer_mirror {
-        let (fresh, cached, failed) = mirror_images(&mut groups, cfg, &opts.db_path, &mirror_client)?;
+        let (fresh, cached, failed) =
+            mirror_images(&mut groups, cfg, &opts.db_path, &mirror_client, MirrorScope::RemoteImages)?;
         println!("Bilder: {fresh} neu gespiegelt, {cached} aus Cache, {failed} fehlgeschlagen.");
     }
     let offers_url = format!("{}/rest/v1/offers", cfg.base_url);
@@ -636,7 +678,8 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
     // erneut upserten — die App zeigt die Angebote längst, hier kommen nur noch
     // die stabilen Bucket-URLs nach.
     if opts.mirror_images && opts.defer_mirror {
-        let (fresh, cached, failed) = mirror_images(&mut groups, cfg, &opts.db_path, &mirror_client)?;
+        let (fresh, cached, failed) =
+            mirror_images(&mut groups, cfg, &opts.db_path, &mirror_client, MirrorScope::RemoteImages)?;
         println!("Bilder (Phase 2): {fresh} neu gespiegelt, {cached} aus Cache, {failed} fehlgeschlagen.");
         let bucket_marker = format!("/{}/", storage::BUCKET);
         let mirrored: Vec<SupabaseRow> = groups
