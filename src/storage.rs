@@ -28,6 +28,8 @@ pub const BUCKET: &str = "offer-images";
 ///   s7g10.scene7.com  — aldi_nord.rs  (assets[].url -> Adobe-Scene7-Shard)
 ///   edeka             — edeka.rs      (img src -> `offer-images.api.edeka`; die
 ///                                      `.edeka`-gTLD gehört komplett EDEKA)
+///   norma-online.de   — norma.rs      (div.produktBox-img img -> `/ext/img/product/…`,
+///                                      derselbe Host wie die Angebotsseiten)
 /// Ein Host passt bei exakter Gleichheit oder als echte Subdomain eines
 /// Eintrags (host == suffix || host endet auf ".{suffix}"). Neue Händler-CDNs
 /// hier ergänzen.
@@ -39,6 +41,7 @@ const ALLOWED_IMAGE_HOST_SUFFIXES: &[&str] = &[
     "aldi.cx",
     "s7g10.scene7.com",
     "edeka",
+    "norma-online.de",
 ];
 
 /// Bild-Hosts, die **jeden** schlichten HTTP-Client mit 403 abweisen — auch
@@ -55,6 +58,10 @@ const ALLOWED_IMAGE_HOST_SUFFIXES: &[&str] = &[
 /// Für diese Hosts gilt beides zugleich: Die App kann das Bild nie laden
 /// (Spiegeln ist Pflicht, nicht Option), und der Download beim Spiegeln muss
 /// über System-curl laufen statt über reqwest.
+///
+/// NORMA steht **nicht** hier: `www.norma-online.de/ext/img/product/…`
+/// antwortet blankem curl wie einem iPhone-UA mit 200 (gemessen 2026-07-31),
+/// die App lädt diese Bilder also selbst.
 const CLIENT_BLOCKED_HOST_SUFFIXES: &[&str] = &["netto-online.de"];
 
 /// True, wenn die URL auf einen Host zeigt, dessen CDN schlichte Clients
@@ -505,6 +512,7 @@ mod tests {
             "https://dm.emea.cms.aldi.cx/x.jpg",
             "https://s7g10.scene7.com/x.jpg",
             "https://offer-images.api.edeka/x.jpg",
+            "https://www.norma-online.de/ext/img/product/angebote/26_08_03/900_x_wo.png",
         ] {
             assert!(!is_client_blocked_url(url), "fälschlich blockiert: {url}");
         }

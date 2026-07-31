@@ -1009,18 +1009,16 @@ fn norma_same_product_from_two_brands_keeps_both() {
     assert_eq!(katze[1].regular_price, Some(13.95));
 }
 
+/// Die Filialdaten stehen als URL-kodiertes JSON im showMap-Link — die
+/// belastbarere Quelle als die Kachel-Verschachtelung daneben.
 #[test]
 fn norma_store_finder_reads_the_showmap_payload() {
-    // Gekürzte Live-Antwort des NORMA-Filialfinders (2026-07-31, Dresden):
-    // Die Filialdaten stehen als URL-kodiertes JSON im showMap-Link.
-    let html = r#"<div class="item"><div class="row">
-        <h2>Entfernung <span title="2962 m">3 km</span></h2>
-        <p>Paradiesstraße 40<br>01217 Dresden</p>
-        <a href="javascript:showMap(%7B%22fmsCity%22%3A%22Dresden%22%2C%22fmsGeoStreet%22%3A%22Paradiesstra%5Cu00dfe+40%22%2C%22fmsLocationId%22%3A%222131%22%2C%22fmsPostalCode%22%3A%2201217%22%2C%22geoCoordinate%22%3A%7B%22longitude%22%3A13.74388%2C%22latitude%22%3A51.02408%7D%2C%22geoDistance%22%3A2962%7D)">Karte</a>
-    </div></div>"#;
-
-    let stores = scrapers::store_finder::parse_norma(html);
-    assert_eq!(stores.len(), 1);
+    let stores = scrapers::store_finder::parse_norma(
+        include_str!("fixtures/norma/filialfinder_01219.html"),
+        50.0,
+    );
+    assert_eq!(stores.len(), 3);
+    // Nach Entfernung sortiert, nicht nach der Reihenfolge im HTML.
     assert_eq!(stores[0].id, "2131");
     // "+" ist ein Leerzeichen, %5Cu00df wird zum ß der JSON-Ebene.
     assert_eq!(stores[0].street.as_deref(), Some("Paradiesstraße 40"));
@@ -1034,11 +1032,42 @@ fn norma_store_finder_reads_the_showmap_payload() {
     assert_eq!(market.name, "NORMA Dresden");
 }
 
+/// Jede Zeile im Verzeichnis braucht Koordinaten und Adresse, sonst kann die
+/// App sie weder auf die Karte noch in die Auswahlliste setzen.
 #[test]
-fn norma_store_finder_drops_branches_beyond_the_cutoff() {
-    // Der `r`-Parameter der Filialsuche filtert serverseitig nicht — eine
-    // Filiale 40 km entfernt darf die Kette nicht in der Region vertreten
-    // machen (gemessen 2026-07-31, siehe store_finder::norma_branch).
-    let html = r#"<a href="javascript:showMap(%7B%22fmsCity%22%3A%22Bautzen%22%2C%22fmsLocationId%22%3A%229999%22%2C%22geoCoordinate%22%3A%7B%22longitude%22%3A14.42%2C%22latitude%22%3A51.18%7D%2C%22geoDistance%22%3A48000%7D)">Karte</a>"#;
-    assert!(scrapers::store_finder::parse_norma(html).is_empty());
+fn norma_store_finder_fills_the_directory_row() {
+    let branch = scrapers::store_finder::parse_norma(
+        include_str!("fixtures/norma/filialfinder_01219.html"),
+        50.0,
+    )
+    .into_iter()
+    .next()
+    .unwrap()
+    .into_branch();
+
+    assert_eq!(branch.market_id, "NORMA_2131");
+    // Dieselbe Schreibweise wie `Store::Norma.chain()` — sonst findet die App
+    // die Angebote der Kette nicht zu ihrer Filiale.
+    assert_eq!(branch.chain, "NORMA");
+    assert_eq!(branch.name, "NORMA Dresden");
+    assert_eq!(branch.street.as_deref(), Some("Paradiesstraße 40"));
+    assert_eq!(branch.plz.as_deref(), Some("01217"));
+    assert_eq!(branch.lat, Some(51.02408));
+    assert_eq!(branch.lon, Some(13.74388));
+    assert_eq!(branch.source, "norma-filialfinder");
+}
+
+#[test]
+fn norma_store_finder_drops_branches_beyond_the_radius() {
+    // Dieselbe Antwort, nur mit dem Umkreis der Gebietssuche: Großharthau
+    // liegt 25.547 m entfernt und fällt bei 25 km heraus. Der Server hält den
+    // Radius zwar ein — aber `geoDistance` steht an jeder Filiale, und der
+    // Tag, an dem er es nicht mehr tut, darf keine Filiale aus dem
+    // Nachbarkreis ins Verzeichnis spülen.
+    let stores = scrapers::store_finder::parse_norma(
+        include_str!("fixtures/norma/filialfinder_01219.html"),
+        lechariot::branches::AREA_RADIUS_KM,
+    );
+    assert_eq!(stores.len(), 2);
+    assert!(stores.iter().all(|s| s.id != "2411"));
 }

@@ -262,7 +262,9 @@ For an area, REWE is searched twice — once by ZIP (the neighbourhood) and once
 by city (the centre; that search caps at 20 hits) — and everything outside
 `--radius-km` (default 25) is dropped afterwards, because each finder draws
 its own boundary differently. EDEKA is the expensive one: its offer id sits
-behind a redirect, so every store costs an extra request.
+behind a redirect, so every store costs an extra request. NORMA costs two: its
+store finder is a POST form whose search lives in a PHP session, so one request
+opens the session before the search itself.
 
 Failures of individual chains only warn. Prerequisite: the migration
 `supabase/migration_v12_branches.sql` has been run once in the Supabase SQL
@@ -280,7 +282,7 @@ editor. Refreshed weekly by `.github/workflows/branches.yml`.
 | ALDI Nord | no | national¹ | ~240 |
 | ALDI Süd | no (curl) | national¹ | ~75 |
 | EDEKA | no (curl) | store-specific (ZIP) | varies (not every region) |
-| NORMA | no | national¹ | ~215 (3 terms/week) |
+| NORMA | no | national¹ | ~220 (3 terms/week) |
 
 Ballpark numbers from a live fetch for ZIP 50667 (Cologne) on 2026-07-17;
 actual numbers vary per week and store. Kaufland and EDEKA returned no hits

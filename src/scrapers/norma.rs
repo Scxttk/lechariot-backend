@@ -549,4 +549,31 @@ mod tests {
         println!("Markt: {} ({})", market.name, market.id);
         assert!(market.id.starts_with("NORMA_"));
     }
+
+    /// Live-Test des Verzeichniswegs — der andere Weg als `norma_live_branch`:
+    /// Der schreibt eine Filiale in den Push, dieser die Liste, aus der die App
+    /// ihre Auswahl baut. Eine Zeile ohne Koordinaten wäre dort unbrauchbar.
+    ///
+    /// cargo test norma_live_directory -- --ignored --nocapture
+    #[test]
+    #[ignore = "Live-Test gegen norma-online.de"]
+    fn norma_live_directory() {
+        for plz in ["01219", "90402"] {
+            let branches = store_finder::norma_branches(
+                plz,
+                crate::branches::AREA_RADIUS_KM,
+                crate::branches::MAX_PER_CHAIN,
+            )
+            .expect("Filialverzeichnis");
+            let mit_geo = branches.iter().filter(|b| b.lat.is_some() && b.lon.is_some()).count();
+            let mit_strasse = branches.iter().filter(|b| b.street.is_some()).count();
+            println!(
+                "{plz}: {} Filialen, {mit_geo} mit Koordinaten, {mit_strasse} mit Straße",
+                branches.len()
+            );
+            assert!(!branches.is_empty(), "{plz}: keine Filiale — Formularsuche kaputt?");
+            assert_eq!(mit_geo, branches.len(), "{plz}: Zeile ohne Koordinaten");
+            assert_eq!(mit_strasse, branches.len(), "{plz}: Zeile ohne Straße");
+        }
+    }
 }

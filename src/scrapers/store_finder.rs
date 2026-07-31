@@ -9,12 +9,13 @@
 //!   ALDI Nord/SÜD: Uberall-Locator (uberall.com/api/storefinders/<key>),
 //!              die Plattform hinter den Filialfindern auf aldi-nord.de bzw.
 //!              aldi-sued.de. Sucht per lat/lng, liefert `distance` in Metern.
-//!   NORMA:     der eigene Filialfinder auf norma-online.de. Antwortet mit
-//!              HTML statt JSON und liefert **nur die nächste** Filiale, egal
-//!              welcher Radius gefragt wird — genug für „ist die Kette hier",
-//!              zu wenig für ein Verzeichnis (siehe `norma_branch`).
+//!   NORMA:     der eigene Filialfinder auf norma-online.de. Ein POST-Formular
+//!              mit PLZ und Radius, das seine Suche in einer PHP-Sitzung
+//!              ablegt; die Antwort ist HTML statt JSON. Braucht keine
+//!              Koordinaten — aber einen Handschlag für das Sitzungscookie
+//!              (siehe `norma_search`).
 //!
-//! Beide brauchen Koordinaten statt PLZ; die besorgt Nominatim
+//! Lidl und ALDI brauchen Koordinaten statt PLZ; die besorgt Nominatim
 //! (nominatim.openstreetmap.org, 1 Request pro Gebiet) in beide Richtungen:
 //! `/search` macht aus einer PLZ Koordinaten, `/reverse` aus Koordinaten eine
 //! PLZ. Nominatim läuft über `util::nominatim_client` — eigener UA und
@@ -514,30 +515,84 @@ pub fn parse_uberall_branches(
 
 // ---------------------------------------------------------------- NORMA
 
-const NORMA_STORE_URL: &str = "https://www.norma-online.de/de/filialfinder/suchergebnis";
+const NORMA_SEARCH_URL: &str = "https://www.norma-online.de/de/filialfinder/";
+/// Der einzige Endpunkt auf norma-online.de, der eine PHP-Sitzung eröffnet —
+/// siehe [`norma_search`].
+const NORMA_SESSION_URL: &str = "https://www.norma-online.de/ext/ajax/get_wishlist.php";
 
-/// Nächste NORMA-Filiale zur PLZ, oder None ohne Filiale im Umkreis.
-///
-/// Der Filialfinder von norma-online.de nimmt Koordinaten und einen Radius in
-/// **Metern** und antwortet mit server-gerendertem HTML. Gemessen 2026-07-31:
-/// Er liefert unabhängig vom Radius immer nur die **nächstgelegene** Filiale
-/// (Dresden, Nürnberg, Berlin, München, Hamburg, Köln, Fürth — überall genau
-/// eine). Für `find_market` ist das genau das Richtige; für ein vollständiges
-/// Verzeichnis reicht es nicht, siehe `parse_norma`.
+/// Nächste NORMA-Filiale zur PLZ, oder None ohne Filiale im Umkreis
+/// (`CUTOFF_KM`). Für `find_market`: „ist die Kette hier vertreten".
 pub fn norma_branch(plz: &str) -> Result<Option<Market>> {
-    let (lat, lon) = geocode_plz(plz)?;
-    let radius_m = (CUTOFF_KM * 1000.0) as u32;
-    let url = format!("{NORMA_STORE_URL}?lng={lon}&lat={lat}&r={radius_m}");
-    util::polite_pause(&url);
-    let html = util::blocking_client()?
-        .get(&url)
+    let html = norma_search(plz, CUTOFF_KM)?;
+    Ok(parse_norma(&html, CUTOFF_KM).into_iter().next().map(|s| s.into_market()))
+}
+
+/// Alle NORMA-Filialen im Umkreis der PLZ, für das Verzeichnis.
+pub fn norma_branches(plz: &str, radius_km: f64, limit: usize) -> Result<Vec<Branch>> {
+    let html = norma_search(plz, radius_km)?;
+    Ok(parse_norma(&html, radius_km).into_iter().take(limit).map(NormaStore::into_branch).collect())
+}
+
+/// Trefferseite des NORMA-Filialfinders zu einer PLZ, als HTML.
+///
+/// **Zwei Requests, und der erste ist kein Versehen.** Der Filialfinder ist ein
+/// klassisches POST-Formular (`filialfinder[suche][plz]`, Radius in **Metern**);
+/// die Suche landet in der PHP-Sitzung, und die Trefferseite hinter dem
+/// 302-Redirect liest sie von dort. Ohne Sitzungscookie antwortet der Server
+/// mit `?info=nosearch` — also mit einer leeren Seite und HTTP 200, nicht mit
+/// einem Fehler. Und ein `PHPSESSID` bekommt man auf norma-online.de nirgends
+/// sonst: Weder `/de/filialfinder/`, noch `/de/angebote/`, noch die
+/// Trefferseite selbst setzen eines (gemessen 2026-07-31, alle vier geprüft) —
+/// nur der Einkaufslisten-Endpunkt, den der Seitenkopf ohnehin auf jeder Seite
+/// aufruft. Deshalb steht er hier als Handschlag davor.
+///
+/// Der ältere Weg über `suchergebnis?lat=…&lng=…&r=…` bleibt bewusst
+/// ungenutzt: Er kommt ohne Sitzung aus, ignoriert aber den Radius und liefert
+/// **immer nur die nächstgelegene** Filiale (2026-07-31 an sieben Orten
+/// geprüft). Der POST-Weg liefert für dieselbe PLZ 01219 im 25-km-Kreis neun
+/// Filialen und spart obendrein den Nominatim-Request, weil er die PLZ als
+/// Text nimmt.
+fn norma_search(plz: &str, radius_km: f64) -> Result<String> {
+    util::polite_pause(NORMA_SESSION_URL);
+    let client = util::blocking_client()?;
+    let session = client
+        .get(NORMA_SESSION_URL)
         .send()
-        .with_context(|| util::ctx("NORMA", "Filialsuche", &url))?
+        .with_context(|| util::ctx("NORMA", "Sitzung eröffnen", NORMA_SESSION_URL))?;
+    let cookie = session
+        .headers()
+        .get_all(reqwest::header::SET_COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .find_map(|v| v.split(';').next())
+        .filter(|c| c.starts_with("PHPSESSID="))
+        .map(str::to_string)
+        .with_context(|| {
+            format!(
+                "[NORMA] Filialsuche: {NORMA_SESSION_URL} hat kein PHPSESSID gesetzt — \
+                 ohne Sitzung liefert die Suche eine leere Trefferseite"
+            )
+        })?;
+
+    let radius_m = (radius_km * 1000.0).round() as u32;
+    util::polite_pause(NORMA_SEARCH_URL);
+    let html = client
+        .post(NORMA_SEARCH_URL)
+        .header(reqwest::header::COOKIE, &cookie)
+        .form(&[
+            ("filialfinder[suche][land]", "Deutschland"),
+            ("filialfinder[suche][radius]", &radius_m.to_string()),
+            ("filialfinder[suche][plz]", plz),
+            ("filialfinder[suche][stadt]", ""),
+            ("filialfinder[suche][strasse]", ""),
+        ])
+        .send()
+        .with_context(|| util::ctx("NORMA", "Filialsuche", NORMA_SEARCH_URL))?
         .error_for_status()
-        .with_context(|| util::ctx("NORMA", "Filialsuche (HTTP-Status)", &url))?
+        .with_context(|| util::ctx("NORMA", "Filialsuche (HTTP-Status)", NORMA_SEARCH_URL))?
         .text()
-        .with_context(|| util::ctx("NORMA", "Filialsuche lesen", &url))?;
-    Ok(parse_norma(&html).into_iter().next().map(|s| s.into_market()))
+        .with_context(|| util::ctx("NORMA", "Filialsuche lesen", NORMA_SEARCH_URL))?;
+    Ok(html)
 }
 
 /// Eine Filiale aus der Filialfinder-Antwort.
@@ -552,12 +607,22 @@ pub struct NormaStore {
 }
 
 impl NormaStore {
-    pub fn into_market(self) -> Market {
-        let name = match &self.city {
+    fn label(&self) -> String {
+        match &self.city {
             Some(c) => format!("NORMA {c}"),
             None => "NORMA".to_string(),
-        };
-        Market::new(format!("NORMA_{}", self.id), name).with_geo(self.lat, self.lon)
+        }
+    }
+
+    pub fn into_market(self) -> Market {
+        Market::new(format!("NORMA_{}", self.id), self.label()).with_geo(self.lat, self.lon)
+    }
+
+    pub fn into_branch(self) -> Branch {
+        let (id, name) = (format!("NORMA_{}", self.id), self.label());
+        Branch::new(id, "NORMA", name, "norma-filialfinder")
+            .with_address(self.street, self.plz, self.city)
+            .with_geo(self.lat, self.lon)
     }
 }
 
@@ -570,9 +635,13 @@ impl NormaStore {
 /// Das ist die belastbarere Quelle; ein Umbau des Kachel-Layouts bricht sie
 /// nicht.
 ///
-/// Der Cutoff wird hier angewandt, weil der Server ihn nicht anwendet: Der
-/// `r`-Parameter hat im Test keine Wirkung gezeigt (siehe `norma_branch`).
-pub fn parse_norma(html: &str) -> Vec<NormaStore> {
+/// `radius_km` wird hier **nochmals** angewandt, obwohl der POST-Weg den
+/// Radius serverseitig respektiert (2026-07-31 gemessen: PLZ 01219 liefert bei
+/// 15 km sieben, bei 25 km neun, bei 50 km 22 Filialen). Die Antwort ist die
+/// Quelle für den Umkreis, aber `geoDistance` steht an jeder Filiale — sie
+/// gegen den gefragten Radius zu prüfen kostet nichts und fängt den Tag ab, an
+/// dem der Server den Parameter wieder ignoriert.
+pub fn parse_norma(html: &str, radius_km: f64) -> Vec<NormaStore> {
     let mut out = Vec::new();
     for raw in html.split("showMap(").skip(1) {
         let Some(encoded) = raw.split(')').next() else { continue };
@@ -592,7 +661,7 @@ pub fn parse_norma(html: &str) -> Vec<NormaStore> {
         // eine stumm verschwundene Kette).
         let distance_km =
             v.get("geoDistance").and_then(|x| x.as_f64()).map_or(0.0, |m| m / 1000.0);
-        if distance_km > CUTOFF_KM {
+        if distance_km > radius_km {
             continue;
         }
         out.push(NormaStore {

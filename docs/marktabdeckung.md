@@ -17,7 +17,7 @@ ein Gesamtuniversum von rund **331,8 Mrd. €**, und daran sind alle Prozentzahl
 unten gerechnet. Die Gruppenumsätze enthalten die Töchter: Netto
 Marken-Discount steckt in Edeka, Penny in Rewe, Lidl und Kaufland in Schwarz.
 
-## Abgedeckt: 76,4 %
+## Abgedeckt: 77,8 %
 
 | Gruppe | Mrd. € | Anteil | in der App |
 |---|---:|---:|---|
@@ -25,9 +25,10 @@ Marken-Discount steckt in Edeka, Penny in Rewe, Lidl und Kaufland in Schwarz.
 | Rewe-Gruppe | 70,615 | 21,3 % | REWE · Penny (10,837 / 3,3 %) |
 | Schwarz-Gruppe | 61,335 | 18,5 % | Lidl (34,810 / 10,5 %) · Kaufland (24,425 / 7,4 %) |
 | Aldi-Gruppe | 36,900 | 11,1 % | ALDI Nord (16,310 / 4,9 %) · ALDI SÜD (20,520 / 6,2 %) |
-| **Summe** | **253,5** | **76,4 %** | |
+| Norma | 4,775 | 1,4 % | NORMA (seit diesem Zweig, siehe unten) |
+| **Summe** | **258,3** | **77,8 %** | |
 
-Mit Norma (siehe unten) wären es **77,8 %**.
+Das sind **neun Ketten** in `Store::ALL` — acht waren es bis NORMA.
 
 ## Nicht abgedeckt
 
@@ -37,7 +38,6 @@ Mit Norma (siehe unten) wären es **77,8 %**.
 | Rossmann | 10,500 | 3,2 % | **nein — Bot-Challenge auf jeder URL** |
 | Bartels-Langness (famila Nordost, CITTI) | 7,265 | 2,2 % | erreichbar, Struktur ungeprüft |
 | Globus | 6,652 | 2,0 % | erreichbar, Struktur ungeprüft |
-| **Norma** | 4,775 | 1,4 % | **ja — sauberste Quelle im Feld** |
 | Müller (Drogerie) | 3,726 | 1,1 % | `/angebote/` → 404, Pfad unbekannt |
 | Bünting (Combi, famila Nordwest) | 2,420 | 0,7 % | erreichbar, Struktur ungeprüft |
 | Dohle (HIT) | 1,962 | 0,6 % | erreichbar, Struktur ungeprüft |
@@ -55,7 +55,7 @@ Transgourmet (5,062), Lüning (0,865), Stroetmann (0,626), Hamberger (0,440),
 Weiling (0,295).
 
 **Die wichtigste Aussage dieser Tabelle steht nicht drin:** Es gibt keine große
-fehlende Kette mehr. Was hinter den abgedeckten 76,4 % liegt, sind zwei
+fehlende Kette mehr. Was hinter den abgedeckten 77,8 % liegt, sind zwei
 Drogerien (7,2 %, davon eine ohne Angebotsmodell) und ein langer Schwanz
 regionaler Ketten, von denen keine über 2,2 % kommt. Jede weitere Kette ist ein
 Nachkommastellen-Geschäft — außer für die Nutzer, die genau dort einkaufen.
@@ -196,7 +196,7 @@ Der Unterschied zu Akamai ist grundsätzlich. Akamai fingerprintet den
 TLS-Stack — dagegen hilft ein anderer Client. F5 verlangt hier, dass echtes
 JavaScript im Browser ein Token rechnet. Das ginge nur mit einem
 Headless-Browser im Nightly, und damit wären Laufzeit, Speicherbedarf und
-Wartungsaufwand der Pipeline in einer anderen Größenordnung als für alle acht
+Wartungsaufwand der Pipeline in einer anderen Größenordnung als für alle neun
 bestehenden Ketten zusammen.
 
 **Fazit: nicht bauen**, solange Rossmann die Challenge fährt. Der Befund ist
@@ -243,20 +243,41 @@ selbst.
 Fallstricke stehen in [docs/scrapers/README.md](scrapers/README.md); hier die
 Messung vom 2026-07-31, die die Entscheidung getragen hat:
 
-- **216 Angebote** über 22 Themenseiten, **211 davon (98 %)** mit einem Preis,
-  der maschinenlesbar im Markup steht
+- **221 Angebote** über 22 Themenseiten, **215 davon (97 %)** mit einem Preis,
+  der maschinenlesbar im Markup steht, **221 (100 %)** mit Bild und Rohkategorie
 - **23 HTTP-Requests** pro Lauf, plain `reqwest` — kein Akamai, kein Cookie,
   kein API-Key, keine Anmeldung
-- **Streichpreise inklusive** („statt 1,59" / „UVP 2,49") — das trifft den
-  offenen Roadmap-Punkt „Streichpreise Lidl → REWE → EDEKA"
+- **Streichpreise inklusive** („statt 1,59" / „UVP 2,49") — 91 von 221; das
+  trifft den offenen Roadmap-Punkt „Streichpreise Lidl → REWE → EDEKA"
 - Grundpreis, Packungsgröße, Marke, Bild, Kategorie und Startdatum stehen dabei
 - Angebotskatalog bundesweit → gehört zu `Store::stores_nationally()` wie ALDI
 
 Zum Vergleich: EDEKA liefert ~200 Angebote pro Woche und braucht dafür
 System-curl gegen Akamai plus einen Redirect je Filiale; ALDI SÜD liefert ~75.
 
-Der Livelauf am 2026-07-31 (PLZ 01219) ergab **218 Angebote, 213 mit Preis,
-91 mit Streichpreis**, Filiale „NORMA Dresden" (`NORMA_2131`).
+**Die Kategorie ist ehrlich schwächer als die anderen Zahlen.** 137 der 221
+Angebote (62 %) bekommen von `enrich` eine echte Kategorie, der Rest landet auf
+„Sonstiges". Das liegt nicht am Parser, sondern an NORMAs Themen: 59 der 84
+Sonstiges-Zeilen stehen unter „Profi-Heimwerker Ausrüstung" (19/19),
+„Alles für den Garten" (11/11), „Sommer Must-haves" (12/15), „Ab aufs Rad"
+(9/10) und „Der grüne Clou" (6/7) — Non-Food, das bei NORMA im selben Prospekt
+steht. Die Lebensmittel-Themen laufen sauber durch: „Wochenend-Spezial" 34/36,
+„XXL" 18/20, „Kunterbunte Küchentrends" 21/24, „Unser Obst und Gemüse",
+„Mittwochs-Clou", „Genuss mit Nuss" und „NEU im Sortiment" komplett.
+
+Bilder liegen auf `www.norma-online.de/ext/img/product/…`, demselben Host wie
+die Angebotsseiten, und der gibt sie heraus: blankes `curl` und iPhone-UA
+bekommen beide 200 (gemessen 2026-07-31). NORMA braucht also **kein Spiegeln** —
+anders als Netto, dessen CDN jeden schlichten Client mit 403 abweist.
+
+**Die Filialen sind die zweite Hälfte, und sie war zuerst nicht da.** Ein
+bundesweiter Katalog nützt nichts, solange im Filial-Picker keine NORMA-Filiale
+steht — die App liest ihre Auswahl aus `public.branches`, und dort stand NORMA
+nicht. Der Filialfinder hängt jetzt in `branches::sync`; der Weg dorthin steht
+in [docs/scrapers/README.md](scrapers/README.md), weil der naheliegende
+Koordinaten-Endpunkt immer nur eine einzige Filiale liefert. Gemessen am
+2026-07-31 im 25-km-Kreis: **01219 Dresden 9 Filialen, 90402 Nürnberg 60** —
+alle mit Koordinaten und Straße.
 
 **Ein Fund aus dem Bauen, der über NORMA hinausgeht:** Die App liest
 `valid_until` als **nicht-optionales** `Date`. Eine Kette ohne Enddatum kippt
