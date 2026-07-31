@@ -204,9 +204,15 @@ jobs:
           # Behandlung wie in branches.yml (#16). Am 31.07.2026 hat ein grüner
           # Lauf drei Lidl-Märkte fallen lassen; die Zeile stand im Log, sah
           # aus wie eine Notiz, und niemand hat sie drei Wochen lang gelesen.
+          # Der Doppelpunkt gehört nur der Hälfte der Meldungen: sync.rs
+          # schreibt "WARNUNG: …", die Scraper "WARNUNG [EDEKA] …". Ohne den
+          # zweiten Schnitt stand das Wort in jeder Scraper-Annotation doppelt.
           while IFS= read -r zeile; do
-            echo "::warning title=Nightly sync::${zeile#WARNUNG: }"
+            zeile="${zeile#WARNUNG: }"
+            echo "::warning title=Nightly sync::${zeile#WARNUNG }"
           done < <(grep "^WARNUNG" "$LOG" 2>/dev/null || true)
+
+          warnungen=$(grep -c "^WARNUNG" "$LOG" 2>/dev/null || true)
 
           {
             echo "## Nightly sync"
@@ -238,6 +244,24 @@ jobs:
                 print "| " line " |"
               }
             ' "$LOG"
+
+            # Alle Warnungen ausschreiben, nicht nur die mit „übersprungen"
+            # — dieselbe Liste, die branches.yml seit #16 führt.
+            #
+            # Der Fall, der sie hier nötig macht: Schlägt die Filialsuche fehl,
+            # meldet store_finder „nutze nationalen Platzhalter" und der Lauf
+            # geht weiter. In der Tabelle steht dann eine Filiale, die gar
+            # nicht die gesuchte ist. Am 30.07. kam der EDEKA-Markt-Redirect
+            # für Ahlbeck auf dem Runner zweimal leer zurück (vom Mac
+            # antwortet dieselbe URL mit 308 — es ist die Runner-IP an
+            # Akamai). Das Wort „übersprungen" steht in dieser Meldung nicht,
+            # sie fiel deshalb aus der Zusammenfassung heraus.
+            if [ "${warnungen:-0}" -gt 0 ]; then
+              echo ""
+              echo "### Warnungen ($warnungen)"
+              echo ""
+              grep "^WARNUNG" "$LOG" | sed 's/^/- /'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
           COUNT=0
