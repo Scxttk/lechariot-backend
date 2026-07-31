@@ -31,7 +31,7 @@
 //! `-bbox-layout` (Wortkoordinaten), Kachelbildung über Abstände und eine
 //! Zuordnung Produkt <-> Preis. Details bei [`extract_offers`].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::process::Command;
 use std::sync::LazyLock;
 
@@ -579,6 +579,170 @@ fn photo_rect(tile: &Island, others: &[(f64, f64, f64, f64)]) -> Option<(f64, f6
     (height >= MIN_SHOT_PT).then_some((tile.x0, top, width, height))
 }
 
+// ------------------------------------------------------- Eingebettete Bilder
+//
+// Der Schnitt (`photo_rect`) rastert den Platz ÜBER einer Kachel. Wo dieser
+// Platz zu hoch ist, um plausibel das eigene Foto zu sein, verweigert er —
+// lieber kein Bild als ein fremdes. Genau dort hilft der zweite Weg: Die
+// Produktfotos liegen im Prospekt-PDF als eigene XObjekte, nicht flach in ein
+// Seitenbild gerechnet, und `pdftohtml -xml` legt sie als Dateien ab und
+// nennt ihre Rechtecke.
+//
+// Beide Wege ersetzen einander nicht, sie ergänzen sich: Auf dem Prospekt vom
+// 20.07. schneidet der eine 160 von 227 Kacheln, und die eingebetteten Bilder
+// füllen 31 der 67 Lücken.
+
+/// Ein eingebettetes Bild des PDFs, umgerechnet in PDF-Punkte.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EmbeddedImage {
+    pub x0: f64,
+    pub y0: f64,
+    pub x1: f64,
+    pub y1: f64,
+    /// Dateiname, den `pdftohtml` neben das XML geschrieben hat.
+    pub file: String,
+}
+
+impl EmbeddedImage {
+    fn width(&self) -> f64 {
+        self.x1 - self.x0
+    }
+    fn height(&self) -> f64 {
+        self.y1 - self.y0
+    }
+}
+
+/// Seitenmaße in PDF-Punkten, aus der `pdftotext -bbox-layout`-Ausgabe.
+///
+/// Sie sind der Maßstab, mit dem die Bildrechtecke von `pdftohtml`
+/// zurückgerechnet werden — siehe [`parse_embedded_images`].
+fn page_sizes(bbox_xml: &str) -> Vec<(f64, f64)> {
+    let mut out = Vec::new();
+    for line in bbox_xml.lines().map(str::trim) {
+        if let Some(rest) = line.strip_prefix("<page ") {
+            let w = attr_f64(rest, "width");
+            let h = attr_f64(rest, "height");
+            out.push((w.unwrap_or(0.0), h.unwrap_or(0.0)));
+        }
+    }
+    out
+}
+
+/// Ein Zahlen-Attribut aus einem Tag-Rest lesen (`width="467.72"`).
+fn attr_f64(rest: &str, name: &str) -> Option<f64> {
+    let needle = format!("{name}=\"");
+    let start = rest.find(&needle)? + needle.len();
+    let end = rest[start..].find('"')? + start;
+    rest[start..end].parse().ok()
+}
+
+/// Die Bilder je Seite aus `pdftohtml -xml`, in PDF-Punkte umgerechnet.
+///
+/// **Der Maßstab ist das Seitenrechteck, nicht ein Textabgleich.** `pdftohtml`
+/// rastert mit festem Zoom, der Faktor ist also schlicht das Verhältnis der
+/// Seitenmaße und der Versatz null. Das ist nachgemessen, nicht angenommen:
+/// Auf den 33 Seiten des Prospekts vom 20.07., auf denen sich zusätzlich eine
+/// Ausgleichsgerade über eindeutige Textzeilen legen ließ, weichen beide Wege
+/// um **höchstens 0,72 pt** voneinander ab — weniger als eine Zeilenhöhe, und
+/// die Zuordnung unten arbeitet mit Toleranzen von Dutzenden Punkten. Der
+/// Textabgleich scheiterte dafür auf 13 Seiten (zu wenige eindeutige Zeilen);
+/// das Seitenrechteck gibt es immer.
+///
+/// Seiten ohne bekanntes PDF-Maß liefern nichts — ohne Maßstab wäre jedes
+/// Rechteck geraten.
+fn parse_embedded_images(xml: &str, pdf_pages: &[(f64, f64)]) -> Vec<Vec<EmbeddedImage>> {
+    let mut pages: Vec<Vec<EmbeddedImage>> = Vec::new();
+    let mut scale: Option<(f64, f64)> = None;
+
+    for line in xml.lines().map(str::trim) {
+        if let Some(rest) = line.strip_prefix("<page number=") {
+            let idx = pages.len();
+            pages.push(Vec::new());
+            let hw = attr_f64(rest, "width").unwrap_or(0.0);
+            let hh = attr_f64(rest, "height").unwrap_or(0.0);
+            scale = match pdf_pages.get(idx) {
+                Some(&(pw, ph)) if hw > 0.0 && hh > 0.0 && pw > 0.0 && ph > 0.0 => {
+                    Some((pw / hw, ph / hh))
+                }
+                _ => None,
+            };
+        } else if let Some(rest) = line.strip_prefix("<image ") {
+            let (Some((sx, sy)), Some(page)) = (scale, pages.last_mut()) else { continue };
+            let (Some(l), Some(t), Some(w), Some(h)) = (
+                attr_f64(rest, "left"),
+                attr_f64(rest, "top"),
+                attr_f64(rest, "width"),
+                attr_f64(rest, "height"),
+            ) else {
+                continue;
+            };
+            let needle = "src=\"";
+            let Some(s) = rest.find(needle).map(|i| i + needle.len()) else { continue };
+            let Some(e) = rest[s..].find('"').map(|i| i + s) else { continue };
+            page.push(EmbeddedImage {
+                x0: l * sx,
+                y0: t * sy,
+                x1: (l + w) * sx,
+                y1: (t + h) * sy,
+                file: rest[s..e].to_string(),
+            });
+        }
+    }
+    pages
+}
+
+/// Wie weit ein eingebettetes Bild breiter sein darf als seine Kachel.
+///
+/// Dieselbe Sorge wie bei [`MAX_SHOT_ASPECT`]: Ein Bild, das viel breiter ist
+/// als die Kachel, gehört ihr nicht allein — es ist der Seitenhintergrund oder
+/// das Foto einer ganzen Kachelgruppe. Auf dem Prospekt vom 20.07. kostet die
+/// Schranke 13 Zuordnungen (44 statt 31) und verhindert dafür ebenso viele
+/// falsche.
+const MAX_EMBEDDED_WIDTH_RATIO: f64 = 1.6;
+
+/// Größter Abstand zwischen Bildunterkante und Kacheloberkante (pt).
+const MAX_EMBEDDED_GAP_PT: f64 = 60.0;
+
+/// Das eingebettete Bild über dieser Kachel — oder keines.
+///
+/// Gesucht wird wie beim Schnitt: unmittelbar **über** dem Kacheltext, in
+/// derselben Spalte. Von mehreren Kandidaten gewinnt der mit dem kleinsten
+/// Abstand plus Mittenversatz.
+///
+/// `taken` sind die Dateien, die schon einer anderen Kachel gehören — ein Bild
+/// steht genau einer Kachel zu, sonst trägt eine Reihe von Kacheln dasselbe
+/// Foto.
+fn embedded_photo_for<'a>(
+    tile: &Island,
+    images: &'a [EmbeddedImage],
+    taken: &std::collections::HashSet<String>,
+) -> Option<&'a EmbeddedImage> {
+    let tile_width = tile.x1 - tile.x0;
+    let tile_mid = (tile.x0 + tile.x1) / 2.0;
+    images
+        .iter()
+        .filter(|img| !taken.contains(&img.file))
+        .filter(|img| img.width() >= MIN_SHOT_PT && img.height() >= MIN_SHOT_PT)
+        .filter(|img| img.width() <= MAX_EMBEDDED_WIDTH_RATIO * tile_width)
+        // Dieselbe Spalte: die Rechtecke überlappen sich in x deutlich.
+        .filter(|img| {
+            let overlap = img.x1.min(tile.x1) - img.x0.max(tile.x0);
+            overlap > 0.35 * tile_width.min(img.width())
+        })
+        // Über der Kachel. Etwas Überlappung ist erlaubt — Prospektfotos ragen
+        // gern unter ihren eigenen Text.
+        .filter(|img| {
+            let gap = tile.y0 - img.y1;
+            gap >= -0.5 * img.height() && gap <= MAX_EMBEDDED_GAP_PT
+        })
+        .min_by(|a, b| {
+            let cost = |i: &EmbeddedImage| {
+                (tile.y0 - i.y1).abs() + ((i.x0 + i.x1) / 2.0 - tile_mid).abs()
+            };
+            cost(a).total_cmp(&cost(b))
+        })
+}
+
 /// `pdftotext -bbox-layout`-Ausgabe in Seiten aus Textinseln zerlegen.
 ///
 /// Bewusst ein Zeilenparser statt eines XML-Parsers: Das Format ist streng
@@ -1093,14 +1257,40 @@ pub fn extract_offers(
 /// Kacheln. Getrennt gehalten, weil das Rastern das PDF braucht und diese
 /// Funktion rein auf der Textebene arbeitet — so bleibt sie gegen die Fixture
 /// prüfbar.
+/// Eine Kachel, für die der Schnitt kein Bild gefunden hat.
+///
+/// Sie ist nicht bildlos, sondern *ungeschnitten*: `photo_rect` verweigert,
+/// wenn der Platz über ihr zu hoch ist, um plausibel ihr eigenes Foto zu sein.
+/// Genau da greift das eingebettete Bild.
+#[derive(Debug, Clone)]
+struct OpenTile {
+    offer_id: String,
+    /// 1-basierte Seitenzahl im PDF.
+    page: usize,
+    tile: Island,
+}
+
 pub fn extract_offers_with_shots(
     xml: &str,
     market_id: &str,
     valid_from: Option<&str>,
     valid_until: Option<&str>,
 ) -> (Vec<Offer>, Vec<TileShot>) {
+    let (offers, shots, _) = extract_offers_shots_and_open(xml, market_id, valid_from, valid_until);
+    (offers, shots)
+}
+
+/// Wie [`extract_offers_with_shots`], liefert zusätzlich die Kacheln, für die
+/// der Schnitt nichts gefunden hat — die Kandidaten für ein eingebettetes Bild.
+fn extract_offers_shots_and_open(
+    xml: &str,
+    market_id: &str,
+    valid_from: Option<&str>,
+    valid_until: Option<&str>,
+) -> (Vec<Offer>, Vec<TileShot>, Vec<OpenTile>) {
     let mut offers = Vec::new();
     let mut shots = Vec::new();
+    let mut open: Vec<OpenTile> = Vec::new();
     let mut stats = Stats::default();
 
     for (page_index, islands) in parse_bbox_layout(xml).into_iter().enumerate() {
@@ -1280,6 +1470,26 @@ pub fn extract_offers_with_shots(
                 // Foto sitzt über beiden.
                 let mut tile_rect = product.clone();
                 tile_rect.merge(price_tile);
+                if let Ok(path) = std::env::var("LIDL_RECT_DUMP") {
+                    use std::io::Write;
+                    if let Ok(mut f) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&path)
+                    {
+                        let _ = writeln!(
+                            f,
+                            "{}\t{}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{}",
+                            offer_id,
+                            page_index + 1,
+                            tile_rect.x0,
+                            tile_rect.y0,
+                            tile_rect.x1,
+                            tile_rect.y1,
+                            title
+                        );
+                    }
+                }
                 if let Some((x, y, w, h)) = photo_rect(&tile_rect, &page_rects) {
                     shots.push(TileShot {
                         offer_id: offer_id.clone(),
@@ -1288,6 +1498,16 @@ pub fn extract_offers_with_shots(
                         y,
                         w,
                         h,
+                    });
+                } else {
+                    // Der Schnitt verweigert — der Platz über der Kachel ist zu
+                    // hoch, um plausibel ihr eigenes Foto zu sein. Genau diese
+                    // Kacheln bekommen die zweite Chance über das eingebettete
+                    // Bild; die Kachel selbst wird dafür aufgehoben.
+                    open.push(OpenTile {
+                        offer_id: offer_id.clone(),
+                        page: page_index + 1,
+                        tile: tile_rect.clone(),
                     });
                 }
 
@@ -1325,9 +1545,18 @@ pub fn extract_offers_with_shots(
     let kept: std::collections::HashSet<&str> = offers.iter().map(|o| o.id.as_str()).collect();
     let mut seen = std::collections::HashSet::new();
     shots.retain(|s| kept.contains(s.offer_id.as_str()) && seen.insert(s.offer_id.clone()));
+    // Dieselbe Buchführung für die offenen Kacheln — und zusätzlich: Was der
+    // Schnitt auf einer anderen Kachel doch bekommen hat, braucht hier keine
+    // zweite Quelle mehr.
+    let mut seen_open = std::collections::HashSet::new();
+    open.retain(|o| {
+        kept.contains(o.offer_id.as_str())
+            && !seen.contains(&o.offer_id)
+            && seen_open.insert(o.offer_id.clone())
+    });
 
     stats.report(offers.len());
-    (offers, shots)
+    (offers, shots, open)
 }
 
 /// Untertitel aus Packungsgröße, Grundpreis und Lidl-Plus-Hinweis.
@@ -1659,6 +1888,181 @@ fn refine_crop(path: &std::path::Path) -> Result<bool> {
     Ok(true)
 }
 
+/// Anteil grauer Pixel, ab dem ein Bild eine Alphamaske ist und kein Foto.
+///
+/// poppler gibt die Maske eines Bildes als **eigenes** `<image>` aus — eine
+/// graustufige Silhouette. Auf dem Prospekt vom 20.07. waren das 2 032 der
+/// 3 150 ausgeworfenen Dateien; ungefiltert war fast die Hälfte aller
+/// Zuordnungen ein leeres weißes Rechteck.
+const MASK_GREY_SHARE: u32 = 98;
+
+/// Höchstzahl belegter Farbeimer (4 bit je Kanal), unter der ein Bild
+/// Bedienelement ist und kein Produkt.
+///
+/// Gemessen an den 31 Zuordnungen des 20.07.-Prospekts: Der Knopf „Jetzt
+/// entdecken" belegt **17** Eimer, das ärmste echte Produktfoto — eine
+/// einfarbige Schürze vor Weiß — belegt **32**. Der Abstand ist der ganze
+/// Spielraum, den es hier gibt, deshalb liegt die Schranke bei 24 und nicht
+/// höher: Ein verworfenes Produkt kostet mehr als ein durchgelassener Knopf.
+///
+/// **Was diese Probe NICHT fängt**, gemessen und nicht vermutet: das Siegel
+/// „Geschützte Geografische Angabe" belegt 382 Eimer. Es ist ein dichter Ring
+/// aus Schrift und Sternen und sieht in jeder Farbkennzahl aus wie ein Foto.
+/// Wer die Schranke so weit anhebt, verliert echte Produkte — die Schürze
+/// liegt bei 32.
+const MIN_PHOTO_COLOUR_BINS: usize = 24;
+
+/// Ist dieses Bild Fläche statt Foto — Maske, Knopf, Logo?
+fn is_flat_artwork(img: &image::RgbImage) -> bool {
+    let total = img.pixels().len().max(1);
+    let grey = img
+        .pixels()
+        .filter(|px| {
+            let (r, g, b) = (px[0] as i32, px[1] as i32, px[2] as i32);
+            (r - g).abs() <= 8 && (g - b).abs() <= 8 && (r - b).abs() <= 8
+        })
+        .count();
+    if (grey * 100 / total) as u32 >= MASK_GREY_SHARE {
+        return true;
+    }
+    let mut bins: HashSet<(u8, u8, u8)> = HashSet::new();
+    for px in img.pixels() {
+        bins.insert((px[0] / 16, px[1] / 16, px[2] / 16));
+        if bins.len() > MIN_PHOTO_COLOUR_BINS {
+            return false;
+        }
+    }
+    true
+}
+
+/// Die zugeordneten eingebetteten Bilder in das Kachelbild-Verzeichnis legen
+/// und je Angebot ihre `file://`-URL liefern.
+///
+/// `assigned` bildet Angebots-ID auf die von `pdftohtml` geschriebene Datei
+/// ab. Was die Flächenprobe nicht besteht, fällt hier heraus — lieber kein
+/// Bild als ein Knopf neben einem Preis.
+fn place_embedded_photos(
+    extracted_dir: &std::path::Path,
+    assigned: &[(String, String)],
+) -> HashMap<String, String> {
+    if assigned.is_empty() {
+        return HashMap::new();
+    }
+    let dir = crop_dir();
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("WARNUNG [Lidl] Kachelbilder nicht ablegbar ({e}) — keine eingebetteten Bilder.");
+        return HashMap::new();
+    }
+    let (mut out, mut flat, mut failed) = (HashMap::new(), 0usize, 0usize);
+    for (offer_id, file) in assigned {
+        let src = extracted_dir.join(file);
+        let Ok(img) = image::open(&src) else {
+            failed += 1;
+            continue;
+        };
+        let rgb = img.to_rgb8();
+        if is_flat_artwork(&rgb) {
+            flat += 1;
+            continue;
+        }
+        let target = dir.join(format!("{offer_id}.png"));
+        match rgb.save(&target) {
+            Ok(()) => {
+                out.insert(offer_id.clone(), format!("file://{}", target.display()));
+            }
+            Err(e) => {
+                eprintln!("  Eingebettetes Bild nicht schreibbar ({offer_id}): {e}");
+                failed += 1;
+            }
+        }
+    }
+    println!(
+        "  {} eingebettete Bilder übernommen ({flat} als Fläche verworfen{})",
+        out.len(),
+        if failed > 0 { format!(", {failed} fehlgeschlagen") } else { String::new() }
+    );
+    out
+}
+
+/// Die eingebetteten Bilder für die Kacheln holen, die der Schnitt abgelehnt
+/// hat.
+///
+/// `pdftohtml -xml` schreibt die Bilder des PDFs als Dateien in ein
+/// Verzeichnis und nennt daneben ihre Rechtecke. Nur die Seiten, auf denen
+/// überhaupt eine offene Kachel sitzt, werden gelesen — auf dem Prospekt vom
+/// 20.07. sind das 46 von 69 Seiten, und der ganze Durchlauf kostete sonst
+/// 3 min 39 s und 234 MB.
+///
+/// Jeder Fehlschlag ist hier folgenlos: Es gibt dann kein zweites Bild, und
+/// die Kachel bleibt bei ihrem Emoji.
+fn embedded_photos(
+    pdf: &std::path::Path,
+    bbox_xml: &str,
+    open: &[OpenTile],
+) -> HashMap<String, String> {
+    if open.is_empty() {
+        return HashMap::new();
+    }
+    let (Some(first), Some(last)) = (
+        open.iter().map(|o| o.page).min(),
+        open.iter().map(|o| o.page).max(),
+    ) else {
+        return HashMap::new();
+    };
+
+    let dir = std::env::temp_dir().join(format!("lechariot-lidl-xobj-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("WARNUNG [Lidl] Bildauszug nicht ablegbar ({e}) — keine eingebetteten Bilder.");
+        return HashMap::new();
+    }
+
+    let out = dir.join("doc");
+    let status = Command::new("pdftohtml")
+        .args(["-xml", "-f", &first.to_string(), "-l", &last.to_string()])
+        .arg(pdf)
+        .arg(&out)
+        .status();
+    match status {
+        Ok(s) if s.success() => {}
+        other => {
+            eprintln!("WARNUNG [Lidl] pdftohtml fehlgeschlagen ({other:?}) — keine eingebetteten Bilder.");
+            let _ = std::fs::remove_dir_all(&dir);
+            return HashMap::new();
+        }
+    }
+
+    let xml = match std::fs::read_to_string(dir.join("doc.xml")) {
+        Ok(x) => x,
+        Err(e) => {
+            eprintln!("WARNUNG [Lidl] Bildauszug nicht lesbar ({e}) — keine eingebetteten Bilder.");
+            let _ = std::fs::remove_dir_all(&dir);
+            return HashMap::new();
+        }
+    };
+
+    // `-f N` lässt pdftohtml bei Seite N zu zählen anfangen; die Seitenmaße
+    // aus dem bbox-XML sind dagegen ab Seite 1 durchnummeriert.
+    let sizes = page_sizes(bbox_xml);
+    let window: Vec<(f64, f64)> =
+        sizes.get(first - 1..last.min(sizes.len())).unwrap_or(&[]).to_vec();
+    let images = parse_embedded_images(&xml, &window);
+
+    let mut taken: HashSet<String> = HashSet::new();
+    let mut assigned: Vec<(String, String)> = Vec::new();
+    for tile in open {
+        let Some(page) = images.get(tile.page - first) else { continue };
+        if let Some(img) = embedded_photo_for(&tile.tile, page, &taken) {
+            taken.insert(img.file.clone());
+            assigned.push((tile.offer_id.clone(), img.file.clone()));
+        }
+    }
+
+    let placed = place_embedded_photos(&dir, &assigned);
+    let _ = std::fs::remove_dir_all(&dir);
+    placed
+}
+
 fn render_shots(pdf: &std::path::Path, shots: &[TileShot]) -> HashMap<String, String> {
     if shots.is_empty() {
         return HashMap::new();
@@ -1834,7 +2238,7 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
         }
     };
 
-    let (mut offers, shots) = extract_offers_with_shots(
+    let (mut offers, shots, open) = extract_offers_shots_and_open(
         &xml,
         &market.id,
         flyer.offer_start_date.as_deref(),
@@ -1846,9 +2250,13 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
     }
 
     let crops = render_shots(&pdf_path, &shots);
+    // Zweiter Weg für die Kacheln, die der Schnitt abgelehnt hat. Scheitert er,
+    // ist das kein Fehler des Laufs — die Angebote stehen, nur einige tragen
+    // weiter ihr Emoji.
+    let embedded = embedded_photos(&pdf_path, &xml, &open);
     let _ = std::fs::remove_file(&pdf_path);
     for offer in &mut offers {
-        if let Some(url) = crops.get(&offer.id) {
+        if let Some(url) = crops.get(&offer.id).or_else(|| embedded.get(&offer.id)) {
             offer.images = vec![url.clone()];
         }
     }
@@ -2079,6 +2487,185 @@ mod tests {
     }
 
 
+    /// Messgerät, kein Test: Abdeckung mit und ohne eingebettete Bilder,
+    /// gegen dasselbe PDF. `LIDL_PDF` zeigt auf eine lokale Prospekt-PDF.
+    ///
+    /// Beide Zahlen müssen aus demselben Prospekt stammen — ein Vorher/Nachher
+    /// aus zwei Wochen ist keins. Der Nenner sind die Kacheln, die überhaupt
+    /// ein Bild brauchen (`shots` + `open`); Angebote ohne Kachelrechteck
+    /// gehören nicht in eine Quote, die sie gar nicht verfehlen können.
+    #[test]
+    #[ignore = "Messgerät — braucht LIDL_PDF mit lokaler Prospekt-PDF"]
+    fn measure_union_coverage() {
+        let pdf = std::env::var("LIDL_PDF").expect("LIDL_PDF fehlt");
+        let path = std::path::Path::new(&pdf);
+        let xml = run_pdftotext(path, "-bbox-layout").expect("pdftotext");
+        let (offers, shots, open) =
+            extract_offers_shots_and_open(&xml, "MESSUNG", None, None);
+        let embedded = embedded_photos(path, &xml, &open);
+
+        let kacheln = shots.len() + open.len();
+        let vereint = shots.len() + embedded.len();
+        eprintln!("ANGEBOTE\t{}", offers.len());
+        eprintln!("KACHELN\t{kacheln}");
+        eprintln!(
+            "NUR_SCHNITT\t{}\t{:.1}%",
+            shots.len(),
+            100.0 * shots.len() as f64 / kacheln as f64
+        );
+        eprintln!("OFFEN\t{}", open.len());
+        eprintln!("EINGEBETTET_DAZU\t{}", embedded.len());
+        eprintln!(
+            "VEREINT\t{vereint}\t{:.1}%",
+            100.0 * vereint as f64 / kacheln as f64
+        );
+        for (id, url) in embedded.iter().take(400) {
+            println!("DAZU\t{id}\t{url}");
+        }
+    }
+
+    /// Ein Bild-Rechteck von `pdftohtml` muss in PDF-Punkten landen, sonst
+    /// vergleicht die Zuordnung Pixel mit Punkten.
+    ///
+    /// Die Maße sind die echten des Prospekts: 467 x 794 pt, gerastert auf
+    /// 700 x 1191 px — Faktor 1,499, wie im Lauf gemessen.
+    #[test]
+    fn embedded_images_come_back_in_pdf_points() {
+        let bbox = r#"<page width="467.72" height="794.00">"#;
+        let html = concat!(
+            r#"<page number="1" position="absolute" top="0" left="0" height="1191" width="700">"#,
+            "\n",
+            r#"<image top="150" left="100" width="200" height="240" src="doc-1_7.png"/>"#,
+        );
+        let pages = parse_embedded_images(html, &page_sizes(bbox));
+
+        assert_eq!(pages.len(), 1);
+        let img = &pages[0][0];
+        assert_eq!(img.file, "doc-1_7.png");
+        // 100 px * 467.72/700 = 66.8 pt
+        assert!((img.x0 - 66.8).abs() < 0.1, "x0 = {}", img.x0);
+        assert!((img.y0 - 100.0).abs() < 0.2, "y0 = {}", img.y0);
+        assert!((img.width() - 133.6).abs() < 0.1, "Breite = {}", img.width());
+    }
+
+    /// Ohne bekanntes Seitenmaß gibt es keinen Maßstab — dann lieber kein Bild
+    /// als eines an geratener Stelle.
+    #[test]
+    fn images_without_a_page_size_are_dropped() {
+        let html = concat!(
+            r#"<page number="1" height="1191" width="700">"#,
+            "\n",
+            r#"<image top="150" left="100" width="200" height="240" src="doc-1_7.png"/>"#,
+        );
+        assert!(parse_embedded_images(html, &[]).concat().is_empty());
+    }
+
+    fn tile_at(x0: f64, y0: f64, x1: f64, y1: f64) -> Island {
+        Island { x0, y0, x1, y1, lines: vec!["Produkt".to_string()] }
+    }
+
+    fn img_at(x0: f64, y0: f64, x1: f64, y1: f64, file: &str) -> EmbeddedImage {
+        EmbeddedImage { x0, y0, x1, y1, file: file.to_string() }
+    }
+
+    /// Das Bild unmittelbar über der Kachel gewinnt, nicht das weiter oben.
+    #[test]
+    fn the_image_directly_above_the_tile_wins() {
+        let tile = tile_at(100.0, 300.0, 200.0, 340.0);
+        let images = vec![
+            img_at(100.0, 100.0, 200.0, 180.0, "weit-oben.png"),
+            img_at(100.0, 200.0, 200.0, 295.0, "direkt-drueber.png"),
+        ];
+        let taken = std::collections::HashSet::new();
+        assert_eq!(
+            embedded_photo_for(&tile, &images, &taken).map(|i| i.file.as_str()),
+            Some("direkt-drueber.png")
+        );
+    }
+
+    /// Ein Bild, das viel breiter ist als die Kachel, gehört ihr nicht allein —
+    /// dieselbe Regel wie `MAX_SHOT_ASPECT` beim Schnitt. Auf dem Prospekt vom
+    /// 20.07. kostet sie 13 Zuordnungen und verhindert ebenso viele falsche.
+    #[test]
+    fn an_image_far_wider_than_its_tile_belongs_to_no_one() {
+        let tile = tile_at(100.0, 300.0, 200.0, 340.0);
+        // 300 pt breit gegen 100 pt Kachel: Seitenhintergrund, nicht Produkt.
+        let images = vec![img_at(50.0, 200.0, 350.0, 295.0, "hintergrund.png")];
+        let taken = std::collections::HashSet::new();
+        assert_eq!(embedded_photo_for(&tile, &images, &taken), None);
+    }
+
+    /// Die Nachbarspalte zählt nicht, auch wenn ihr Bild näher liegt.
+    #[test]
+    fn images_in_the_neighbouring_column_are_ignored() {
+        let tile = tile_at(100.0, 300.0, 200.0, 340.0);
+        let images = vec![img_at(210.0, 250.0, 300.0, 298.0, "nachbar.png")];
+        let taken = std::collections::HashSet::new();
+        assert_eq!(embedded_photo_for(&tile, &images, &taken), None);
+    }
+
+    /// Ein Bild gehört genau einer Kachel. Ohne diese Buchführung trüge eine
+    /// ganze Kachelreihe dasselbe Foto.
+    #[test]
+    fn an_image_is_only_given_away_once() {
+        let tile = tile_at(100.0, 300.0, 200.0, 340.0);
+        let images = vec![img_at(100.0, 200.0, 200.0, 295.0, "schon-vergeben.png")];
+        let taken = std::collections::HashSet::from(["schon-vergeben.png".to_string()]);
+        assert_eq!(embedded_photo_for(&tile, &images, &taken), None);
+    }
+
+    /// Zu weit über der Kachel heißt: gehört der Kachel darüber.
+    #[test]
+    fn an_image_too_far_above_is_not_this_tiles_photo() {
+        let tile = tile_at(100.0, 300.0, 200.0, 340.0);
+        let images = vec![img_at(100.0, 100.0, 200.0, 200.0, "zu-weit.png")];
+        let taken = std::collections::HashSet::new();
+        assert_eq!(embedded_photo_for(&tile, &images, &taken), None);
+    }
+
+    /// poppler gibt die Alphamaske eines Bildes als eigenes `<image>` aus.
+    /// Ungefiltert war auf dem Prospekt vom 20.07. fast die Hälfte aller
+    /// Zuordnungen so ein leeres Rechteck — und in der App sähe das aus wie
+    /// ein kaputtes Bild.
+    #[test]
+    fn alpha_masks_are_not_product_photos() {
+        let mut mask = image::RgbImage::new(40, 40);
+        for (x, y, px) in mask.enumerate_pixels_mut() {
+            // Graustufen-Silhouette: R, G und B liegen gleichauf.
+            let v = if (x + y) % 7 == 0 { 20u8 } else { 240u8 };
+            *px = image::Rgb([v, v, v]);
+        }
+        assert!(is_flat_artwork(&mask));
+    }
+
+    /// Ein Knopf ist nicht grau, er ist arm an Farben. „Jetzt entdecken"
+    /// belegte 17 Farbeimer.
+    #[test]
+    fn interface_chrome_is_not_a_product_photo() {
+        let mut knopf = image::RgbImage::new(60, 20);
+        for (x, _y, px) in knopf.enumerate_pixels_mut() {
+            *px = if x % 9 == 0 {
+                image::Rgb([255, 255, 255]) // Schrift
+            } else {
+                image::Rgb([16, 82, 214]) // Knopffläche
+            };
+        }
+        assert!(is_flat_artwork(&knopf));
+    }
+
+    /// Und die Gegenprobe, die den Preis dieser Schranke festhält: Ein Foto
+    /// mit vielen Farbabstufungen muss durch. Das ärmste echte Produktfoto des
+    /// Prospekts — eine einfarbige Schürze vor Weiß — belegte 32 Eimer, die
+    /// Schranke liegt bei 24.
+    #[test]
+    fn a_photo_with_many_shades_survives() {
+        let mut foto = image::RgbImage::new(40, 40);
+        for (x, y, px) in foto.enumerate_pixels_mut() {
+            *px = image::Rgb([(x * 6) as u8, (y * 6) as u8, ((x + y) * 3) as u8]);
+        }
+        assert!(!is_flat_artwork(&foto));
+    }
+
     /// Die Kachelbildung setzt mitunter mitten im Wort an. Was so entsteht,
     /// trägt die Marke im Fragment und besteht deshalb jede Prüfung, die nur
     /// nach einem großgeschriebenen Wort sucht.
@@ -2249,11 +2836,10 @@ mod tests {
         }
     }
 
-    /// Messgerät, kein Test (portiert von `lidl-xobjekte`, `6c239f4`): nur der
-    /// Textweg, damit die Verwurfsgründe je Kachel sichtbar werden. Ohne
-    /// Netz und ohne Rastern, also in Sekunden. `LIDL_PDF` zeigt auf eine
-    /// lokale Prospekt-PDF; `LIDL_PROSPEKT_DEBUG=1` druckt jede verworfene
-    /// Kachel mit Grund.
+    /// Messgerät, kein Test: nur der Textweg, damit die Verwurfsgründe je
+    /// Kachel sichtbar werden. Ohne Netz und ohne Rastern, also in Sekunden.
+    /// `LIDL_PDF` zeigt auf eine lokale Prospekt-PDF;
+    /// `LIDL_PROSPEKT_DEBUG=1` druckt jede verworfene Kachel mit Grund.
     #[test]
     #[ignore = "Messgerät — braucht LIDL_PDF mit lokaler Prospekt-PDF"]
     fn measure_dropped_tiles() {
@@ -2311,4 +2897,155 @@ mod tests {
         assert!(!c.separated);
     }
 
+    /// Messgerät, kein Test: baut aus einer Liste von Bildpfaden
+    /// (`LIDL_SHEET_LIST`, ein Pfad je Zeile) eine Kontaktbogen-PNG, damit die
+    /// Zuordnung mit dem Auge geprüft werden kann statt nur mit Zahlen.
+    #[test]
+    #[ignore]
+    fn build_contact_sheet() {
+        use image::{GenericImage, Rgba, RgbaImage};
+        let list = std::env::var("LIDL_SHEET_LIST").expect("LIDL_SHEET_LIST fehlt");
+        let out = std::env::var("LIDL_SHEET_OUT").expect("LIDL_SHEET_OUT fehlt");
+        let paths: Vec<String> = std::fs::read_to_string(&list)
+            .expect("liste")
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(str::to_string)
+            .collect();
+        const CELL: u32 = 150;
+        const COLS: u32 = 6;
+        let rows = paths.len().div_ceil(COLS as usize) as u32;
+        let mut sheet = RgbaImage::from_pixel(COLS * CELL, rows * CELL, Rgba([255, 255, 255, 255]));
+        for (i, p) in paths.iter().enumerate() {
+            let Ok(img) = image::open(p) else { continue };
+            let thumb = img.resize(CELL - 8, CELL - 8, image::imageops::FilterType::Triangle);
+            let thumb = thumb.to_rgba8();
+            let ox = (i as u32 % COLS) * CELL + 4;
+            let oy = (i as u32 / COLS) * CELL + 4;
+            // Transparenz auf Weiss legen, sonst ist das Produkt nicht zu sehen.
+            for (x, y, px) in thumb.enumerate_pixels() {
+                let al = px[3] as f32 / 255.0;
+                let mix = |c: u8| (c as f32 * al + 255.0 * (1.0 - al)) as u8;
+                sheet.put_pixel(
+                    ox + x,
+                    oy + y,
+                    Rgba([mix(px[0]), mix(px[1]), mix(px[2]), 255]),
+                );
+            }
+        }
+        sheet.save(&out).expect("speichern");
+        eprintln!("KONTAKTBOGEN\t{}\t{} bilder", out, paths.len());
+    }
+
+    /// Messgerät, kein Test: zählt, wie viele der zugeordneten Bilder gar keine
+    /// Fotos sind, sondern Masken — poppler gibt die Alphamaske eines Bildes als
+    /// eigenes `<image>` aus, und die ist einfarbig schwarz/weiß.
+    #[test]
+    #[ignore]
+    fn count_flat_images() {
+        let list = std::env::var("LIDL_SHEET_LIST").expect("LIDL_SHEET_LIST fehlt");
+        let paths: Vec<String> = std::fs::read_to_string(&list)
+            .expect("liste")
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(str::to_string)
+            .collect();
+        let (mut flat, mut ok, mut bad) = (0usize, 0usize, 0usize);
+        for p in &paths {
+            let Ok(img) = image::open(p) else {
+                bad += 1;
+                continue;
+            };
+            let rgb = img.to_rgb8();
+            // Grau heißt hier: R, G und B liegen dicht beieinander. Eine Maske
+            // besteht nur aus solchen Pixeln, ein Produktfoto nicht.
+            let total = rgb.pixels().len().max(1);
+            let grey = rgb
+                .pixels()
+                .filter(|px| {
+                    let (r, g, b) = (px[0] as i32, px[1] as i32, px[2] as i32);
+                    (r - g).abs() <= 8 && (g - b).abs() <= 8 && (r - b).abs() <= 8
+                })
+                .count();
+            if grey * 100 / total >= 98 {
+                flat += 1;
+                println!("MASKE\t{p}");
+            } else {
+                ok += 1;
+            }
+        }
+        eprintln!("FARBIG\t{ok}\tMASKE\t{flat}\tUNLESBAR\t{bad}\tGESAMT\t{}", paths.len());
+    }
+
+    /// Messgerät, kein Test: Kennzahlen je Bild, um Bedienelemente (Knöpfe,
+    /// Siegel, Logos) von Produktfotos zu trennen.
+    ///
+    /// Die Maskenprobe oben reicht dafür nicht: Ein blauer Knopf mit weißer
+    /// Schrift ist nicht grau, er ist nur **arm an Farben**. Gemessen werden
+    /// deshalb die Zahl belegter Farbeimer (4 bit je Kanal) und der Anteil der
+    /// zwei häufigsten — ein Foto verteilt sich, ein Knopf nicht.
+    #[test]
+    #[ignore]
+    fn colour_metrics_per_image() {
+        let list = std::env::var("LIDL_SHEET_LIST").expect("LIDL_SHEET_LIST fehlt");
+        let paths: Vec<String> = std::fs::read_to_string(&list)
+            .expect("liste")
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(str::to_string)
+            .collect();
+        println!("datei\teimer\ttop2%\tkanten%\tbreite\thoehe");
+        for p in &paths {
+            let Ok(img) = image::open(p) else { continue };
+            let rgb = img.to_rgb8();
+            let (w, h) = rgb.dimensions();
+            let mut bins: HashMap<(u8, u8, u8), u32> = HashMap::new();
+            for px in rgb.pixels() {
+                *bins.entry((px[0] / 16, px[1] / 16, px[2] / 16)).or_default() += 1;
+            }
+            let total = (w * h).max(1);
+            let mut counts: Vec<u32> = bins.values().copied().collect();
+            counts.sort_unstable_by(|a, b| b.cmp(a));
+            let top2: u32 = counts.iter().take(2).sum();
+            // Kantenanteil: Nachbarpixel, die sich deutlich unterscheiden. Ein
+            // Foto ist überall leicht unruhig, eine Fläche nur an ihrem Rand.
+            let mut edges = 0u32;
+            for y in 0..h {
+                for x in 1..w {
+                    let a = rgb.get_pixel(x - 1, y).0;
+                    let b = rgb.get_pixel(x, y).0;
+                    let d = (0..3).map(|i| (a[i] as i32 - b[i] as i32).abs()).max().unwrap_or(0);
+                    if d > 24 {
+                        edges += 1;
+                    }
+                }
+            }
+            let name = p.rsplit('/').next().unwrap_or(p);
+            println!(
+                "{name}\t{}\t{}\t{}\t{w}\t{h}",
+                counts.len(),
+                top2 * 100 / total,
+                edges * 100 / total,
+            );
+        }
+    }
+
+    /// Messgerät, kein Test: liest ein lokales Prospekt-PDF und meldet, wie
+    /// viele Angebote es trägt und für wie viele der Schnitt einen Streifen
+    /// findet. `#[ignore]`, weil es eine Datei von außen braucht.
+    #[test]
+    #[ignore]
+    fn measure_local_pdf() {
+        let pdf = std::env::var("LIDL_PDF").expect("LIDL_PDF fehlt");
+        let xml = run_pdftotext(std::path::Path::new(&pdf), "-bbox-layout").expect("pdftotext");
+        let (offers, shots) = extract_offers_with_shots(&xml, "MEASURE", None, None);
+        if let Ok(path) = std::env::var("LIDL_SHOT_DUMP") {
+            let body: String = shots
+                .iter()
+                .map(|s| format!("{}\t{}\n", s.offer_id, s.page))
+                .collect();
+            std::fs::write(path, body).expect("streifen schreiben");
+        }
+        eprintln!("ANGEBOTE\t{}\tSTREIFEN\t{}", offers.len(), shots.len());
+    }
 }
