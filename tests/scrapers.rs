@@ -620,3 +620,32 @@ fn lidl_prospekt_derives_a_photo_strip_above_each_tile() {
         shot.h
     );
 }
+
+/// **Der Wackeltest, als Test.**
+///
+/// `lidl_prospekt_builds_tiles_from_word_coordinates` fiel in der Nacht vom
+/// 2026-07-31 mal um und mal nicht — bei byte-gleichem Commit — mit „weicher
+/// Trennstrich nicht zusammengezogen". Die Ursache lag nicht beim Trennstrich:
+/// `cluster` gab seine Kacheln aus einer `HashMap` heraus, und die iteriert in
+/// zufälliger Reihenfolge. Da `pairs.sort_by` stabil ist, entschied damit der
+/// Zufall, welches Produkt zu welchem Preis gepaart wurde.
+///
+/// Ein Extraktor, der aus derselben Seite zweimal etwas anderes liest, ist
+/// keine Quelle, auf die man einen Preisvergleich stellt.
+#[test]
+fn extraction_is_deterministic_across_runs() {
+    let xml = include_str!("fixtures/lidl/prospekt_bbox_layout.xml");
+    let first = scrapers::lidl_prospekt::extract_offers(xml, "LIDL_1988", Some("2026-07-20"), Some("2026-07-25"));
+    assert!(!first.is_empty());
+
+    // Jeder Durchlauf legt neue HashMaps an, und jede bekommt einen eigenen
+    // Hash-Seed — zwanzig Läufe treffen die alte Reihenfolge zuverlässig.
+    for run in 1..=20 {
+        let again = scrapers::lidl_prospekt::extract_offers(xml, "LIDL_1988", Some("2026-07-20"), Some("2026-07-25"));
+        assert_eq!(
+            first.iter().map(|o| (&o.title, o.price)).collect::<Vec<_>>(),
+            again.iter().map(|o| (&o.title, o.price)).collect::<Vec<_>>(),
+            "Lauf {run} las etwas anderes aus derselben Seite"
+        );
+    }
+}
