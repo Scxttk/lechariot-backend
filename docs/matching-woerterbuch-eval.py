@@ -6,8 +6,51 @@ from collections import Counter, defaultdict
 DB = os.path.expanduser("~/.local/share/lechariot/lechariot.db")
 
 # Kategorien, die klar Non-Food sind (Ketten-Marketing-Kategorien)
-NONFOOD_CAT = re.compile(r"mode|style|heim|haus|garten|haustier|tierbedarf|tiernahrung|pflanzen|angeln|elektro|medien|kinderzimmer|wäschepflege|schulstart|kochen-und-grillen|drogerie|spielzeug|alltagshelfer|technik|spielwaren|baumarkt|multimedia|bekleidung|schuhe|camping|auto|buero|non.?food|onlineshop|e-bikes?|fahrrad|trolley|koffer|unterhemd|\btops\b|\bteller\b|sch[üu]sseln?|staubsauger|wischroboter|k[üu]chenmasch|n[äa]hmasch|batterien|\bfarben\b|kleber|zahngesundheit|glasartikel|aufbewahr|essgeschirr|reinigungsger|k[üu]chenger|k[üu]chengro|k[üu]chenzubeh|grillzubeh|backzubeh|damen|herren|w[äa]sche\b|leuchten|m[öo]bel|werkzeug|haartrockner|rasierer|zahnpflege|fernseh|led ?& ?lcd|kapsel|padmasch|\bk[üu]che\b|blumen|strauß", re.I)
+NONFOOD_CAT = re.compile(r"mode|style|heim|haus|garten|haustier|tierbedarf|tiernahrung|pflanzen|angeln|elektro|medien|kinderzimmer|wäschepflege|schulstart|kochen-und-grillen|drogerie|spielzeug|alltagshelfer|technik|spielwaren|baumarkt|multimedia|bekleidung|schuhe|camping|auto|buero|non.?food|onlineshop|e-bikes?|fahrrad|trolley|koffer|unterhemd|\btops\b|\bteller\b|sch[üu]sseln?|staubsauger|wischroboter|k[üu]chenmasch|n[äa]hmasch|batterien|\bfarben\b|kleber|zahngesundheit|glasartikel|aufbewahr|essgeschirr|reinigungsger|k[üu]chenger|k[üu]chengro|k[üu]chenzubeh|grillzubeh|backzubeh|damen|herren|w[äa]sche\b|leuchten|m[öo]bel|werkzeug|haartrockner|rasierer|zahnpflege|fernseh|led ?& ?lcd|kapsel|padmasch|\bk[üu]che\b|blumen|strauß|kochen-und-backen|reinigen|waschmittel", re.I)
 FOOD_CAT = re.compile(r"obst|gemüse|fleisch|geflügel|wurst|molkerei|fette|getränke|feinkost|konserven|kaffee|tee|süßwaren|knabber|grundnahrung|fisch|bäckerei|backwaren|tiefkühl", re.I)
+
+# Kategorie → Begriff, als LETZTER Ausweg: greift nur, wenn Titel und
+# Untertitel nichts hergeben. Die Ketten schreiben dorthin, was das Produkt
+# IST — „Die Extrazarte" ist nichtssagend, die Kategorie daneben sagt Butter.
+#
+# Gepflegte Zuordnung statt freier Wörterbuchsuche über die Kategorie, und der
+# Unterschied ist gemessen (2026-07-31, 423 Food-Angebote): Die freie Variante
+# holt 33 Zeilen, davon sind VIER falsch — „Not Milk" unter *Veganes* würde
+# `tofu`, „Spitzkohl" unter *Brokkoli und Kohl* würde `brokkoli`, und beide
+# Waschmittel würden `windeln/hygiene`. Ein fehlendes Tag kostet einen
+# Treffer; ein falsches legt jemandem das falsche Produkt in den Einkauf.
+# Deshalb steht hier nur, was jede Zeile für sich begründet.
+#
+# Verglichen wird die NORMALISIERTE Kategorie auf Gleichheit — kein Substring,
+# kein Regex. „Geflügel" fehlt bewusst (das ganze Kaninchen stand darunter),
+# „Veganes" und „Brokkoli und Kohl" ebenso.
+KAT_ROH = {
+    "Brot": "brot",
+    "Brötchen": "brot",
+    "Kuchen & Feinbackwaren": "backwaren",
+    "Kekse": "kekse",
+    "Joghurt": "joghurt",
+    "Butter": "butter",
+    "Käse": "käse",
+    "Sahne, Schmand und Crème fraîche": "sahne",
+    "Schokoladen": "schokolade",
+    "Nüsse": "nüsse",
+    "Eis": "eis",
+    "Wasser": "wasser",
+    "Softdrinks": "limonade",
+    "Weissweine": "wein",
+    "Rotweine": "wein",
+    "Champagner": "wein",
+    "Brauner Rum": "spirituosen",
+    "Kräuter": "gewürze",
+    "Gewürzmischungen": "gewürze",
+    "Öle und Fette": "öl",
+    "Meeresfrüchte": "fisch",
+    "Tiefkühlfisch und Meeresfrüchte": "fisch",
+    "Tiefkühlgerichte": "fertiggericht",
+    "Instantgerichte": "fertiggericht",
+    "Windeln": "windeln/hygiene",
+}
 
 # Wörterbuch: begriff -> (exakte tokens, komposita-suffixe, blockliste)
 V = {
@@ -188,6 +231,13 @@ def norm(s):
     s = re.sub(r"[^a-zäöüß\- ]", " ", s)
     return re.sub(r"\s+", " ", s).strip()
 
+# Die Schlüssel werden mit derselben Normalisierung verglichen wie alles
+# andere — von Hand normalisiert stünde hier „sahne schmand und creme fra che"
+# (das `î` fällt aus der Akzent-Tabelle und wird zum Leerzeichen), und der
+# nächste Tippfehler fiele niemandem auf.
+KAT = {norm(k): v for k, v in KAT_ROH.items()}
+
+
 def tokens(s):
     base = [t for t in re.split(r"[ \-]", norm(s)) if len(t) > 2]
     extra = [t[:-1] for t in base if len(t) > 4 and t[-1] in "sne"]
@@ -248,8 +298,26 @@ def main():
             stats["tagged"] += 1
             for h in hits: tagged[h].append((market, title))
         else:
-            stats["untagged"] += 1
-            untagged.append((market, title, sub, cat))
+            # Letzter Ausweg: die gepflegte Kategorie-Zuordnung. Nur exakte
+            # Gleichheit der normalisierten Kategorie, nur wenn Titel und
+            # Untertitel nichts hergeben — ein Titel-Treffer wird nie
+            # überstimmt.
+            kat = KAT.get(norm(cat))
+            if kat and kat in V:
+                # Die Blockliste des Begriffs gilt auch hier — sonst holt sich
+                # „Erdnussbutter" über die Kategorie „Butter" genau den Tag
+                # zurück, den die Blockliste ihm nimmt.
+                _, _, block = V[kat]
+                ntoks = tokens(text)
+                if any(norm(b) in ntext for b in block if " " in b) \
+                   or any(norm(b) in ntoks for b in block):
+                    kat = None
+            if kat:
+                stats["tagged"] += 1; stats["via_kategorie"] += 1
+                tagged[kat].append((market, title))
+            else:
+                stats["untagged"] += 1
+                untagged.append((market, title, sub, cat))
 
     total = len(rows)
     print(f"Angebote gültig heute: {total}")
@@ -258,6 +326,7 @@ def main():
     print(f"Food-Angebote: {food}")
     print(f"  regelbasiert getaggt: {stats['tagged']} ({stats['tagged']/food:.0%})")
     print(f"  ungetaggt:            {stats['untagged']} ({stats['untagged']/food:.0%})")
+    print(f"  davon über Kategorie: {stats['via_kategorie']}   (über Marke: {stats['via_marke']})")
     print("\n== Treffer pro Begriff (Top 25) ==")
     for term, lst in sorted(tagged.items(), key=lambda x:-len(x[1]))[:25]:
         print(f"  {term:16s} {len(lst):3d}  z.B. {lst[0][1][:60]}")
@@ -266,7 +335,7 @@ def main():
     for market, title, sub, cat in random.sample(untagged, min(120, len(untagged))):
         print(f"  [{market[:12]:12s}] {title[:55]:55s} | {sub[:25]:25s} | {cat[:25]}")
 
-    json.dump({"begriffe":{t:{"exact":e,"suffix":s,"block":b} for t,(e,s,b) in V.items()},"marken":MARKEN,"nonfood_cat":NONFOOD_CAT.pattern,"nonfood_terms":NONFOOD_TERMS.pattern,"food_cat":FOOD_CAT.pattern},
+    json.dump({"begriffe":{t:{"exact":e,"suffix":s,"block":b} for t,(e,s,b) in V.items()},"marken":MARKEN,"kategorien":KAT,"nonfood_cat":NONFOOD_CAT.pattern,"nonfood_terms":NONFOOD_TERMS.pattern,"food_cat":FOOD_CAT.pattern},
               open(os.path.join(os.path.dirname(__file__),"matching-woerterbuch.json"),"w"), ensure_ascii=False, indent=1)
 
 
