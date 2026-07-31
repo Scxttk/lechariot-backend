@@ -73,9 +73,10 @@ impl Store {
     /// nicht regionale Wahrheit.
     ///
     /// **Lidl gehört ausdrücklich nicht dazu.** Die Kette galt früher als
-    /// national (der marktguru-Weg lieferte bundesweit dasselbe), aber seit
-    /// der Prospekt-Quelle hängt der Katalog an der Filiale — `fetch_offers`
-    /// bekommt die PLZ übergeben und lädt den Prospekt dieses Marktes.
+    /// national (der entfernte marktguru-Weg lieferte bundesweit dasselbe),
+    /// aber seit der Prospekt-Quelle hängt der Katalog an der Filiale —
+    /// `fetch_offers` bekommt die PLZ übergeben und lädt den Prospekt dieses
+    /// Marktes.
     pub fn stores_nationally(self) -> bool {
         matches!(self, Store::AldiNord | Store::AldiSued)
     }
@@ -92,37 +93,44 @@ impl Store {
     }
 }
 
-/// Quelle der Lidl-Angebote.
+/// Source of the Lidl offers.
 ///
-/// Lidl ist die einzige Kette, die ihre Angebote über einen Dritten
-/// (api.marktguru.de) bezieht, und mit rund 30 % aller Zeilen zugleich die
-/// größte. Beide Alternativen lesen Lidls eigenen Wochenprospekt und
-/// unterscheiden sich nur darin, wie sie Preis und Produktname zusammen-
-/// bringen. `LIDL_SOURCE` entscheidet:
+/// Both paths read Lidl's own weekly leaflet and differ only in how they tie a
+/// price to a product name. `LIDL_SOURCE` decides:
 ///
-/// * `prospekt` — Kachelbildung über Wortkoordinaten
-///   (`scrapers::lidl_prospekt`). Braucht `pdftotext`, sonst nichts.
-/// * `prospekt-llm` — dieselbe Textebene, seitenweise durch ein Sprachmodell
-///   (`scrapers::lidl_llm`). Braucht zusätzlich `ANTHROPIC_API_KEY`, liest
-///   dafür auch Kacheln ohne saubere Marke-Name-Struktur (Obst, Gemüse,
-///   Non-Food), an denen die Geometrie scheitert.
-/// * alles andere oder nicht gesetzt — marktguru (Stand heute der Standard)
+/// * `prospekt` — tiles built from word coordinates
+///   (`scrapers::lidl_prospekt`). Needs `pdftotext`, nothing else. Default.
+/// * `prospekt-llm` — the same text layer, page by page through a language
+///   model (`scrapers::lidl_llm`). Additionally needs `ANTHROPIC_API_KEY`, and
+///   in exchange reads tiles without a clean brand-name-description structure
+///   (fruit, vegetables, non-food) where the geometry fails.
 ///
-/// Der Schalter ist bewusst eine Umgebungsvariable und kein CLI-Flag: So
-/// lässt sich ein einzelner nightly-Lauf umstellen, ohne die Aufrufe in
-/// `sync_region` und `fetch_all` anzufassen.
+/// The switch is deliberately an environment variable rather than a CLI flag:
+/// a single nightly run can be moved over without touching the call sites in
+/// `sync_region` and `fetch_all`.
+///
+/// **There is no third option any more.** Until 2026-07-31 the default was
+/// marktguru — a third party (api.marktguru.de) that indexed the same leaflet.
+/// It was removed on Scott's decision so that nothing can reach it by
+/// accident; an unset or unknown `LIDL_SOURCE` therefore falls back to
+/// `prospekt`, not to a foreign API.
+///
+/// What that costs is worth writing down, because it is the fallback that made
+/// the 2026-07-27 switch safe: marktguru was the only source that carried
+/// **images**, and the leaflet paths supply none. Until the leaflet delivers
+/// image crops, every Lidl offer shows the emoji fallback — measured on
+/// 2026-07-31, twelve of fifteen markets still looked healthy purely because
+/// they still carried marktguru rows.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum LidlSource {
-    Marktguru,
     Prospekt,
     ProspektLlm,
 }
 
 pub fn lidl_source() -> LidlSource {
     match std::env::var("LIDL_SOURCE") {
-        Ok(v) if v.eq_ignore_ascii_case("prospekt") => LidlSource::Prospekt,
         Ok(v) if v.eq_ignore_ascii_case("prospekt-llm") => LidlSource::ProspektLlm,
-        _ => LidlSource::Marktguru,
+        _ => LidlSource::Prospekt,
     }
 }
 
@@ -156,7 +164,7 @@ pub fn find_market(store: Store, zip: &str, cert: &str, key: &str) -> Result<Opt
         Store::Kaufland => scrapers::kaufland::find_market(zip)?,
         Store::Netto => scrapers::netto::find_market(zip)?,
         Store::Edeka => scrapers::edeka::find_market(zip)?,
-        Store::Lidl => match scrapers::lidl::find_market(zip)? {
+        Store::Lidl => match scrapers::lidl_prospekt::find_market(zip)? {
             Some(m) => m,
             None => return Ok(None),
         },
@@ -183,8 +191,8 @@ pub fn find_market(store: Store, zip: &str, cert: &str, key: &str) -> Result<Opt
 /// aus dem Verzeichnis (`public.branches`). Dann gibt es nichts mehr zu
 /// finden — die ID steht schon fest.
 ///
-/// `zip` braucht nur Lidl (die marktguru-Abfrage filtert über die PLZ, nicht
-/// über die Filial-ID); alle übrigen Ketten binden die Filiale über
+/// `zip` braucht nur Lidl (der Prospekt hängt an der PLZ der Filiale, nicht
+/// an der Filial-ID); alle übrigen Ketten binden die Filiale über
 /// `market.id`: REWE als `-market`-Parameter, Kaufland über das Cookie
 /// `x-aem-variant`, Netto über `netto_user_stores_id`, EDEKA über den
 /// Marktpfad.
@@ -205,7 +213,6 @@ pub fn fetch_offers(
         Store::Lidl => match lidl_source() {
             LidlSource::Prospekt => scrapers::lidl_prospekt::fetch_offers(market, zip)?,
             LidlSource::ProspektLlm => scrapers::lidl_llm::fetch_offers(market, zip)?,
-            LidlSource::Marktguru => scrapers::lidl::fetch_offers(market, zip)?,
         },
         Store::Netto => scrapers::netto::fetch_offers(market)?,
         Store::AldiNord => scrapers::aldi_nord::fetch_offers(market)?,

@@ -26,7 +26,6 @@ pub const BUCKET: &str = "offer-images";
 ///   media.schwarz     — kaufland.rs   (img.k-product-tile -> `kaufland.media.schwarz`)
 ///   aldi.cx           — aldi_sued.rs  (assets[].url -> `dm.emea.cms.aldi.cx`)
 ///   s7g10.scene7.com  — aldi_nord.rs  (assets[].url -> Adobe-Scene7-Shard)
-///   mg2de.b-cdn.net   — lidl.rs       (fest kodiert, marktguru-BunnyCDN)
 ///   edeka             — edeka.rs      (img src -> `offer-images.api.edeka`; die
 ///                                      `.edeka`-gTLD gehört komplett EDEKA)
 /// Ein Host passt bei exakter Gleichheit oder als echte Subdomain eines
@@ -39,7 +38,6 @@ const ALLOWED_IMAGE_HOST_SUFFIXES: &[&str] = &[
     "media.schwarz",
     "aldi.cx",
     "s7g10.scene7.com",
-    "mg2de.b-cdn.net",
     "edeka",
 ];
 
@@ -352,8 +350,7 @@ mod tests {
             "kaufland.media.schwarz",
             "dm.emea.cms.aldi.cx",
             "s7g10.scene7.com",
-            "mg2de.b-cdn.net",
-            "offer-images.api.edeka",
+                    "offer-images.api.edeka",
         ] {
             assert!(host_is_allowed(host), "sollte erlaubt sein: {host}");
         }
