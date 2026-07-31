@@ -52,7 +52,7 @@ Was der Prospekt besser kann:
 - **regionsgenau** — der Prospekt gilt für die Absatzregion der Filiale,
   marktguru war nur ungefähr regional;
 - **Streichpreise** — `UVP` / `Normalpreis` stehen im Prospekt, marktguru
-  lieferte für Lidl gar kein `regular_price`;
+  lieferte für Lidl gar kein `regular_price` (Details unten);
 - **seitengenaue Laufzeiten** — Donnerstag-Angebote tragen im Seitenkopf
   („Ab Do. 23.7. bis Sa. 25.7.") eine kürzere Gültigkeit als der Prospekt.
 
@@ -133,6 +133,33 @@ schlimmer als ein fehlendes Produkt.
 Bekannte Grenze: Vereinzelt landet eine Werbezeile als Produktname in den
 Daten („Woche", „Kernarm") — rund 2 % der Zeilen. Die Preise dieser Zeilen
 sind korrekt, nur der Name taugt nicht zum Matchen.
+
+### Streichpreise: der gedruckte Rabatt ist der Beweis
+
+Der Prospekt druckt den alten Preis in vier Schreibweisen (gezählt am
+Prospekt vom 27.07.2026): `-42% UVP 3.49` (80-mal), `UVP 3.59` ohne
+Rabattzahl (44), `Normalpreis: 3.39` mitten in der Beschreibungszeile, und
+ganz ohne Stichwort nur `-20% 1.39` über dem Angebotspreis (42).
+
+Ein Streichpreis am falschen Produkt ist schlimmer als keiner — er behauptet
+einen Rabatt, den es nicht gibt, und die App zeigt ihn ohne Vorbehalt.
+Deshalb wird ein Fund nur übernommen, wenn er festgenagelt ist:
+
+1. **Rechnet der gedruckte Rabatt auf?** Lidl schneidet die Nachkommastellen
+   ab (3.49 → 1.99 sind 42,98 % und stehen als „-42 %" im Heft). Passt die
+   Zahl nicht, gehört die Plakette einem anderen Produkt.
+2. **Ohne Rabattzahl zählt nur die eindeutige Kachel** — ein Preis, ein
+   Betrag in Reichweite. Trägt die Kachel mehrere Sternpreise, gehört die
+   Plakette einem davon, und welchem, sagt der Prospekt nicht.
+3. **Eine Plakette gehört genau einem Preis.** Passt sie rechnerisch auf zwei
+   Preise derselben Kachel, bekommt sie keiner.
+
+Was das kostet und bringt, am Prospekt vom 27.07. gemessen: **61 → 78**
+Angebote mit Streichpreis von 260. Der Zuwachs kommt aus den Plaketten ohne
+Stichwort; gleichzeitig fallen die Fehlpaarungen weg, die der alte Weg
+lieferte (BARILLA Pasta Sauce „1.79 statt 13.99", ROWENTA Staubsauger „8.99
+statt 119.99", WAGNER Steinofen Pizza mit demselben `UVP 4.98` an allen drei
+Preisen seiner Kachel).
 
 ### Dritter Weg: `LIDL_SOURCE=prospekt-llm` (Zusatz, nicht Ersatz)
 

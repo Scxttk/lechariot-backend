@@ -77,8 +77,46 @@ static BASE_PRICE: LazyLock<Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
+/// Streichpreis-Plakette mit Stichwort. Am 2026-07-31 im Prospekt vom 27.07.
+/// gezählt: 80-mal mit Rabattzahl (`-42% UVP 3.49`), 44-mal ohne
+/// (`UVP 3.59`, `Normalpreis: 3.39` mitten in der Beschreibungszeile).
+///
+/// Der Betrag steht **unmittelbar** hinter dem Stichwort; dazwischen sind nur
+/// Doppelpunkt und Leerraum erlaubt. Das ist keine Kosmetik: Wo die Plakette
+/// mit dem Produktnamen in eine Textinsel gerutscht ist („UVP NADLER 4.79
+/// Sahne Heringfilets XXL", „TANQUERAY … UVP Distilled 21.99 Gin"), steht
+/// zwischen Stichwort und Zahl ein Wort — und dann ist unklar, ob die Zahl
+/// noch zur Plakette gehört. Solche Funde fallen bewusst durch.
+///
+/// `\d{1,4}` und `[.,](?:\d{2}|-)`, weil der Prospekt volle Euro kürzt
+/// (`UVP 1599.-`) und Non-Food vierstellig wird.
+///
+/// **`Vorher` steht bewusst nicht in der Liste.** Es kommt im Prospekt genau
+/// einmal vor, und dort als Bildunterschrift („Vorher"/„Nachher" beim
+/// ROKITTA'S Rostschreck), nicht als Preis.
 static REGULAR_PRICE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?:UVP|Normalpreis|Letzter Preis)[:\s]*(\d{1,3}[.,]\d{2})").unwrap()
+    Regex::new(
+        r"(?:-\s*(\d{1,3})\s*%\s*)?(?:UVP|Normalpreis|Letzter Preis)\s*:?\s*(\d{1,4}[.,](?:\d{2}|-))",
+    )
+    .unwrap()
+});
+/// Dieselbe Plakette ohne Stichwort: nur der Rabatt und der alte Preis
+/// (`-20% 1.39` über dem Angebotspreis 1.11* der Petersilie, `-28% 6.99` über
+/// dem PARKSIDE-Montageschlüssel für 4.99*). 42-mal im Prospekt vom 27.07.,
+/// also kein Randfall.
+///
+/// Ohne Stichwort ist der gedruckte Rabatt die **einzige** Auskunft darüber,
+/// dass diese Zahl ein Streichpreis ist. Deshalb wird ein solcher Fund nur
+/// übernommen, wenn die Rechnung aufgeht (siehe [`assign_regular_prices`]) —
+/// für die Plaketten mit Stichwort ist der Rabatt eine Bestätigung, hier ist
+/// er die Bedingung.
+///
+/// Die dritte Gruppe fängt den Stern: In „-41% 2.79* UVP NADLER 4.79" steht
+/// hinter dem Rabatt der **Angebots**preis, nicht der alte. Ein Sternpreis ist
+/// nie ein Streichpreis, sonst wäre der Nachbarpreis derselben Kachel als
+/// „vorher" zu haben.
+static DISCOUNT_BADGE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"-\s*(\d{1,3})\s*%\s+(\d{1,4}[.,](?:\d{2}|-))(\s*\*)?").unwrap()
 });
 /// Packungsgröße: „Je 400 g", „Je 2x 75 ml", „Je 6x 0,25 l", „Je 200/250 g"
 static QUANTITY: LazyLock<Regex> = LazyLock::new(|| {
@@ -1168,6 +1206,133 @@ pub fn parse_price(raw: &str) -> Option<f64> {
         .filter(|v| v.is_finite() && *v > 0.0)
 }
 
+/// Betrag in Prospekt-Schreibweise. Wie [`parse_price`], versteht zusätzlich
+/// die gekürzten vollen Euro (`119.-`), die nur in den Streichpreis-Plaketten
+/// vorkommen — im Angebotspreis schreibt Lidl immer Cent aus.
+fn parse_amount(raw: &str) -> Option<f64> {
+    parse_price(&raw.trim().replace(",", ".").replace(".-", ".00"))
+}
+
+/// Eine im Prospekt gedruckte Streichpreis-Plakette.
+#[derive(Debug, Clone, PartialEq)]
+struct RegularCandidate {
+    value: f64,
+    /// Der Rabatt, den die Plakette selbst druckt („-42 %"). None, wenn dort
+    /// nur der Betrag steht.
+    percent: Option<u32>,
+}
+
+/// Der Rabatt, wie der Prospekt ihn drucken würde: Lidl schneidet die
+/// Nachkommastellen ab, rundet also nicht (nachgerechnet an 73 Plaketten des
+/// Prospekts vom 27.07.2026 — BARILLA Pesto 3.49 → 1.99 sind 42,98 % und
+/// stehen als „-42 %" im Heft, nicht als „-43 %").
+fn printed_discount(regular: f64, price: f64) -> Option<u32> {
+    if !(regular > price && price > 0.0) {
+        return None;
+    }
+    // Die Epsilon-Zugabe fängt den Fall ab, dass ein glatter Rabatt als
+    // 19.999999 herauskommt und dann als 19 statt 20 gelesen würde.
+    let exact = (regular - price) / regular * 100.0;
+    Some((exact + 1e-6).floor() as u32)
+}
+
+/// Streichpreise auf die Sternpreise einer Kachel verteilen.
+///
+/// Ein durchgestrichener Preis am falschen Produkt ist schlimmer als keiner:
+/// Er behauptet einen Rabatt, den es nicht gibt, und die App zeigt ihn ohne
+/// Vorbehalt an. Deshalb wird ein Fund nur übernommen, wenn er festgenagelt
+/// ist — auf einem von zwei Wegen:
+///
+/// 1. **Der gedruckte Rabatt ist der Beweis.** Trägt die Plakette „-42 %",
+///    muss sich der Angebotspreis mit genau diesem Rabatt aus dem
+///    Streichpreis ergeben. Das trennt die Plakette der Nachbarkachel
+///    zuverlässig ab: Sie ist an ihr eigenes Produkt gebunden, nicht an
+///    dieses (gemessen am Prospekt vom 27.07.: BARILLA Pasta Sauce bekam so
+///    „1.79 statt 13.99", ROWENTA Staubsauger „8.99 statt 119.99").
+/// 2. **Ohne Rabattzahl zählt nur die eindeutige Kachel.** Trägt die Kachel
+///    mehr als einen Sternpreis, gehört die Plakette einem davon — welchem,
+///    sagt der Prospekt nicht. Dann bekommt keiner sie. Genauso, wenn zwei
+///    Plaketten mit verschiedenen Beträgen in Reichweite liegen.
+///
+/// Und in beiden Runden gilt: **Eine Plakette gehört genau einem Preis.**
+/// WAGNER Steinofen Pizza trug „-19% UVP 4.98" bis 2026-07-31 an allen drei
+/// Preisen seiner Kachel, auch am 0.99er — das behauptet 80 % Rabatt, die im
+/// Prospekt nirgends stehen. Passt eine Plakette rechnerisch auf zwei Preise
+/// derselben Kachel, bekommt sie ebenfalls keiner: Dann ist die Rechnung kein
+/// Beweis mehr, sondern ein Münzwurf.
+fn assign_regular_prices(prices: &[f64], candidates: &[RegularCandidate]) -> Vec<Option<f64>> {
+    let mut out = vec![None; prices.len()];
+
+    // Runde 1: Plaketten mit gedrucktem Rabatt. Über die Plaketten gelaufen,
+    // nicht über die Preise — eine Plakette hat genau einen Streichpreis zu
+    // vergeben, ein Preis kann von mehreren umworben werden.
+    for c in candidates.iter().filter(|c| c.percent.is_some()) {
+        let fits: Vec<usize> = (0..prices.len())
+            .filter(|i| out[*i].is_none() && c.percent == printed_discount(c.value, prices[*i]))
+            .collect();
+        if let [only] = fits[..] {
+            out[only] = Some(c.value);
+        }
+    }
+
+    // Runde 2: Plaketten ohne Rabattzahl — nur, wenn nichts mehrdeutig ist.
+    if prices.len() == 1 && out[0].is_none() {
+        let mut plain: Vec<f64> = candidates
+            .iter()
+            .filter(|c| c.percent.is_none() && c.value > prices[0])
+            .map(|c| c.value)
+            .collect();
+        plain.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        plain.dedup();
+        if plain.len() == 1 {
+            out[0] = Some(plain[0]);
+        }
+    }
+
+    out
+}
+
+/// Alle Streichpreis-Funde einer Kachel, Textinsel für Textinsel.
+///
+/// Bewusst **nicht** über den zusammengeklebten `context`-String: Dort steht
+/// hinter dem „UVP" der einen Plakette der Betrag der nächsten, und der
+/// Extraktor läse ihn als Streichpreis. `sources` sind die Textinseln der
+/// Kachel, die nächste zuerst.
+fn regular_candidates(sources: &[String]) -> Vec<RegularCandidate> {
+    let mut labelled = Vec::new();
+    let mut bare = Vec::new();
+    for text in sources {
+        let text = text.trim();
+        for c in REGULAR_PRICE.captures_iter(text) {
+            if let Some(value) = c.get(2).and_then(|m| parse_amount(m.as_str())) {
+                labelled.push(RegularCandidate {
+                    value,
+                    percent: c.get(1).and_then(|m| m.as_str().parse().ok()),
+                });
+            }
+        }
+        for c in DISCOUNT_BADGE.captures_iter(text) {
+            if c.get(3).is_some() {
+                continue; // Sternpreis, siehe [`DISCOUNT_BADGE`]
+            }
+            if let Some(value) = c.get(2).and_then(|m| parse_amount(m.as_str())) {
+                bare.push(RegularCandidate {
+                    value,
+                    percent: c.get(1).and_then(|m| m.as_str().parse().ok()),
+                });
+            }
+        }
+    }
+    // Plaketten mit Stichwort zuerst. Wo beide Formen in Reichweite liegen,
+    // ist die mit „UVP" die bessere Auskunft: Auf Seite 39 des Prospekts vom
+    // 27.07. hat die Kachelbildung das GSW-Kochtopf-Set (49.99*, „-74% UVP
+    // 199.-") mit der Heißluft-Fritteuse zusammengezogen, die zufällig
+    // ebenfalls 49.99* kostet und „-16% 59.99" trägt. Beide Rechnungen gehen
+    // auf; das Stichwort entscheidet.
+    labelled.append(&mut bare);
+    labelled
+}
+
 /// Rechenprobe: Der Prospekt nennt Packungsgröße **und** Grundpreis, also
 /// muss `Menge × Grundpreis ≈ Preis` gelten. Stimmt das nicht, ist die Kachel
 /// falsch zusammengesetzt — und ein falscher Preis ist in einer
@@ -1255,18 +1420,23 @@ struct Stats {
     implausible_price: usize,
     failed_arithmetic: usize,
     bad_title: usize,
+    /// Zugeteilte Streichpreise. Zählt vor dem Dedup, also leicht über der
+    /// Zahl in der fertigen Liste — als Trend genügt das, und die genaue Zahl
+    /// steht in der Zeile darüber.
+    regular: usize,
 }
 
 impl Stats {
     fn report(&self, kept: usize) {
         println!(
             "  {kept} von {} Sternpreisen übernommen (ohne Partner {}, Preis unplausibel {}, \
-             Rechenprobe {}, kein Titel {})",
+             Rechenprobe {}, kein Titel {}), davon mit Streichpreis {}",
             self.anchors,
             self.no_partner,
             self.implausible_price,
             self.failed_arithmetic,
-            self.bad_title
+            self.bad_title,
+            self.regular
         );
     }
 }
@@ -1408,6 +1578,28 @@ fn extract_offers_shots_and_open(
             .filter(|j| is_plausible_title(&tile_title(&prices[*j])))
             .collect();
 
+        // Jede Plakette gehört der Preiskachel, der sie am nächsten steht —
+        // und nur ihr.
+        //
+        // Ohne diese Buchführung teilen sich zwei Nachbarn dieselbe Plakette:
+        // Auf Seite 15 des Prospekts vom 27.07. steht „UVP 3.49" zwischen
+        // WRIGLEY'S Extra (2.95*) und MONSTER Energy (1.99*), und beide
+        // bekamen sie. Der Streichpreis gehört WRIGLEY'S — die Plakette klebt
+        // an dessen Preis, und der gedruckte Rabatt „-15 %" geht auch nur dort
+        // auf.
+        let badge_owner: Vec<Option<usize>> = badges
+            .iter()
+            .map(|b| {
+                prices
+                    .iter()
+                    .enumerate()
+                    .map(|(j, p)| (b.gap(p), j))
+                    .min_by(|a, c| a.0.partial_cmp(&c.0).unwrap_or(std::cmp::Ordering::Equal))
+                    .filter(|(gap, _)| *gap < BADGE_GAP_PT)
+                    .map(|(_, j)| j)
+            })
+            .collect();
+
         stats.anchors += prices
             .iter()
             .map(|t| PRICE_STAR.find_iter(&t.text()).count())
@@ -1452,6 +1644,28 @@ fn extract_offers_shots_and_open(
                 .join(" ");
             let context = format!("{} {} {near}", product.text(), price_tile.text());
 
+            // Für den Streichpreis bleiben die Textinseln getrennt — siehe
+            // [`regular_candidates`] — und es zählen nur die Plaketten, die
+            // dieser Preiskachel gehören. Nach Abstand sortiert, damit bei
+            // zwei passenden die nähere gewinnt und nicht die, die zufällig
+            // weiter vorn auf der Seite steht.
+            //
+            // Die eigene Kachel steht vorn: `Normalpreis:` druckt der Prospekt
+            // mitten in die Beschreibungszeile des Produkts, nicht als eigene
+            // Plakette.
+            let mut own_badges: Vec<(f64, &Island)> = badges
+                .iter()
+                .enumerate()
+                .filter(|(b, _)| badge_owner[*b] == Some(j))
+                .map(|(_, b)| (b.gap(product).min(b.gap(price_tile)), b))
+                .collect();
+            own_badges.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+            let mut sources = vec![product.text()];
+            if i != j {
+                sources.push(price_tile.text());
+            }
+            sources.extend(own_badges.iter().map(|(_, b)| b.text()));
+
             let title = tile_title(product);
             if !is_plausible_title(&title) || is_layout_text(&title) {
                 stats.bad_title += usable.len();
@@ -1482,7 +1696,15 @@ fn extract_offers_shots_and_open(
             // der *Grundpreis* vom Nachbarn stammt, und ein Veto würde ein
             // korrektes Angebot wegwerfen (BELBAKE Speisestärke 0.59 €).
             let veto = usable.len() > 1;
-            for price in usable.iter().copied() {
+
+            // Die Streichpreise werden **vor** der Preisschleife verteilt:
+            // Eine Plakette gehört zu genau einem Preis der Kachel, das lässt
+            // sich nicht entscheiden, während man die Preise einzeln
+            // durchgeht.
+            let regulars = assign_regular_prices(&usable, &regular_candidates(&sources));
+            stats.regular += regulars.iter().filter(|r| r.is_some()).count();
+
+            for (slot, price) in usable.iter().copied().enumerate() {
                 if veto && arithmetic_check(&context, price) == Some(false) {
                     stats.failed_arithmetic += 1;
                     if debug_enabled() {
@@ -1496,12 +1718,7 @@ fn extract_offers_shots_and_open(
                     continue;
                 }
 
-                // Streichpreis nur übernehmen, wenn er über dem Angebotspreis
-                // liegt — sonst hat die Kachel den Grundpreis eingefangen.
-                let regular = REGULAR_PRICE
-                    .captures(&context)
-                    .and_then(|c| parse_price(c.get(1)?.as_str()))
-                    .filter(|r| *r > price);
+                let regular = regulars[slot];
 
                 let offer_id =
                     Offer::build_id(market_id, &format!("{title}_{price:.2}"), valid_from);
@@ -2825,6 +3042,114 @@ mod tests {
         );
     }
 
+    // ------------------------------------------------------- Streichpreise
+
+    /// Lidl schneidet den Rabatt ab, statt ihn zu runden. Die drei Fälle
+    /// stehen so im Prospekt vom 27.07.2026 und entscheiden, ob eine Plakette
+    /// zu einem Preis passt oder nicht.
+    #[test]
+    fn printed_discount_truncates_like_the_leaflet() {
+        // BARILLA Pesto: 42,98 % steht als „-42 %" im Heft, nicht als „-43 %".
+        assert_eq!(printed_discount(3.49, 1.99), Some(42));
+        // WAGNER Steinofen Pizza: 19,88 % → „-19 %".
+        assert_eq!(printed_discount(4.98, 3.99), Some(19));
+        // GSW Kochtopf-Set: 74,87 % → „-74 %".
+        assert_eq!(printed_discount(199.00, 49.99), Some(74));
+        // Glatte Rabatte dürfen nicht am Rundungsfehler scheitern.
+        assert_eq!(printed_discount(2.00, 1.60), Some(20));
+        // Ein Preis ist nie sein eigener Streichpreis.
+        assert_eq!(printed_discount(2.99, 2.99), None);
+        assert_eq!(printed_discount(1.99, 2.99), None);
+    }
+
+    /// Der gedruckte Rabatt ist der Beweis der Paarung. Eine Plakette, deren
+    /// Rechnung nicht aufgeht, gehört einem anderen Produkt — so kam BARILLA
+    /// Pasta Sauce (1.79*) zu „statt 13.99" und der ROWENTA-Staubsauger zu
+    /// „8.99 statt 119.99".
+    #[test]
+    fn a_badge_whose_discount_does_not_add_up_is_dropped() {
+        let fremd = RegularCandidate { value: 13.99, percent: Some(28) };
+        assert_eq!(assign_regular_prices(&[1.79], &[fremd.clone()]), vec![None]);
+
+        // Dieselbe Plakette an ihrem eigenen Preis: 13.99 → 9.99 sind 28,5 %.
+        assert_eq!(assign_regular_prices(&[9.99], &[fremd]), vec![Some(13.99)]);
+    }
+
+    /// Eine Plakette gehört einem Produkt. Trägt die Kachel mehrere Preise,
+    /// darf der Streichpreis nicht an allen hängen — WAGNER Steinofen Pizza
+    /// (3.99*, 3.79*, 0.99*, „-19% UVP 4.98") bekam ihn bis 2026-07-31
+    /// dreimal.
+    #[test]
+    fn one_badge_serves_one_price() {
+        let badge = |v: f64, p: u32| RegularCandidate { value: v, percent: Some(p) };
+
+        // WAGNER Steinofen Pizza: drei Preise, eine Plakette.
+        assert_eq!(
+            assign_regular_prices(&[3.99, 3.79, 0.99], &[badge(4.98, 19)]),
+            vec![Some(4.98), None, None]
+        );
+
+        // Zwei Plaketten, zwei Preise: jede an ihren eigenen.
+        assert_eq!(
+            assign_regular_prices(&[3.99, 0.99], &[badge(4.98, 19), badge(4.98, 80)]),
+            vec![Some(4.98), Some(4.98)]
+        );
+
+        // Passt eine Plakette auf zwei Preise derselben Kachel, ist die
+        // Rechnung kein Beweis mehr: 10.00 minus 50 % sind sowohl 5.00 als
+        // auch 4.99 (50,1 %, abgeschnitten 50). Dann bekommt sie keiner.
+        assert_eq!(
+            assign_regular_prices(&[5.00, 4.99], &[badge(10.00, 50)]),
+            vec![None, None]
+        );
+    }
+
+    /// Ohne gedruckten Rabatt entscheidet nur die Eindeutigkeit: ein Preis in
+    /// der Kachel, ein Betrag in Reichweite.
+    #[test]
+    fn a_badge_without_a_discount_needs_an_unambiguous_tile() {
+        let uvp = |v: f64| RegularCandidate { value: v, percent: None };
+
+        // WRIGLEY'S Extra: 2.95* und „d) UVP 3.49" — eindeutig.
+        assert_eq!(assign_regular_prices(&[2.95], &[uvp(3.49)]), vec![Some(3.49)]);
+        // JOHNNIE WALKER teilt sich die Kachel mit dem Wodka: zwei Preise,
+        // ein „Normalpreis: 15.99" — welchem er gehört, steht nirgends.
+        assert_eq!(assign_regular_prices(&[10.99, 6.49], &[uvp(15.99)]), vec![None, None]);
+        // Zwei Beträge in Reichweite widersprechen einander.
+        assert_eq!(assign_regular_prices(&[2.95], &[uvp(3.49), uvp(4.19)]), vec![None]);
+        // Derselbe Betrag zweimal ist kein Widerspruch.
+        assert_eq!(assign_regular_prices(&[2.95], &[uvp(3.49), uvp(3.49)]), vec![Some(3.49)]);
+        // Unter dem Angebotspreis ist es ein Grundpreis, kein Streichpreis.
+        assert_eq!(assign_regular_prices(&[2.95], &[uvp(1.49)]), vec![None]);
+    }
+
+    /// Was aussieht wie eine Plakette, aber keine ist.
+    #[test]
+    fn only_a_number_glued_to_the_keyword_counts() {
+        let c = |t: &str| regular_candidates(&[t.to_string()]);
+
+        // Zwischen Stichwort und Zahl steht ein Wort: Die Kachelbildung hat
+        // Plakette und Produktname zusammengezogen, und dann ist unklar, ob
+        // 4.79 noch zur Plakette gehört.
+        assert!(c("UVP NADLER 4.79 Sahne Heringfilets XXL").is_empty());
+        assert!(c("TANQUERAY London Dry Gin UVP Distilled 21.99 Gin").is_empty());
+        // Die Fußnote ohne Betrag.
+        assert!(c("Letzter Preis auf lidl.de zum Drucktermin").is_empty());
+        // „Vorher"/„Nachher" ist die Bildunterschrift des Rostschrecks.
+        assert!(c("Vorher 12.99").is_empty());
+        // Hinter dem Rabatt steht der Angebots-, nicht der alte Preis.
+        assert!(c("-41% 2.79*").is_empty());
+
+        // Gegenprobe: die vier echten Schreibweisen.
+        assert_eq!(c("-42% UVP 3.49")[0], RegularCandidate { value: 3.49, percent: Some(42) });
+        assert_eq!(c("d ) UVP 3.49")[0], RegularCandidate { value: 3.49, percent: None });
+        assert_eq!(c("Je 100 g 1 kg = 11.10 Normalpreis: 1.99")[0].value, 1.99);
+        assert_eq!(c("-20% 1.39")[0], RegularCandidate { value: 1.39, percent: Some(20) });
+        // Volle Euro schreibt der Prospekt gekürzt.
+        assert_eq!(c("-74% UVP 199.-")[0].value, 199.0);
+        assert_eq!(c("-50% UVP 1399.-")[0].value, 1399.0);
+    }
+
     /// Live-Test gegen lidl.com und endpoints.leaflets.schwarz.
     #[test]
     #[ignore = "Live-Test gegen lidl.com (lädt ~83 MB PDF)"]
@@ -3235,6 +3560,17 @@ mod tests {
         let xml = run_pdftotext(std::path::Path::new(&pdf), "-bbox-layout").expect("pdftotext");
         let (offers, _) = extract_offers_with_shots(&xml, "MESSUNG", None, None);
         eprintln!("ANGEBOTE\t{}", offers.len());
+        let mit: Vec<&Offer> = offers.iter().filter(|o| o.regular_price.is_some()).collect();
+        eprintln!("STREICHPREISE\t{}", mit.len());
+        for o in mit {
+            let (p, r) = (o.price.unwrap_or(0.0), o.regular_price.unwrap_or(0.0));
+            eprintln!(
+                "  S{}\t{p:.2} statt {r:.2}\t-{:.0} %\t{}",
+                o.flyer_page.unwrap_or(0),
+                (r - p) / r * 100.0,
+                o.title
+            );
+        }
     }
 
     /// Messgerät, kein Test: ein ganzer Lidl-Abend für drei Filialen
