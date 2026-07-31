@@ -27,8 +27,10 @@ use crate::scrapers::{store_finder, util};
 // 1. **Der Preis steht doppelt im Markup**, und nur eine Fassung ist
 //    maschinenlesbar. Sichtbar ist „–,99" (Gedankenstrich statt führender
 //    Null, Sternchen als Fußnote); daneben steht `aria-label="0,99 Euro"`.
-//    Wir lesen das aria-label — dieselbe Steilvorlage wie EDEKAs sr-only-Div,
-//    und sie erspart einen Parser für die Gedankenstrich-Schreibweise.
+//    Wir lesen das aria-label — dieselbe Steilvorlage wie EDEKAs sr-only-Div.
+//    Der **Streichpreis** hat kein aria-label, und NORMA schreibt ihn in
+//    derselben Gedankenstrich-Schreibweise („UVP –,99"). `parse_price` muss
+//    sie deshalb doch beherrschen, siehe dort.
 // 2. **Marke und Produkt stehen getrennt** (`strong.supplier` = „Sheba",
 //    `h3` = „Katzennassnahrung"). Beide gehören in den Titel, sonst fallen
 //    zwei Marken desselben Produkts auf dieselbe Offer-ID — am 2026-07-31
@@ -146,7 +148,7 @@ pub fn parse_theme(
     let sel_desc = sel("p.produktBox-txt-description");
     let sel_amount = sel("li.produktBox-txt-inh");
     let sel_base = sel("li.produktBox-txt-price");
-    let sel_strike = sel("li.produktBox-cont-wrapper-uvp");
+    let sel_strike = sel(STRIKE_SELECTOR);
     let sel_price = sel("li.produktBox-cont-wrapper-price span[aria-label]");
     let sel_img = sel("div.produktBox-img img");
 
@@ -212,6 +214,30 @@ pub fn parse_theme(
     }
 }
 
+/// Die Zeile über dem Preis — aber nur, solange sie wirklich einen Preis trägt.
+///
+/// NORMA benutzt dieselbe Klasse `produktBox-cont-wrapper-uvp` für **zwei**
+/// Zeilen. Die reine Klasse ist der Streichpreis („statt 1,59", „UVP 2,49",
+/// „UVP = 13,95"). Kommt `produktBox-cont-wrapper-uvp-info` dazu, steht dort
+/// ein Hinweis statt eines Preises — gemessen am 2026-07-31 in 25 Kacheln:
+///
+/// ```text
+/// Ständig im Sortiment          14x   (keine Ziffer, harmlos)
+/// Zum tagesaktuellen Tiefpreis   5x
+/// NEU im Sortiment               3x
+/// 25% billiger                   1x   -> las sich als "statt 25,00"
+/// z.B. 1,1 kg                    1x   -> las sich als "statt 1,10"
+/// z.B. 909 g                     1x   -> las sich als "statt 909,00"
+/// ```
+///
+/// Die letzten drei sind Beispiel-Gewichte und ein Rabattband, keine früheren
+/// Preise. Zwei davon standen so in der Produktion („4,99 statt 909",
+/// „5,99 statt 1,10"); die Maggi-Kachel trägt gar keinen Preis und fiel
+/// deshalb schon vorher aus dem Upload. Die dritte Klasse `…-uvp-spacer` ist
+/// ein eigener Klassenname und trifft den Selektor ohnehin nicht.
+const STRIKE_SELECTOR: &str =
+    "li.produktBox-cont-wrapper-uvp:not(.produktBox-cont-wrapper-uvp-info)";
+
 fn sel(css: &str) -> Selector {
     Selector::parse(css).expect("statischer CSS-Selektor")
 }
@@ -235,23 +261,42 @@ fn text_of(el: ElementRef, selector: &Selector) -> Option<String> {
 }
 
 /// Preistexte aus dem aria-label ("0,99 Euro") und aus den Streichpreis-Zeilen
-/// ("statt 1,59", "UVP 2,49", "UVP = 13,95").
+/// ("statt 1,59", "UVP 2,49", "UVP = 13,95", "UVP –,99").
 ///
 /// Bewusst über die *letzte* Zahl im Text: „1 l = –,79 ohne App" und
 /// „UVP = 13,95" tragen beide ein Gleichheitszeichen, und der NormaPlus-Zusatz
 /// „ohne App" hängt hinten dran.
+///
+/// **Der Gedankenstrich ist eine Null.** Unter einem Euro druckt NORMA
+/// „–,99" statt „0,99" — im Preis selbst ist das folgenlos (dort steht das
+/// aria-label daneben), in der UVP-Zeile nicht: Sie hat kein aria-label, und
+/// ohne diese Regel wurde aus „UVP –,99" ein Streichpreis von 99 €.
+/// Ein Trennzeichen darf deshalb eine Zahl eröffnen, wenn unmittelbar davor
+/// ein Strich steht.
 fn parse_price(s: &str) -> Option<f64> {
     let mut found = None;
     let mut current = String::new();
+    // Steht der Strich direkt vor dem Komma, ist er die weggelassene Null.
+    let mut dash = false;
     for c in s.chars() {
         match c {
-            '0'..='9' => current.push(c),
-            ',' | '.' if !current.is_empty() && !current.contains('.') => current.push('.'),
+            '0'..='9' => {
+                current.push(c);
+                dash = false;
+            }
+            ',' | '.' if !current.contains('.') && (!current.is_empty() || dash) => {
+                if current.is_empty() {
+                    current.push('0');
+                }
+                current.push('.');
+                dash = false;
+            }
             _ => {
                 if let Ok(v) = current.parse::<f64>() {
                     found = Some(v);
                 }
                 current.clear();
+                dash = matches!(c, '-' | '–' | '—' | '−' | '‒');
             }
         }
     }
@@ -363,6 +408,19 @@ mod tests {
         assert_eq!(parse_price("UVP = 13,95"), Some(13.95));
         assert_eq!(parse_price(""), None);
         assert_eq!(parse_price("Zum tagesaktuellen Tiefpreis"), None);
+
+        // Der Gedankenstrich ist die weggelassene Null — ohne diese Regel
+        // wurde aus "UVP –,99" ein Streichpreis von 99 €.
+        assert_eq!(parse_price("UVP –,99"), Some(0.99));
+        assert_eq!(parse_price("1 l = –,79 ohne App"), Some(0.79));
+        // Auch mit dem einfachen Bindestrich, falls NORMA das Zeichen tauscht.
+        assert_eq!(parse_price("UVP -,49"), Some(0.49));
+        // Umgekehrt: der Strich *hinter* dem Komma ist ein glatter Betrag,
+        // und die Zahl davor darf nicht verloren gehen ("1 kg = 399,–").
+        assert_eq!(parse_price("1 kg = 399,–"), Some(399.0));
+        // Ein Strich ohne Zahl bleibt kein Preis.
+        assert_eq!(parse_price("–"), None);
+        assert_eq!(parse_price("Ständig im Sortiment"), None);
     }
 
     #[test]

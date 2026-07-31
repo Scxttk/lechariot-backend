@@ -1,7 +1,7 @@
 <!--
   Gekürzte Live-Antwort von
   https://www.norma-online.de/de/angebote/ab-montag,-03.08.26/mehr-fuers-geld-t-379179/
-  (2026-07-31). Von 14 Kacheln sind fünf übrig — je eine für die
+  (2026-07-31). Von 14 Kacheln sind sechs übrig — je eine für die
   Preis-Varianten, an denen der Parser sich entscheidet:
 
     1. Erfrischungsgetränk  Marke + "statt"-Preis + Pfand im Mengentext
@@ -11,6 +11,9 @@
     5. Katzennassnahrung    Marke Whiskas — gleicher Produktname wie 4.,
                             deshalb kollidieren beide auf derselben
                             Offer-ID, wenn die Marke nicht im Titel steht
+    6. Maggi-Produkte       kein Preis, und über dem Preis steht statt
+                            eines Streichpreises das Rabattband
+                            "25% billiger" in einer …-uvp-info-Zeile
 -->
 <!DOCTYPE html>
 <html lang="de">
@@ -154,6 +157,31 @@
       </div>
     </a>
     <div class="productBox-available"><ul><li>Filiale</li></ul></div>
+  </article>
+
+  <article class="b463 produktBoxContainer" id="of_379796">
+    <a href="/de/angebote/ab-montag,-03.08.26/mehr-fuers-geld-t-379179/maggi-produkte-i-379796/" id="a_379796">
+      <div class="produktBox produktBox--pre bfsg articleMarke_248015 produktBox-mehr_fuers_geld ">
+        <div class="produktBox-img produktBox-img--center">
+          <img src="/ext/img/product/angebote/26_08_03/900_maggi-produkte_wo.png" alt=""/>
+        </div>
+        <div class="produktBox-txt">
+          <hr/>
+          <strong class="supplier">Maggi</strong>
+          <h3 class="produktBox-txt-headline">Maggi-Produkte</h3>
+          <p class="produktBox-txt-description">Aus unserem Sortiment</p>
+          <ul>
+            <li class="produktBox-txt-price"></li>
+          </ul>
+        </div>
+        <div class="produktBox-cont"><div class="produktBox-cont-wrapper">
+          <div class="produktBox-cont-wrapper-billiger-spacer"></div>
+          <ul>
+            <li class="produktBox-cont-wrapper-uvp produktBox-cont-wrapper-uvp-info"><div style="font-size:32px; color:#ffdf00;">25% billiger</div></li>
+          </ul>
+        </div></div>
+      </div>
+    </a>
   </article>
 </main>
 </body>

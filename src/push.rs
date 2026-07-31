@@ -143,6 +143,36 @@ fn is_pure_quantity(text: &str) -> bool {
         .all(|t| FILLER.contains(&t))
 }
 
+/// Obergrenze für den Streichpreis, als Vielfaches des Angebotspreises.
+///
+/// Gemessen am 2026-07-31 über alle 3732 Zeilen der Produktion, die Preis
+/// *und* Streichpreis tragen: Der steilste echte Rabatt kam von Penny
+/// (4,00 statt 24,00 — SLOGGI Damen-Slips, 6,0×), danach Kaufland
+/// (9,99 statt 49,99 — Kopfhörer, 5,0×). Beide stammen aus den APIs der
+/// Ketten selbst und sind echt. Über 6,0× lag nichts außer den beiden
+/// NORMA-Lesefehlern (125× und 182×). Die 20 sind also rund das Dreifache
+/// des höchsten je gemessenen echten Rabatts — weit genug weg, um einen
+/// 90-%-Ausverkauf nicht zu schlucken.
+const MAX_REGULAR_FACTOR: f64 = 20.0;
+
+/// Streichpreis, sofern er überhaupt einer sein kann.
+///
+/// Zwei Fälle sind Arithmetik, keine Geschmacksfrage, und deshalb hier
+/// zentral statt in einem einzelnen Scraper:
+///
+/// * **Nicht über dem Preis.** Ein „Streichpreis" gleich oder unter dem
+///   Angebotspreis ist keine Ersparnis. In der Produktion waren das
+///   Kaufland-Zeilen wie „59,99 statt 59,99" (Rabattband 0 %) und eine
+///   NORMA-Zeile „5,99 statt 1,10".
+/// * **Absurd über dem Preis.** Siehe [`MAX_REGULAR_FACTOR`].
+///
+/// Fällt der Streichpreis weg, bleibt das Angebot: Ein fehlender früherer
+/// Preis kostet nichts, ein falscher behauptet einen Rabatt, den es nicht
+/// gibt — und die App malt daraus ein Rabatt-Abzeichen.
+fn plausible_regular_price(price: f64, regular: Option<f64>) -> Option<f64> {
+    regular.filter(|r| *r > price && *r <= price * MAX_REGULAR_FACTOR)
+}
+
 /// Lokales Angebot in eine Supabase-Zeile mappen. None bei Angeboten ohne
 /// Preis — die kann die App nicht anzeigen.
 pub fn map_offer(offer: &Offer, chain: &str, nationwide: bool) -> Option<SupabaseRow> {
@@ -160,7 +190,7 @@ pub fn map_offer(offer: &Offer, chain: &str, nationwide: bool) -> Option<Supabas
         market: chain.to_string(),
         product: product_name(offer),
         price,
-        regular_price: offer.regular_price,
+        regular_price: plausible_regular_price(price, offer.regular_price),
         // Mengen-Untertitel ("je 12 x 1 l") wandert ins unit-Feld — sonst
         // wirkt ein Multipack-Preis in der App wie ein Einzelpreis.
         unit: match &offer.subtitle {

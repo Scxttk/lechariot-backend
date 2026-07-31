@@ -1063,7 +1063,7 @@ fn norma_theme_parses_tiles_with_prices_and_strike_prices() {
         &mut offers,
         &mut seen,
     );
-    assert_eq!(offers.len(), 5);
+    assert_eq!(offers.len(), 6);
 
     // Termin und Thema stehen nur im Pfad — beides muss an jedem Angebot hängen.
     for o in &offers {
@@ -1101,6 +1101,78 @@ fn norma_theme_parses_tiles_with_prices_and_strike_prices() {
     let kekse = offers.iter().find(|o| o.title == "Butterkekse").unwrap();
     assert_eq!(kekse.price, Some(4.99));
     assert_eq!(kekse.regular_price, None);
+
+    // …-uvp-info dagegen trägt dieselbe Klasse *zusätzlich*. Dort steht das
+    // Rabattband, kein früherer Preis — sonst wären aus "25% billiger"
+    // 25,00 € Streichpreis geworden.
+    let maggi = offers.iter().find(|o| o.title == "Maggi-Produkte").unwrap();
+    assert_eq!(maggi.price, None);
+    assert_eq!(maggi.regular_price, None);
+}
+
+/// Der Fall aus der Produktion: „NORMA 4,99 statt 909 — Gut Bartenhof Dicke
+/// Rippe". Über dem Preis stand kein Streichpreis, sondern das Beispielgewicht
+/// „z.B. 909 g" in einer `…-uvp-info`-Zeile. Ohne Streichpreis fehlt der App
+/// nichts; mit einem falschen malt sie ein Rabatt-Abzeichen über Schweinefleisch.
+#[test]
+fn norma_hint_line_above_the_price_is_no_strike_price() {
+    let mut offers = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    scrapers::norma::parse_theme(
+        include_str!("fixtures/norma/thema_wochenend_spezial.html"),
+        "/de/angebote/ab-freitag,-07.08.26/wochenend-spezial-t-379197/",
+        "NORMA_DE",
+        &mut offers,
+        &mut seen,
+    );
+    assert_eq!(offers.len(), 3);
+
+    let rippe = offers.iter().find(|o| o.title == "Gut Bartenhof Dicke Rippe").unwrap();
+    assert_eq!(rippe.price, Some(4.99));
+    assert_eq!(rippe.regular_price, None, "'z.B. 909 g' ist ein Gewicht, kein Preis");
+
+    // Dieselbe Zeile ohne Ziffern — war schon vorher harmlos, muss es bleiben.
+    let pfirsich = offers.iter().find(|o| o.title == "Super Nivo Plattpfirsiche").unwrap();
+    assert_eq!(pfirsich.price, None);
+    assert_eq!(pfirsich.regular_price, None);
+
+    // Gegenprobe auf derselben Seite: die reine …-uvp-Zeile bleibt ein
+    // Streichpreis. Von 87 NORMA-Zeilen mit Streichpreis waren 85 dieser Art.
+    let hering = offers.iter().find(|o| o.title == "Appel Herings-Filets").unwrap();
+    assert_eq!(hering.price, Some(1.11));
+    assert_eq!(hering.regular_price, Some(1.99), "'UVP = 1,99' ist einer");
+}
+
+/// Der zweite Fall aus der Produktion: „NORMA 0,79 statt 99 — San Benedetto
+/// Premiumlimonaden ZERO". Unter einem Euro druckt NORMA einen Gedankenstrich
+/// statt der führenden Null („UVP –,99"), und anders als beim Preis selbst
+/// steht in der UVP-Zeile kein aria-label daneben, das man stattdessen lesen
+/// könnte.
+#[test]
+fn norma_dash_in_the_strike_price_is_a_leading_zero() {
+    let mut offers = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    scrapers::norma::parse_theme(
+        include_str!("fixtures/norma/thema_sommergenuss.html"),
+        "/de/angebote/ab-montag,-03.08.26/sommergenuss-t-379188/",
+        "NORMA_DE",
+        &mut offers,
+        &mut seen,
+    );
+    assert_eq!(offers.len(), 3);
+
+    let limo = offers.iter().find(|o| o.title.starts_with("San Benedetto")).unwrap();
+    assert_eq!(limo.price, Some(0.79));
+    assert_eq!(limo.regular_price, Some(0.99), "'UVP –,99' sind 99 Cent, nicht 99 Euro");
+
+    // Gegenproben: ausgeschriebene Streichpreise beider Schreibweisen.
+    let kaese = offers.iter().find(|o| o.title == "Fol Epi Käsescheiben").unwrap();
+    assert_eq!(kaese.price, Some(1.39));
+    assert_eq!(kaese.regular_price, Some(2.69));
+
+    let becher = offers.iter().find(|o| o.title.starts_with("Paw Patrol")).unwrap();
+    assert_eq!(becher.price, Some(3.99));
+    assert_eq!(becher.regular_price, Some(4.99));
 }
 
 #[test]
