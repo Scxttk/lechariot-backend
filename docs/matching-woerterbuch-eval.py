@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 DB = os.path.expanduser("~/.local/share/lechariot/lechariot.db")
 
 # Kategorien, die klar Non-Food sind (Ketten-Marketing-Kategorien)
-NONFOOD_CAT = re.compile(r"mode|style|heim|haus|garten|haustier|tierbedarf|tiernahrung|pflanzen|angeln|elektro|medien|kinderzimmer|wäschepflege|schulstart|kochen-und-grillen|drogerie|spielzeug|alltagshelfer|technik|spielwaren|baumarkt|multimedia|bekleidung|schuhe|camping|auto|buero|non.?food|onlineshop|e-bikes?|fahrrad|trolley|koffer|unterhemd|\btops\b|\bteller\b|sch[üu]sseln?|staubsauger|wischroboter|k[üu]chenmasch|n[äa]hmasch|batterien|\bfarben\b|kleber|zahngesundheit|glasartikel|aufbewahr|essgeschirr|reinigungsger|k[üu]chenger|k[üu]chengro|k[üu]chenzubeh|grillzubeh|backzubeh|damen|herren|w[äa]sche\b|leuchten|m[öo]bel|werkzeug|haartrockner|rasierer|zahnpflege|fernseh|led ?& ?lcd|kapsel|padmasch|\bk[üu]che\b|blumen|strauß|kochen-und-backen|reinigen|waschmittel", re.I)
+NONFOOD_CAT = re.compile(r"mode|style|heim|haus|garten|haustier|tierbedarf|tiernahrung|pflanzen|angeln|elektro|medien|kinderzimmer|wäschepflege|schulstart|alles für die schule|kochen-und-grillen|drogerie|spielzeug|alltagshelfer|technik|spielwaren|baumarkt|multimedia|bekleidung|schuhe|camping|auto|buero|non.?food|onlineshop|e-bikes?|fahrrad|trolley|koffer|unterhemd|\btops\b|\bteller\b|sch[üu]sseln?|staubsauger|wischroboter|k[üu]chenmasch|n[äa]hmasch|batterien|\bfarben\b|kleber|zahngesundheit|glasartikel|aufbewahr|essgeschirr|reinigungsger|k[üu]chenger|k[üu]chengro|k[üu]chenzubeh|grillzubeh|backzubeh|damen|herren|w[äa]sche\b|leuchten|m[öo]bel|werkzeug|haartrockner|rasierer|zahnpflege|fernseh|led ?& ?lcd|kapsel|padmasch|\bk[üu]che\b|blumen|strauß|kochen-und-backen|reinigen|waschmittel", re.I)
 FOOD_CAT = re.compile(r"obst|gemüse|fleisch|geflügel|wurst|molkerei|fette|getränke|feinkost|konserven|kaffee|tee|süßwaren|knabber|grundnahrung|fisch|bäckerei|backwaren|tiefkühl", re.I)
 
 # Kategorie → Begriff, als LETZTER Ausweg: greift nur, wenn Titel und
@@ -49,6 +49,12 @@ KAT_ROH = {
     "Tiefkühlfisch und Meeresfrüchte": "fisch",
     "Tiefkühlgerichte": "fertiggericht",
     "Instantgerichte": "fertiggericht",
+    # Lidls Aufstrich-/Dip-Regale (2026-07-31): jede Zeile darunter ist ein
+    # Dip oder herzhafter Aufstrich (Zaziki, Ajvar, Antipasti Creme) —
+    # `soßen` führt Dips schon im exact. „Schokoaufstrich" fehlt bewusst:
+    # die eine Zeile darunter (Nutella) trifft ihr Tag über den Titel.
+    "herzhafte Aufstriche": "soßen",
+    "Dips": "soßen",
     "Windeln": "windeln/hygiene",
 }
 
@@ -80,7 +86,10 @@ V = {
  "beeren":(["erdbeeren","himbeeren","blaubeeren","heidelbeeren","brombeeren","johannisbeeren","beerenmix"],["beeren"],["erdbeermarmelade","erdbeerjoghurt"]),
  "trauben":(["trauben","tafeltrauben","weintrauben"],["trauben"],["traubensaft","traubenzucker"]),
  "melone":(["melone","wassermelone","honigmelone","galiamelone","cantaloupe"],["melone"],[]),
- "pfirsich":(["pfirsich","pfirsiche","nektarinen","aprikosen","flachpfirsiche","kirschen","pflaumen","plattnektarinen","zwetschgen","mirabellen","sauerkirschen"],["pfirsiche","aprikosen","nektarinen","pflaumen"],[]),
+ # `pfirsich` fasst Steinobst bewusst zusammen (Pflaumen, Zwetschgen, …). Die
+ # Blockeinträge lösen nur die Kollision mit Pflaumentomaten — ein eigener
+ # Begriff `pflaumen` fehlt NICHT (geklärt 2026-07-31).
+ "pfirsich":(["pfirsich","pfirsiche","nektarinen","aprikosen","flachpfirsiche","kirschen","pflaumen","plattnektarinen","zwetschgen","mirabellen","sauerkirschen"],["pfirsiche","aprikosen","nektarinen","pflaumen"],["pflaumentomaten","minipflaumen"]),
  "avocado":(["avocado","avocados"],[],[]),
  "zucchini":(["zucchini"],[],[]),
  "aubergine":(["aubergine","auberginen"],[],[]),
@@ -92,7 +101,10 @@ V = {
  "kondensmilch":(["kondensmilch"],[],[]),
  "kokosmilch":(["kokosmilch","kokosnussmilch"],[],[]),
  "lamm":(["lamm","lammfilets","lammlachs","lammkeule"],[],[]),
- "schwein":(["schwein","schweine","schweinefleisch","schweinemedaillons","kasseler","schweinefilet","schweineschnitzel","schweinebraten","schweinesteaks","nackensteaks","schweinelachs","kotelett","krustenbauch"],["kotelett","nuggets"],[]),
+ # Suffix `nuggets` war für 100 % seiner Treffer falsch (sieben Hähnchen, ein
+ # veganes, null Schwein im 11-Regionen-Korpus) — Chicken Nuggets kommen über
+ # `chicken` an, vegane über `vegane`.
+ "schwein":(["schwein","schweine","schweinefleisch","schweinemedaillons","kasseler","schweinefilet","schweineschnitzel","schweinebraten","schweinesteaks","nackensteaks","schweinelachs","kotelett","krustenbauch"],["kotelett"],[]),
  "rind":(["rindersteak","rinderfilet","rinderbraten","rumpsteak","entrecote","rinderrouladen","rinder","beinscheiben","roastbeef","gulasch","corned beef","hüftsteaks","patties"],["steak","steaks"],["nackensteaks","schweinesteaks","hacksteaks","putensteaks"]),
  "bratwurst":(["bratwurst","rostbratwurst","grillwurst","bratwürste"],["bratwurst","bratwürste"],[]),
  "wurst":(["wurst","salami","schinken","mortadella","lyoner","leberwurst","mettwurst","wiener","würstchen","aufschnitt","mett","edelsalami","cabanossi","chipolata","sülze","serrano","schinkenwürfel","currywurst","currykrakauer","leberkäse","hackepeter","knacker","landjäger","markenspeck","räucherlendchen","schinkenspeck","schinkenkrakauer"],["wurst","würstchen","schinken","salami","aufschnitt"],[]),
@@ -111,14 +123,24 @@ V = {
  "wasser":(["wasser","mineralwasser","sprudel"],["wasser"],[]),
  "saft":(["saft","orangensaft","apfelsaft","multivitaminsaft","nektar","schorle"],["saft","schorle"],[]),
  "limonade":(["limonade","cola","coca-cola","fanta","sprite","mezzo mix","limo","eistee","energy drink","energydrink"],["limonade"],[]),
- "bier":(["bier","pils","pilsener","radler","weißbier","weizen","helles","dunkel","schwarzbier","biermischgetränk"],["bier"],["bierschinken","trauben","tafeltrauben"]),
+ # `weizen` stand im exact, aber in 19.629 Korpus-Zeilen gibt es kein einziges
+ # Weizenbier-Angebot — beide Treffer waren falsch (Weizen-Brötchen, Weizen
+ # Mehl). Weißbier bleibt; das Suffix `bier` fängt „Weizenbier", falls es kommt.
+ "bier":(["bier","pils","pilsener","radler","weißbier","helles","dunkel","schwarzbier","biermischgetränk"],["bier"],["bierschinken","trauben","tafeltrauben"]),
  "wein":(["wein","rotwein","weißwein","rosé","sekt","prosecco","secco","fruchtsecco","chardonnay","merlot","riesling","grauburgunder","sauvignon","blanc","champagner","jahrgangssekt"],["wein"],["weinsauerkraut","weintrauben","weinessig"]),
  "schokolade":(["schokolade","tafelschokolade","pralinen","schokoriegel"],["schokolade"],["schokoladenpudding","trinkschokolade"]),
  "kekse":(["kekse","butterkeks","cookies","gebäck","waffeln"],["kekse","keks"],[]),
- "chips":(["chips","tortilla","nachos","erdnussflips","flips","cracker","salzstangen","kartoffelringe"],["chips"],["kartoffelchips fällt unter chips"]),
+ # „Kartoffelchips" fällt über das Suffix `chips` hierher und nicht unter
+ # `kartoffeln` — dort steht es auf der Blockliste. Das stand bis 2026-07-31
+ # als Fließtext IN der Blockliste und war damit ein toter Eintrag: eine
+ # Blockliste vergleicht Wörter, keine Sätze.
+ "chips":(["chips","tortilla","nachos","erdnussflips","flips","cracker","salzstangen","kartoffelringe"],["chips"],[]),
  "eis":(["eis","eiscreme","speiseeis","eistafel","eiskonfekt","waffelhörnchen","eisbecher"],["eis"],["eistee","eiswürfel","eiskaffee"]),
  "pizza":(["pizza","steinofenpizza"],["pizza"],["pizzabrötchen","pizzakäse"]),
- "tiefkühlgemüse":(["tiefkühlgemüse","rahmspinat","spinat","erbsen","gemüsemix","kaidergemüse"],["gemüse"],["buttergemüse zulässig"]),
+ # „Buttergemüse" darf `tiefkühlgemüse` bekommen (nur `butter` blockt es) —
+ # ebenfalls eine Notiz, die als Fließtext in der Blockliste stand und dort
+ # nie etwas tun konnte.
+ "tiefkühlgemüse":(["tiefkühlgemüse","rahmspinat","spinat","erbsen","gemüsemix","kaidergemüse"],["gemüse"],[]),
  "pommes":(["pommes","pommes frites","wedges","kroketten","rösti"],[],[]),
  "tofu":(["tofu","vegane","vegan","veggie","fleischersatz","falafel","gemüsebällchen"],[],[]),
  "eintopf":(["eintopf","suppe","brühe","bouillon"],["eintopf","suppe"],[]),
@@ -256,14 +278,67 @@ def term_hits(text):
     ntext = norm(text)
     hits = []
     for term,(exact,suffixes,block) in V.items():
-        if any(norm(b) in ntext for b in block if " " in b) or any(norm(b) in toks or any(t == norm(b) for t in toks) for b in block):
+        # Ob ein Eintrag als Phrase (Teilstring in ntext) oder als Wort
+        # (Token-Gleichheit) geprüft wird, entscheidet die NORMALISIERTE Form,
+        # nicht die rohe. Bis 2026-07-31 stand das Leerzeichen-Kriterium auf
+        # dem Rohstring, und `norm` macht aus dem Bindestrich ein Leerzeichen:
+        # „thunfisch-salat" galt hier als Wort, konnte als Wort nie treffen
+        # (Tokens enthalten keine Leerzeichen) und blockte damit nichts —
+        # während Rust dieselbe Zeile längst als Phrase las und blockte.
+        # „Thunfisch-Salat" bekam so in Python `salat` und in Rust nicht.
+        # Gleiches galt für `kærgården`, `pak-choi`, `bio-eier`, `coca-cola`.
+        nblock = [norm(b) for b in block]
+        if any(b in ntext for b in nblock if " " in b) or any(b in toks for b in nblock):
             continue
-        hit = any(norm(e) in toks or (" " in e and norm(e) in ntext) for e in exact) \
-           or any(any(t.endswith(norm(sfx)) and t not in SUFFIX_STOP
-                      and not any(t == norm(b) for b in block) for t in toks)
-                  for sfx in suffixes if len(norm(sfx)) >= 4)
+        hit = any(e in toks or (" " in e and e in ntext) for e in map(norm, exact)) \
+           or any(any(t.endswith(sfx) and t not in SUFFIX_STOP and t not in nblock
+                      for t in toks)
+                  for sfx in map(norm, suffixes) if len(sfx) >= 4)
         if hit: hits.append(term)
     return hits
+
+
+NONFOOD_KEY = "nonfood"
+
+
+def match_keys(title, sub="", cat=""):
+    """Tags eines Angebots — die Python-Seite von `src/matching.rs::match_keys`.
+
+    Gibt `(tags, weg)` zurück; `weg` ist "titel", "marke" oder "kategorie" und
+    zählt nur für die Statistik. `[NONFOOD_KEY]` heißt erkanntes Non-Food, die
+    leere Liste heißt ungetaggt (Review-Liste).
+
+    Die Pipeline steht hier und nicht mehr ausgeschrieben in `main`, weil der
+    zeilenweise Paritäts-Test in src/matching.rs genau diese Funktion aufruft:
+    Eine zweite Kopie der Pipeline wäre die Sorte Abweichung, die der Test
+    finden soll — und würde sie stattdessen verstecken.
+    """
+    text = f"{title} {sub}" if sub else title
+    ntext = norm(text)
+    if (NONFOOD_CAT.search(cat or "") and not FOOD_CAT.search(cat or "")) or NONFOOD_TERMS.search(text):
+        return [NONFOOD_KEY], "titel"
+    hits = term_hits(text)
+    if hits:
+        return hits, "titel"
+    # Marken-Fallback: die erste passende Marke in Wörterbuch-Reihenfolge.
+    for marke, term in MARKEN.items():
+        nmarke = norm(marke)
+        if nmarke and nmarke in ntext:
+            return [NONFOOD_KEY if term == "NONFOOD" else term], "marke"
+    # Letzter Ausweg: die gepflegte Kategorie-Zuordnung. Nur exakte Gleichheit
+    # der normalisierten Kategorie, nur wenn Titel und Untertitel nichts
+    # hergeben — ein Titel-Treffer wird nie überstimmt.
+    kat = KAT.get(norm(cat))
+    if kat and kat in V:
+        # Die Blockliste des Begriffs gilt auch hier — sonst holt sich
+        # „Erdnussbutter" über die Kategorie „Butter" genau den Tag zurück,
+        # den die Blockliste ihm nimmt.
+        _, _, block = V[kat]
+        toks = tokens(text)
+        nblock = [norm(b) for b in block]
+        if not (any(b in ntext for b in nblock if " " in b) or any(b in toks for b in nblock)):
+            return [kat], "kategorie"
+    return [], "titel"
 
 
 # Ab hier: Messlauf gegen die lokale Nightly-DB. In eine Funktion gefasst,
@@ -278,46 +353,16 @@ def main():
 
     stats = Counter(); tagged = defaultdict(list); untagged = []
     for title, sub, cat, market in rows:
-        text = f"{title} {sub}"
-        toks = tokens(text)
-        ntext = norm(text)
-        if (NONFOOD_CAT.search(cat or "") and not FOOD_CAT.search(cat or "")) or NONFOOD_TERMS.search(text):
-            stats["nonfood"] += 1; continue
-        hits = term_hits(text)
-        if not hits:  # Marken-Fallback
-            for marke, term in MARKEN.items():
-                if norm(marke) and norm(marke) in ntext:
-                    if term == "NONFOOD":
-                        hits = ["NONFOOD"]
-                    else:
-                        hits = [term]; stats["via_marke"] += 1
-                    break
-        if hits == ["NONFOOD"]:
+        hits, weg = match_keys(title, sub, cat)
+        if hits == [NONFOOD_KEY]:
             stats["nonfood"] += 1; continue
         if hits:
             stats["tagged"] += 1
+            if weg != "titel": stats["via_" + weg] += 1
             for h in hits: tagged[h].append((market, title))
         else:
-            # Letzter Ausweg: die gepflegte Kategorie-Zuordnung. Nur exakte
-            # Gleichheit der normalisierten Kategorie, nur wenn Titel und
-            # Untertitel nichts hergeben — ein Titel-Treffer wird nie
-            # überstimmt.
-            kat = KAT.get(norm(cat))
-            if kat and kat in V:
-                # Die Blockliste des Begriffs gilt auch hier — sonst holt sich
-                # „Erdnussbutter" über die Kategorie „Butter" genau den Tag
-                # zurück, den die Blockliste ihm nimmt.
-                _, _, block = V[kat]
-                ntoks = tokens(text)
-                if any(norm(b) in ntext for b in block if " " in b) \
-                   or any(norm(b) in ntoks for b in block):
-                    kat = None
-            if kat:
-                stats["tagged"] += 1; stats["via_kategorie"] += 1
-                tagged[kat].append((market, title))
-            else:
-                stats["untagged"] += 1
-                untagged.append((market, title, sub, cat))
+            stats["untagged"] += 1
+            untagged.append((market, title, sub, cat))
 
     total = len(rows)
     print(f"Angebote gültig heute: {total}")
