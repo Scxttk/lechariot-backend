@@ -186,15 +186,115 @@ pub fn map_offer(offer: &Offer, chain: &str, nationwide: bool) -> Option<Supabas
     })
 }
 
-/// Duplikate auf dem Upsert-Schlüssel (market_id, product, valid_from)
-/// entfernen; der erste Treffer gewinnt.
+/// Zeilen auf den Angebots-Schlüssel eindampfen, in zwei Stufen:
+///
+/// 1. **Exakter Upsert-Schlüssel** (market_id, product, valid_from): der
+///    erste Treffer gewinnt — wie bisher; den zweiten ließe der
+///    Unique-Index der Datenbank ohnehin nicht zu.
+/// 2. **Überlappende Gültigkeitsfenster** desselben Produkts derselben
+///    Filiale **zum selben Preis** sind EIN Angebot, nicht zwei: Die Zeile
+///    behält den frühesten Start und das späteste Ende. Das ist der
+///    Kaufland-Fall (gemessen 2026-07-31: 523 Kombinationen, alle nach
+///    diesem Muster — Wochenfenster 23.–29.07. plus Aktionstag 25.07. zum
+///    selben Preis), und er ist der Grund, warum dasselbe Produkt in der
+///    App doppelt stand.
+///
+/// Ausdrücklich NICHT verschmolzen werden:
+///
+/// * **disjunkte Fenster** — echte verschiedene Wochen (Penny/Lidl pushen
+///   die Folgewoche mit; 479 Kombinationen am 2026-07-31), und
+/// * **überlappende Fenster mit verschiedenem Preis** — Aktionstage mit
+///   eigenem Preis und Lidl-Sammeltitel wie „Bio-Käse", hinter denen
+///   verschiedene Artikel stecken (77 Kombinationen am 2026-07-31).
+///
+/// `valid_from` bleibt damit Teil des Upsert-Schlüssels: Ihn zu entfernen
+/// würde genau diese echten Fälle verschmelzen.
 pub fn dedupe_rows(rows: Vec<SupabaseRow>) -> Vec<SupabaseRow> {
     let mut seen = HashSet::new();
-    rows.into_iter()
+    let rows: Vec<SupabaseRow> = rows
+        .into_iter()
         .filter(|r| {
             seen.insert((r.market_id.clone(), r.product.clone(), r.valid_from.clone()))
         })
-        .collect()
+        .collect();
+    merge_overlapping_windows(rows)
+}
+
+/// Stufe 2 von [`dedupe_rows`]: überlappende Fenster gleichen Preises je
+/// (market_id, product) zu einer Zeile mit dem Gesamtfenster verschmelzen.
+/// Die Felder behält die zuerst gesehene Zeile des Clusters (erster Treffer
+/// gewinnt, wie in Stufe 1); die Reihenfolge der Eingabe bleibt erhalten.
+fn merge_overlapping_windows(rows: Vec<SupabaseRow>) -> Vec<SupabaseRow> {
+    // Fehlendes valid_until heißt „offenes Ende" und überlappt alles Spätere.
+    fn until_key(r: &SupabaseRow) -> &str {
+        r.valid_until.as_deref().unwrap_or("9999-12-31")
+    }
+
+    let mut groups: BTreeMap<(String, String, u64), Vec<usize>> = BTreeMap::new();
+    for (i, r) in rows.iter().enumerate() {
+        groups
+            .entry((r.market_id.clone(), r.product.clone(), r.price.to_bits()))
+            .or_default()
+            .push(i);
+    }
+
+    let mut rows: Vec<Option<SupabaseRow>> = rows.into_iter().map(Some).collect();
+    for idxs in groups.into_values() {
+        if idxs.len() < 2 {
+            continue;
+        }
+        // Nach Start sortieren (ISO-Daten vergleichen lexikografisch), dann
+        // im Durchlauf Cluster bilden: Ein neues beginnt, sobald ein Start
+        // hinter dem spätesten bisherigen Ende liegt.
+        let mut idxs = idxs;
+        idxs.sort_by(|&a, &b| {
+            let (a, b) = (rows[a].as_ref().unwrap(), rows[b].as_ref().unwrap());
+            a.valid_from.cmp(&b.valid_from)
+        });
+        let mut clusters: Vec<Vec<usize>> = Vec::new();
+        let mut cluster: Vec<usize> = vec![idxs[0]];
+        let mut max_until = until_key(rows[idxs[0]].as_ref().unwrap()).to_string();
+        for &i in &idxs[1..] {
+            let r = rows[i].as_ref().unwrap();
+            if r.valid_from.as_deref().unwrap_or("") <= max_until.as_str() {
+                if until_key(r) > max_until.as_str() {
+                    max_until = until_key(r).to_string();
+                }
+                cluster.push(i);
+            } else {
+                clusters.push(std::mem::take(&mut cluster));
+                cluster.push(i);
+                max_until = until_key(r).to_string();
+            }
+        }
+        clusters.push(cluster);
+
+        for c in clusters {
+            if c.len() < 2 {
+                continue;
+            }
+            // Erster Treffer gewinnt: Die Zeile mit dem kleinsten
+            // Eingabe-Index behält ihre Felder und bekommt das Gesamtfenster.
+            let rep = *c.iter().min().unwrap();
+            let min_from = c
+                .iter()
+                .filter_map(|&j| rows[j].as_ref().unwrap().valid_from.clone())
+                .min();
+            let open_ended = c.iter().any(|&j| rows[j].as_ref().unwrap().valid_until.is_none());
+            let max_until = c
+                .iter()
+                .filter_map(|&j| rows[j].as_ref().unwrap().valid_until.clone())
+                .max();
+            let mut merged = rows[rep].take().unwrap();
+            merged.valid_from = min_from;
+            merged.valid_until = if open_ended { None } else { max_until };
+            for &j in &c {
+                rows[j] = None;
+            }
+            rows[rep] = Some(merged);
+        }
+    }
+    rows.into_iter().flatten().collect()
 }
 
 /// Zeile für `public.price_history` (migration_v7): nur die Preis-relevanten
