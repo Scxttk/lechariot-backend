@@ -475,6 +475,11 @@ pub fn run(
         }
     }
 
+    // Der Lidl-Prospekt liegt für alle Filialen einmal im Speicher (siehe
+    // `lidl_prospekt::cached_leaflet`). Hier ist der Lauf durch — die PDF
+    // darf weg, sonst bleiben 85 MB im Temp-Verzeichnis liegen.
+    crate::scrapers::lidl_prospekt::release_leaflet();
+
     let ok = selected.len() - failures.len();
     println!("\nFertig: {ok}/{} Filiale(n) erfolgreich gesynct.", selected.len());
     if ok == 0 {

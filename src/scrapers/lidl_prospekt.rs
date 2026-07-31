@@ -1771,6 +1771,109 @@ fn download_pdf(pdf_url: &str) -> Result<std::path::PathBuf> {
     Ok(path)
 }
 
+// ------------------------------------------------------- Prospekt je Lauf
+//
+// Gemessen am 2026-07-31: Die drei gewählten Lidl-Filialen liegen in
+// derselben Absatzregion und bekommen deshalb denselben Prospekt
+// (`aktionsprospekt-27-07-2026-01-08-2026-eee91d`). Ohne Cache lud und las
+// jeder Markt dieselbe Datei neu — 85 MB Download und rund 40 s
+// `pdftotext -bbox-layout`, dreimal für eine Datei.
+
+/// Die PDF eines Prospekts und ihre Textebene, solange dieser Prozess läuft.
+///
+/// **Bewusst nur im Speicher und nur für diesen Lauf.** Der Prospekt wechselt
+/// wöchentlich; ein Cache über Läufe hinweg lieferte irgendwann die Angebote
+/// der Vorwoche, ohne dass jemand es merkt. Ein neuer Prozess fängt leer an
+/// und lädt die PDF neu.
+///
+/// Es liegt immer höchstens **ein** Prospekt hier: Fragt ein Markt nach einer
+/// anderen `pdf_url`, wird die vorige Datei gelöscht. Der Platzbedarf auf der
+/// Platte bleibt damit derselbe wie vor dem Cache.
+struct Leaflet {
+    url: String,
+    pdf: std::path::PathBuf,
+    /// Textebene je `pdftotext`-Modus — `-bbox-layout` für den Extraktor,
+    /// `-layout` für den LLM-Weg. Beide lesen dieselbe Datei.
+    text: HashMap<String, std::sync::Arc<String>>,
+    /// Bildauszug (`pdftohtml -xml`) je Seitenfenster.
+    xobjects: HashMap<(usize, usize), std::sync::Arc<XObjects>>,
+}
+
+static LEAFLET: LazyLock<std::sync::Mutex<Option<Leaflet>>> =
+    LazyLock::new(|| std::sync::Mutex::new(None));
+
+/// PDF und Textebene zu `pdf_url` — beim ersten Aufruf geladen und gelesen,
+/// danach aus dem Cache.
+///
+/// `download` und `parse` stehen als Parameter da und nicht fest im Rumpf,
+/// damit der Test nachweisen kann, dass der zweite Aufruf wirklich keine
+/// Arbeit mehr macht: Er reicht zählende Attrappen herein.
+fn cached_leaflet(
+    pdf_url: &str,
+    mode: &str,
+    download: &dyn Fn(&str) -> Result<std::path::PathBuf>,
+    parse: &dyn Fn(&std::path::Path, &str) -> Result<String>,
+) -> Result<(std::path::PathBuf, std::sync::Arc<String>)> {
+    // Ein vergifteter Mutex ist hier kein Grund aufzugeben: Im Slot steht
+    // nur ein Pfad und Text, keine halb geänderte Datenstruktur.
+    let mut slot = LEAFLET.lock().unwrap_or_else(|e| e.into_inner());
+
+    // Anderer Prospekt: die alte Datei wird nicht mehr gebraucht.
+    if slot.as_ref().is_some_and(|l| l.url != pdf_url) {
+        if let Some(old) = slot.take() {
+            let _ = std::fs::remove_file(&old.pdf);
+        }
+    }
+    if slot.is_none() {
+        *slot = Some(Leaflet {
+            url: pdf_url.to_string(),
+            pdf: download(pdf_url)?,
+            text: HashMap::new(),
+            xobjects: HashMap::new(),
+        });
+    }
+
+    let leaflet = slot.as_ref().expect("gerade gesetzt");
+    if !leaflet.text.contains_key(mode) {
+        let parsed = parse(&leaflet.pdf, mode);
+        match parsed {
+            Ok(text) => {
+                slot.as_mut()
+                    .expect("gerade gesetzt")
+                    .text
+                    .insert(mode.to_string(), std::sync::Arc::new(text));
+            }
+            Err(e) => {
+                // Eine PDF, die sich nicht lesen lässt, darf nicht im Cache
+                // hängen bleiben — sonst scheitert jeder folgende Markt an
+                // derselben kaputten Datei, ohne es noch einmal zu versuchen.
+                if let Some(old) = slot.take() {
+                    let _ = std::fs::remove_file(&old.pdf);
+                }
+                return Err(e);
+            }
+        }
+    }
+
+    let leaflet = slot.as_ref().expect("gerade gesetzt");
+    Ok((leaflet.pdf.clone(), leaflet.text[mode].clone()))
+}
+
+/// Den Prospekt dieses Laufs freigeben und seine PDF löschen.
+///
+/// Ruft der Sync am Ende der Filialschleife auf. Vor dem Cache löschte jeder
+/// Markt seine eigene Kopie; jetzt teilen sie sich eine, und die letzte darf
+/// nicht liegen bleiben.
+pub fn release_leaflet() {
+    let mut slot = LEAFLET.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(leaflet) = slot.take() {
+        let _ = std::fs::remove_file(&leaflet.pdf);
+    }
+    // Die Bildauszüge liegen unter einer gemeinsamen Wurzel; sie fällt hier
+    // mit, auch wenn ein Auszug am Cache vorbei entstanden ist.
+    let _ = std::fs::remove_dir_all(xobject_root());
+}
+
 /// `pdftotext` mit dem gewünschten Modus laufen lassen.
 fn run_pdftotext(path: &std::path::Path, mode: &str) -> Result<String> {
     let output = Command::new("pdftotext")
@@ -2037,6 +2140,7 @@ fn place_embedded_photos(
 /// Jeder Fehlschlag ist hier folgenlos: Es gibt dann kein zweites Bild, und
 /// die Kachel bleibt bei ihrem Emoji.
 fn embedded_photos(
+    pdf_url: &str,
     pdf: &std::path::Path,
     bbox_xml: &str,
     open: &[OpenTile],
@@ -2051,11 +2155,96 @@ fn embedded_photos(
         return HashMap::new();
     };
 
-    let dir = std::env::temp_dir().join(format!("lechariot-lidl-xobj-{}", std::process::id()));
+    let Some(xobjects) = cached_xobjects(pdf_url, pdf, bbox_xml, first, last) else {
+        return HashMap::new();
+    };
+
+    let mut taken: HashSet<String> = HashSet::new();
+    let mut assigned: Vec<(String, String)> = Vec::new();
+    for tile in open {
+        let Some(page) = xobjects.images.get(tile.page - first) else { continue };
+        if let Some(img) = embedded_photo_for(&tile.tile, page, &taken) {
+            taken.insert(img.file.clone());
+            assigned.push((tile.offer_id.clone(), img.file.clone()));
+        }
+    }
+
+    place_embedded_photos(&xobjects.dir, &assigned)
+}
+
+/// Der Bildauszug eines Seitenfensters: das Verzeichnis, in das `pdftohtml`
+/// die Bilder geschrieben hat, und ihre Rechtecke je Seite.
+struct XObjects {
+    dir: std::path::PathBuf,
+    images: Vec<Vec<EmbeddedImage>>,
+}
+
+/// Wurzelverzeichnis aller Bildauszüge dieses Prozesses.
+fn xobject_root() -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("lechariot-lidl-xobj-{}", std::process::id()))
+}
+
+/// Bildauszug zu `first..=last` — beim ersten Aufruf gezogen, danach aus dem
+/// Cache.
+///
+/// **Der teuerste Schritt des ganzen Lidl-Abends.** Am 2026-07-31 gemessen:
+/// `pdftohtml -xml` über die 64 Seiten mit offenen Kacheln kostet 112 s und
+/// legt 163 MB ab; ein voller Marktdurchlauf dauert 145 s. Ohne diesen Cache
+/// zog jede Filiale dieselben 163 MB neu aus derselben PDF — bei drei
+/// Filialen also 224 s für nichts.
+///
+/// Das Fenster steht im Schlüssel, obwohl alle Filialen dasselbe bekommen:
+/// Es hängt an den offenen Kacheln, und die hängen am Extraktor. Kommt dort
+/// je Filiale einmal ein anderes Fenster heraus, liefert der Cache lieber
+/// einen zweiten Auszug als den falschen.
+fn cached_xobjects(
+    pdf_url: &str,
+    pdf: &std::path::Path,
+    bbox_xml: &str,
+    first: usize,
+    last: usize,
+) -> Option<std::sync::Arc<XObjects>> {
+    let mut slot = LEAFLET.lock().unwrap_or_else(|e| e.into_inner());
+    // Nur der Prospekt, der gerade im Cache liegt, darf dort auch ablegen.
+    // In `fetch_offers` ist das immer derselbe — die Bedingung ist die
+    // Zusicherung, nicht der Regelfall.
+    let cachebar = slot.as_ref().is_some_and(|l| l.url == pdf_url);
+    if cachebar {
+        if let Some(hit) = slot
+            .as_ref()
+            .and_then(|l| l.xobjects.get(&(first, last)))
+            .cloned()
+        {
+            println!("  Bildauszug aus dem Prospekt-Cache (Seiten {first}-{last})");
+            return Some(hit);
+        }
+    }
+
+    let extracted = std::sync::Arc::new(extract_xobjects(pdf, bbox_xml, first, last)?);
+    if cachebar {
+        if let Some(leaflet) = slot.as_mut() {
+            leaflet.xobjects.insert((first, last), extracted.clone());
+        }
+    }
+    Some(extracted)
+}
+
+/// `pdftohtml -xml` über das Seitenfenster laufen lassen und seine Ausgabe
+/// lesen.
+///
+/// Jeder Fehlschlag ist folgenlos: Es gibt dann kein zweites Bild, und die
+/// Kachel bleibt bei ihrem Emoji.
+fn extract_xobjects(
+    pdf: &std::path::Path,
+    bbox_xml: &str,
+    first: usize,
+    last: usize,
+) -> Option<XObjects> {
+    let dir = xobject_root().join(format!("{first}-{last}"));
     let _ = std::fs::remove_dir_all(&dir);
     if let Err(e) = std::fs::create_dir_all(&dir) {
         eprintln!("WARNUNG [Lidl] Bildauszug nicht ablegbar ({e}) — keine eingebetteten Bilder.");
-        return HashMap::new();
+        return None;
     }
 
     let out = dir.join("doc");
@@ -2067,9 +2256,11 @@ fn embedded_photos(
     match status {
         Ok(s) if s.success() => {}
         other => {
-            eprintln!("WARNUNG [Lidl] pdftohtml fehlgeschlagen ({other:?}) — keine eingebetteten Bilder.");
+            eprintln!(
+                "WARNUNG [Lidl] pdftohtml fehlgeschlagen ({other:?}) — keine eingebetteten Bilder."
+            );
             let _ = std::fs::remove_dir_all(&dir);
-            return HashMap::new();
+            return None;
         }
     }
 
@@ -2078,7 +2269,7 @@ fn embedded_photos(
         Err(e) => {
             eprintln!("WARNUNG [Lidl] Bildauszug nicht lesbar ({e}) — keine eingebetteten Bilder.");
             let _ = std::fs::remove_dir_all(&dir);
-            return HashMap::new();
+            return None;
         }
     };
 
@@ -2087,21 +2278,7 @@ fn embedded_photos(
     let sizes = page_sizes(bbox_xml);
     let window: Vec<(f64, f64)> =
         sizes.get(first - 1..last.min(sizes.len())).unwrap_or(&[]).to_vec();
-    let images = parse_embedded_images(&xml, &window);
-
-    let mut taken: HashSet<String> = HashSet::new();
-    let mut assigned: Vec<(String, String)> = Vec::new();
-    for tile in open {
-        let Some(page) = images.get(tile.page - first) else { continue };
-        if let Some(img) = embedded_photo_for(&tile.tile, page, &taken) {
-            taken.insert(img.file.clone());
-            assigned.push((tile.offer_id.clone(), img.file.clone()));
-        }
-    }
-
-    let placed = place_embedded_photos(&dir, &assigned);
-    let _ = std::fs::remove_dir_all(&dir);
-    placed
+    Some(XObjects { dir, images: parse_embedded_images(&xml, &window) })
 }
 
 fn render_shots(pdf: &std::path::Path, shots: &[TileShot]) -> HashMap<String, String> {
@@ -2247,11 +2424,9 @@ pub fn products_as_offers(
 pub fn fetch_layout_pages(zip: &str) -> Result<(Flyer, Vec<String>)> {
     let flyer = resolve_flyer(zip)?;
     let pdf_url = flyer.pdf_url.clone().context("Prospekt ohne pdfUrl")?;
-    let path = download_pdf(&pdf_url)?;
-    let result = run_pdftotext(&path, "-layout");
-    let _ = std::fs::remove_file(&path);
+    let (_, text) = cached_leaflet(&pdf_url, "-layout", &download_pdf, &run_pdftotext)?;
     // pdftotext trennt Seiten mit einem Seitenvorschub.
-    let pages = result?
+    let pages = text
         .split('\u{000c}')
         .map(|page| page.trim_end().to_string())
         .filter(|page| !page.trim().is_empty())
@@ -2267,26 +2442,20 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
         flyer.offer_start_date.as_deref().unwrap_or("?"),
         flyer.offer_end_date.as_deref().unwrap_or("?")
     );
-    // Das PDF bleibt hier liegen, bis auch die Kachelbilder geschnitten sind —
-    // es ein zweites Mal zu laden wären 83 MB für nichts.
-    let pdf_path = download_pdf(pdf_url)?;
-    let xml = run_pdftotext(&pdf_path, "-bbox-layout");
-    let xml = match xml {
-        Ok(xml) => xml,
-        Err(e) => {
-            let _ = std::fs::remove_file(&pdf_path);
-            return Err(e);
-        }
-    };
+    // Die PDF bleibt liegen, bis auch die Kachelbilder geschnitten sind — sie
+    // ein zweites Mal zu laden wären 85 MB für nichts. Seit dem Cache gilt das
+    // über die Filiale hinaus: Die drei gewählten Lidl-Märkte teilen sich
+    // Prospekt und Textebene, geladen und gelesen wird beides einmal je Lauf.
+    let (pdf_path, xml) = cached_leaflet(pdf_url, "-bbox-layout", &download_pdf, &run_pdftotext)?;
+    let xml = xml.as_str();
 
     let (mut offers, shots, open) = extract_offers_shots_and_open(
-        &xml,
+        xml,
         &market.id,
         flyer.offer_start_date.as_deref(),
         flyer.offer_end_date.as_deref(),
     );
     if offers.is_empty() {
-        let _ = std::fs::remove_file(&pdf_path);
         bail!("Prospekt gelesen, aber keine Angebote extrahiert — Layout geändert?");
     }
 
@@ -2294,8 +2463,7 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
     // Zweiter Weg für die Kacheln, die der Schnitt abgelehnt hat. Scheitert er,
     // ist das kein Fehler des Laufs — die Angebote stehen, nur einige tragen
     // weiter ihr Emoji.
-    let embedded = embedded_photos(&pdf_path, &xml, &open);
-    let _ = std::fs::remove_file(&pdf_path);
+    let embedded = embedded_photos(pdf_url, &pdf_path, xml, &open);
     for offer in &mut offers {
         if let Some(url) = crops.get(&offer.id).or_else(|| embedded.get(&offer.id)) {
             offer.images = vec![url.clone()];
@@ -2440,6 +2608,155 @@ mod tests {
         assert_eq!(arithmetic_check(seite61, 6.49), Some(false));
     }
 
+    /// Der Prospekt-Cache ist ein Prozess-Global; `cargo test` lässt Tests
+    /// nebenläufig laufen. Beide Cache-Tests nehmen deshalb dieselbe Sperre.
+    fn leaflet_tests_one_at_a_time() -> std::sync::MutexGuard<'static, ()> {
+        static REIHUM: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        REIHUM.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Alle drei Lidl-Filialen bekommen denselben Prospekt. Geladen und
+    /// gelesen wird er trotzdem nur einmal.
+    ///
+    /// Der Nachweis läuft über Attrappen mit Zähler statt über echte Dateien:
+    /// Ein Test, der 85 MB lädt und 40 s `pdftotext` startet, würde nie
+    /// laufen. Gemessen wird genau das, was die Nacht kostet — Zahl der
+    /// Downloads und Zahl der Parse-Läufe.
+    #[test]
+    fn the_leaflet_is_fetched_once_per_run() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let _reihum = leaflet_tests_one_at_a_time();
+
+        let dir = std::env::temp_dir().join(format!("lechariot-test-cache-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("Testverzeichnis");
+        let downloads = AtomicUsize::new(0);
+        let parses = AtomicUsize::new(0);
+        let download = |_url: &str| -> Result<std::path::PathBuf> {
+            let n = downloads.fetch_add(1, Ordering::SeqCst);
+            let path = dir.join(format!("prospekt-{n}.pdf"));
+            std::fs::write(&path, b"%PDF-Attrappe")?;
+            Ok(path)
+        };
+        let parse = |_p: &std::path::Path, mode: &str| -> Result<String> {
+            parses.fetch_add(1, Ordering::SeqCst);
+            Ok(format!("<doc mode=\"{mode}\"/>"))
+        };
+
+        // Ein neuer Prozess fängt leer an; im Test stellen wir das her.
+        release_leaflet();
+
+        const A: &str = "https://assets.leaflets.schwarz/a.pdf";
+        const B: &str = "https://assets.leaflets.schwarz/b.pdf";
+
+        let erste = cached_leaflet(A, "-bbox-layout", &download, &parse).expect("erster Markt");
+        for markt in 2..=3 {
+            let weiterer =
+                cached_leaflet(A, "-bbox-layout", &download, &parse).expect("weiterer Markt");
+            assert_eq!(weiterer.0, erste.0, "Markt {markt} bekam eine andere Datei");
+            // Byte-gleiche Textebene: Der Extraktor ist absichtlich
+            // deterministisch, und derselbe Prospekt muss ihm denselben Text
+            // vorlegen — sonst wären die Angebote je Filiale andere.
+            assert_eq!(*weiterer.1, *erste.1, "Markt {markt} bekam anderen Text");
+        }
+        assert_eq!(downloads.load(Ordering::SeqCst), 1, "PDF mehrfach geladen");
+        assert_eq!(parses.load(Ordering::SeqCst), 1, "PDF mehrfach gelesen");
+
+        // Der LLM-Weg liest dieselbe Datei in einem anderen Modus: kein
+        // zweiter Download, aber ein zweiter Lauf von pdftotext.
+        let layout = cached_leaflet(A, "-layout", &download, &parse).expect("zweiter Modus");
+        assert_eq!(downloads.load(Ordering::SeqCst), 1);
+        assert_eq!(parses.load(Ordering::SeqCst), 2);
+        assert!(layout.1.contains("-layout"));
+
+        // Ein anderer Prospekt verdrängt den alten — und räumt ihn weg.
+        let alt = erste.0.clone();
+        let zweiter = cached_leaflet(B, "-bbox-layout", &download, &parse).expect("anderer Prospekt");
+        assert_eq!(downloads.load(Ordering::SeqCst), 2);
+        assert!(!alt.exists(), "die verdrängte PDF liegt noch da: {alt:?}");
+
+        // Freigabe am Ende des Laufs: Datei weg, Cache leer. Der nächste Lauf
+        // lädt neu — der Prospekt wechselt wöchentlich, ein Cache über Läufe
+        // hinweg lieferte irgendwann die Angebote der Vorwoche.
+        release_leaflet();
+        assert!(!zweiter.0.exists(), "die PDF blieb nach der Freigabe liegen");
+        cached_leaflet(B, "-bbox-layout", &download, &parse).expect("neuer Lauf");
+        assert_eq!(downloads.load(Ordering::SeqCst), 3, "der neue Lauf nahm den alten Cache");
+
+        release_leaflet();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Auch der Bildauszug wird je Lauf nur einmal gezogen.
+    ///
+    /// `pdftohtml` lässt sich nicht als Attrappe unterschieben, es ist ein
+    /// fremder Prozess. Der Nachweis geht deshalb andersherum: Der Auszug
+    /// wird von Hand hinterlegt und zeigt auf ein Verzeichnis, das es gar
+    /// nicht gibt. Kommt genau dieses Verzeichnis zurück, kann `pdftohtml`
+    /// nicht gelaufen sein — ein echter Lauf könnte es nicht liefern.
+    #[test]
+    fn the_image_extract_is_pulled_once_per_run() {
+        let _reihum = leaflet_tests_one_at_a_time();
+        release_leaflet();
+
+        const URL: &str = "https://assets.leaflets.schwarz/auszug.pdf";
+        let download = |_: &str| -> Result<std::path::PathBuf> {
+            Ok(std::env::temp_dir().join("lechariot-test-auszug.pdf"))
+        };
+        let parse = |_: &std::path::Path, _: &str| -> Result<String> { Ok(String::new()) };
+        cached_leaflet(URL, "-bbox-layout", &download, &parse).expect("erster Markt");
+
+        let erfunden = std::path::PathBuf::from("/gibt/es/nicht/auszug-12-64");
+        {
+            let mut slot = LEAFLET.lock().unwrap_or_else(|e| e.into_inner());
+            slot.as_mut().expect("Slot").xobjects.insert(
+                (12, 64),
+                std::sync::Arc::new(XObjects { dir: erfunden.clone(), images: Vec::new() }),
+            );
+        }
+
+        let fehlt = std::path::Path::new("/gibt/es/nicht/prospekt.pdf");
+        let treffer = cached_xobjects(URL, fehlt, "", 12, 64).expect("Treffer erwartet");
+        assert_eq!(treffer.dir, erfunden, "der Auszug wurde neu gezogen");
+
+        // Anderes Seitenfenster: kein Treffer. Die PDF gibt es nicht, also
+        // scheitert pdftohtml — und ein Fehlschlag bleibt folgenlos.
+        assert!(cached_xobjects(URL, fehlt, "", 13, 64).is_none());
+
+        release_leaflet();
+        {
+            let slot = LEAFLET.lock().unwrap_or_else(|e| e.into_inner());
+            assert!(slot.is_none(), "der Cache blieb nach der Freigabe stehen");
+        }
+    }
+
+    /// Eine PDF, die sich nicht lesen lässt, darf nicht im Cache hängen
+    /// bleiben — sonst scheitern die beiden folgenden Märkte an derselben
+    /// Datei, ohne es noch einmal zu versuchen.
+    #[test]
+    fn a_leaflet_that_cannot_be_read_is_not_kept() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let _reihum = leaflet_tests_one_at_a_time();
+
+        let downloads = AtomicUsize::new(0);
+        let download = |_url: &str| -> Result<std::path::PathBuf> {
+            downloads.fetch_add(1, Ordering::SeqCst);
+            Ok(std::env::temp_dir().join("lechariot-test-kaputt.pdf"))
+        };
+        let parse =
+            |_p: &std::path::Path, _mode: &str| -> Result<String> { bail!("pdftotext fehlgeschlagen") };
+
+        release_leaflet();
+        const URL: &str = "https://assets.leaflets.schwarz/kaputt.pdf";
+        assert!(cached_leaflet(URL, "-bbox-layout", &download, &parse).is_err());
+        assert!(cached_leaflet(URL, "-bbox-layout", &download, &parse).is_err());
+        assert_eq!(
+            downloads.load(Ordering::SeqCst),
+            2,
+            "der zweite Markt hat es nicht noch einmal versucht"
+        );
+        release_leaflet();
+    }
+
     #[test]
     fn the_arithmetic_check_stays_silent_when_nothing_is_computable() {
         assert_eq!(
@@ -2571,7 +2888,9 @@ mod tests {
         let xml = run_pdftotext(path, "-bbox-layout").expect("pdftotext");
         let (offers, shots, open) =
             extract_offers_shots_and_open(&xml, "MESSUNG", None, None);
-        let embedded = embedded_photos(path, &xml, &open);
+        // Ohne Prospekt-URL: Der Auszug landet nicht im Cache und die Wurzel
+        // wird am Ende weggeräumt.
+        let embedded = embedded_photos("", path, &xml, &open);
 
         let kacheln = shots.len() + open.len();
         let vereint = shots.len() + embedded.len();
@@ -2916,6 +3235,34 @@ mod tests {
         let xml = run_pdftotext(std::path::Path::new(&pdf), "-bbox-layout").expect("pdftotext");
         let (offers, _) = extract_offers_with_shots(&xml, "MESSUNG", None, None);
         eprintln!("ANGEBOTE\t{}", offers.len());
+    }
+
+    /// Messgerät, kein Test: ein ganzer Lidl-Abend für drei Filialen
+    /// derselben Absatzregion — genau die Nacht, um die es beim Cache geht.
+    ///
+    /// Läuft mit Netz und lädt den Prospekt (85 MB), deshalb `#[ignore]`.
+    /// `LIDL_MESSUNG_ZIP` setzt die PLZ (Standard 01219, Dresden).
+    ///
+    /// Die erste Zeile ist der Preis ohne Cache — so lief bis 2026-07-31
+    /// jeder der drei Märkte. Die beiden folgenden sind der Preis mit.
+    #[test]
+    #[ignore = "Messgerät — braucht Netz und lädt den Prospekt (85 MB)"]
+    fn measure_full_run() {
+        let zip = std::env::var("LIDL_MESSUNG_ZIP").unwrap_or_else(|_| "01219".to_string());
+        release_leaflet();
+        let gesamt = std::time::Instant::now();
+        for id in ["LIDL_MESSUNG_1", "LIDL_MESSUNG_2", "LIDL_MESSUNG_3"] {
+            let market = Market::new(id, "Messung");
+            let start = std::time::Instant::now();
+            let offers = fetch_offers(&market, &zip).expect("Lauf");
+            eprintln!(
+                "MARKT\t{id}\t{} Angebote\t{:.1} s",
+                offers.len(),
+                start.elapsed().as_secs_f64()
+            );
+        }
+        eprintln!("GESAMT\t{:.1} s", gesamt.elapsed().as_secs_f64());
+        release_leaflet();
     }
 
     fn canvas(w: u32, h: u32, bg: [u8; 3]) -> image::RgbImage {
