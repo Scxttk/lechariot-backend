@@ -1402,6 +1402,126 @@ pub fn crop_dir() -> std::path::PathBuf {
 ///
 /// Ein Fehlschlag einzelner Streifen ist kein Abbruchgrund: Dann bleibt das
 /// Angebot ohne Bild und die App zeigt ihr Emoji — genau wie heute.
+/// Was in einem gerasterten Streifen tatsächlich Bild ist.
+#[derive(Debug, PartialEq)]
+pub struct CropContent {
+    pub top: u32,
+    pub bottom: u32,
+    pub left: u32,
+    pub right: u32,
+    /// Fand sich über dem Produkt eine Hintergrundlücke? Ohne sie stößt der
+    /// Streifen randlos an das Foto der Kachel darüber, und dann ist nicht
+    /// entscheidbar, wo das eigene Produkt anfängt.
+    pub separated: bool,
+}
+
+/// Farbabstand, ab dem ein Pixel nicht mehr Hintergrund ist.
+const BG_TOLERANCE: i32 = 28;
+/// Ab diesem Anteil gilt eine Bildzeile als „hat Inhalt".
+const ROW_CONTENT: f64 = 0.06;
+/// So viele fast leere Zeilen hintereinander sind die Lücke zwischen zwei
+/// Kacheln.
+const GAP_ROWS: u32 = 6;
+
+/// Das Produkt im Streifen anhand seiner Hintergrundfläche eingrenzen.
+///
+/// Scotts Idee: Das Produkt hat andere Farben als die Fläche, also lässt sich
+/// seine Ausdehnung schätzen, statt sie aus Kachelmaßen zu raten. Gelesen wird
+/// von **unten** — das eigene Foto sitzt unmittelbar über dem Kacheltext — bis
+/// eine Hintergrundlücke kommt. Was darüber liegt, gehört der Kachel darüber.
+///
+/// Damit darf die Geometrie großzügiger werden: Sie liefert ein weites Band,
+/// und wo das Produkt darin endet, entscheiden die Farben.
+///
+/// **Grenze, ehrlich benannt:** Stoßen zwei randlose Fotos aneinander, gibt es
+/// keine Lücke zu finden. Dann meldet das Ergebnis `separated == false`, und
+/// die Antwort darauf bleibt „kein Bild" statt einer feineren Schätzung.
+pub fn analyse_crop(img: &image::RgbImage) -> Option<CropContent> {
+    let (w, h) = img.dimensions();
+    if w < 8 || h < 8 {
+        return None;
+    }
+    let mut bins: HashMap<(u8, u8, u8), u32> = HashMap::new();
+    let mut border = |x: u32, y: u32| {
+        let p = img.get_pixel(x, y).0;
+        *bins.entry((p[0] / 16, p[1] / 16, p[2] / 16)).or_default() += 1;
+    };
+    for y in 0..h {
+        border(0, y);
+        border(w - 1, y);
+    }
+    let (bin, _) = bins.into_iter().max_by_key(|&(bin, n)| (n, bin))?;
+    let bg = [bin.0 as i32 * 16 + 8, bin.1 as i32 * 16 + 8, bin.2 as i32 * 16 + 8];
+    let is_content = |p: &image::Rgb<u8>| {
+        (p.0[0] as i32 - bg[0]).abs().max((p.0[1] as i32 - bg[1]).abs())
+            .max((p.0[2] as i32 - bg[2]).abs())
+            > BG_TOLERANCE
+    };
+
+    let rows: Vec<f64> = (0..h)
+        .map(|y| (0..w).filter(|&x| is_content(img.get_pixel(x, y))).count() as f64 / w as f64)
+        .collect();
+
+    let bottom = (0..h).rev().find(|&y| rows[y as usize] >= ROW_CONTENT)?;
+    let mut top = bottom;
+    let mut gap = 0u32;
+    let mut separated = false;
+    for y in (0..=bottom).rev() {
+        if rows[y as usize] < ROW_CONTENT {
+            gap += 1;
+            if gap >= GAP_ROWS {
+                separated = true;
+                break;
+            }
+        } else {
+            gap = 0;
+            top = y;
+        }
+    }
+
+    let left = (0..w).find(|&x| (top..=bottom).any(|y| is_content(img.get_pixel(x, y))))?;
+    let right = (0..w).rev().find(|&x| (top..=bottom).any(|y| is_content(img.get_pixel(x, y))))?;
+    Some(CropContent { top, bottom, left, right, separated })
+}
+
+/// Den gerasterten Streifen auf das Produkt zuschneiden — oder verwerfen.
+///
+/// `Ok(false)` heißt: Hier ist nicht entscheidbar, was das eigene Produkt ist.
+/// Dann bleibt das Angebot ohne Bild und behält sein Emoji.
+fn refine_crop(path: &std::path::Path) -> Result<bool> {
+    let img = image::open(path)
+        .with_context(|| format!("Kachelbild nicht lesbar: {}", path.display()))?
+        .to_rgb8();
+    let Some(c) = analyse_crop(&img) else {
+        return Ok(false); // reine Fläche, kein Produkt
+    };
+    // **Die Lücke entscheidet hier nichts.** Gemessen an einem echten Lauf für
+    // 01219: Als Tor benutzt, verwirft sie 99 von 197 Streifen und drückt die
+    // Abdeckung von 202 auf 98 — die Kacheln des Rasters stoßen meist ohne
+    // sechs leere Zeilen aneinander, weil die Geometrie das Band schon an der
+    // Nachbarkachel abgeschnitten hat. Das Tor bleibt deshalb die Geometrie
+    // (`MAX_SHOT_ASPECT`), die nachweislich keine falschen Bilder durchlässt;
+    // die Farben schneiden nur den leeren Rand weg.
+
+    const PAD: u32 = 4;
+    let (w, h) = img.dimensions();
+    let x0 = c.left.saturating_sub(PAD);
+    let y0 = c.top.saturating_sub(PAD);
+    let x1 = (c.right + PAD).min(w - 1);
+    let y1 = (c.bottom + PAD).min(h - 1);
+    let (cw, ch) = (x1 - x0 + 1, y1 - y0 + 1);
+    if cw < 24 || ch < 24 {
+        return Ok(false);
+    }
+    if cw != w || ch != h {
+        image::imageops::crop_imm(&img, x0, y0, cw, ch)
+            .to_image()
+            .save(path)
+            .with_context(|| format!("Kachelbild nicht schreibbar: {}", path.display()))?;
+    }
+    Ok(true)
+}
+
 fn render_shots(pdf: &std::path::Path, shots: &[TileShot]) -> HashMap<String, String> {
     if shots.is_empty() {
         return HashMap::new();
@@ -1415,6 +1535,7 @@ fn render_shots(pdf: &std::path::Path, shots: &[TileShot]) -> HashMap<String, St
     let scale = RENDER_DPI as f64 / 72.0;
     let mut out = HashMap::new();
     let mut failed = 0usize;
+    let mut rejected = 0usize;
     for shot in shots {
         let target = dir.join(format!("{}.png", shot.offer_id));
         // `-singlefile` schreibt genau `<prefix>.png` statt `<prefix>-<seite>.png`.
@@ -1431,15 +1552,29 @@ fn render_shots(pdf: &std::path::Path, shots: &[TileShot]) -> HashMap<String, St
             .arg(&prefix)
             .status();
         match status {
-            Ok(s) if s.success() && target.exists() => {
-                out.insert(shot.offer_id.clone(), format!("file://{}", target.display()));
-            }
+            Ok(s) if s.success() && target.exists() => match refine_crop(&target) {
+                Ok(true) => {
+                    out.insert(shot.offer_id.clone(), format!("file://{}", target.display()));
+                }
+                // Der Streifen hat die Hintergrundprobe nicht bestanden: kein
+                // Bild ist besser als das der Nachbarkachel.
+                Ok(false) => {
+                    let _ = std::fs::remove_file(&target);
+                    rejected += 1;
+                }
+                Err(e) => {
+                    eprintln!("  Kachelbild nicht auswertbar ({}): {e}", shot.offer_id);
+                    let _ = std::fs::remove_file(&target);
+                    failed += 1;
+                }
+            },
             _ => failed += 1,
         }
     }
     println!(
-        "  {} Kachelbilder gerastert{}",
+        "  {} Kachelbilder gerastert ({} an der Hintergrundprobe verworfen{})",
         out.len(),
+        rejected,
         if failed > 0 {
             format!(", {failed} fehlgeschlagen")
         } else {
@@ -1854,6 +1989,55 @@ mod tests {
             trim_dangling_tail("Brot und Butter Aufstrich"),
             "Brot und Butter Aufstrich"
         );
+    }
+
+
+    fn canvas(w: u32, h: u32, bg: [u8; 3]) -> image::RgbImage {
+        image::RgbImage::from_pixel(w, h, image::Rgb(bg))
+    }
+
+    fn fill(img: &mut image::RgbImage, x0: u32, y0: u32, x1: u32, y1: u32, c: [u8; 3]) {
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                img.put_pixel(x, y, image::Rgb(c));
+            }
+        }
+    }
+
+    /// Eine reine Fläche ist kein Produktfoto. Gemessen an einem echten Lauf:
+    /// 18 der 181 Streifen waren genau das — einfarbige Rechtecke von 189 bis
+    /// 277 Byte, die in der App wie ein kaputtes Bild aussehen.
+    #[test]
+    fn a_flat_area_carries_no_product() {
+        let img = canvas(80, 80, [255, 240, 0]);
+        assert_eq!(analyse_crop(&img), None);
+    }
+
+    /// Das Produkt wird von unten gesucht und an der Hintergrundlücke
+    /// abgeschnitten — was darüber liegt, gehört der Kachel darüber.
+    #[test]
+    fn the_product_is_bounded_by_the_gap_above_it() {
+        let mut img = canvas(80, 100, [220, 0, 0]);
+        // Fremdes Foto oben, dann Lücke, dann das eigene Produkt unten.
+        fill(&mut img, 5, 0, 74, 20, [255, 255, 255]);
+        fill(&mut img, 10, 50, 69, 95, [0, 0, 255]);
+
+        let c = analyse_crop(&img).expect("Produkt nicht gefunden");
+        assert!(c.separated, "die Luecke wurde nicht erkannt");
+        assert!(c.top >= 45 && c.top <= 55, "Oberkante bei {}", c.top);
+        assert_eq!(c.bottom, 95);
+        assert_eq!((c.left, c.right), (10, 69));
+    }
+
+    /// Läuft der Inhalt ohne Lücke bis an die Oberkante, stößt der Streifen
+    /// randlos an die Nachbarkachel — dann ist nicht entscheidbar, wo das
+    /// eigene Produkt anfängt.
+    #[test]
+    fn content_running_into_the_top_edge_is_not_separated() {
+        let mut img = canvas(80, 100, [220, 0, 0]);
+        fill(&mut img, 5, 0, 74, 95, [0, 0, 255]);
+        let c = analyse_crop(&img).expect("Inhalt nicht gefunden");
+        assert!(!c.separated);
     }
 
 }
