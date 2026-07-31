@@ -233,6 +233,13 @@ enum Command {
         #[arg(long, value_name = "MARKET_ID")]
         anchor: Option<String>,
 
+        /// `area_requests.area_key` der Zeile, die diesen Lauf ausgelöst hat
+        /// (ab Migration v24 vom Trigger mitgeschickt). Ohne ihn rechnet der
+        /// Lauf die Zelle selbst aus — dieselbe Regel, aber eine zweite
+        /// Stelle, an der sie stimmen muss.
+        #[arg(long, value_name = "AREA_KEY")]
+        area_key: Option<String>,
+
         /// Die PLZ der gewählten Filialen als Gebiete verwenden
         #[arg(long, default_value_t = false)]
         from_branches: bool,
@@ -471,6 +478,7 @@ fn main() -> Result<()> {
             lat,
             lon,
             anchor,
+            area_key,
             from_branches,
             from_area_requests,
             skip_national,
@@ -492,6 +500,11 @@ fn main() -> Result<()> {
                     coords: Some((lat, lon)),
                     plz: area.first().cloned(),
                     anchor_market_id: anchor.clone(),
+                    // Leer heißt „niemand hat einen mitgeschickt", nicht
+                    // „leerer Schlüssel": Die Dispatch-API kennt keine
+                    // weggelassenen Eingaben, der Trigger schickt bei einer
+                    // Zeile ohne Gebiet einen leeren String.
+                    area_key: area_key.clone().filter(|k| !k.is_empty()),
                 }),
                 _ => targets.extend(area.iter().map(AreaTarget::from_plz)),
             }
