@@ -771,3 +771,145 @@ fn online_shop_products_come_out_in_a_stable_order() {
         );
     }
 }
+
+// ------------------------------------- EDEKA: Markt-Redirect, blockiert vs. weg
+//
+// Der stille Verlustfall vom 2026-07-30: Der Markt-Redirect
+// (/eh/<region>/<slug>/index.jsp -> /maerkte/<id>/) kam auf dem GitHub-Runner
+// zweimal leer zurück, während dieselbe URL von einem Mac sofort mit 308
+// antwortet — Runner-IP an Akamai, nicht der Umlaut im Slug. EDEKA Böse in
+// Ahlbeck fehlte danach im Verzeichnis.
+//
+// Diese Tests laufen gegen einen lokalen Server, den echtes System-curl
+// abfragt — dieselbe Kommandozeile wie in der Produktion, nur ein anderer
+// Host. Geprüft wird das, woran der Fehler hing: dass „geblockt" und „gibt es
+// nicht" auseinandergehalten werden.
+
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// Antwortet auf jede Anfrage mit `response` und zählt die Anfragen.
+fn spawn_http(response: &'static str) -> (String, Arc<AtomicUsize>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let hits = Arc::new(AtomicUsize::new(0));
+    let hits2 = hits.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { break };
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf);
+            hits2.fetch_add(1, Ordering::SeqCst);
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+        }
+    });
+    (format!("http://{addr}/eh/mv/edeka-boese/index.jsp"), hits)
+}
+
+/// Der Normalfall: 308 mit Location, ein Versuch, Ziel zurück.
+#[test]
+fn edeka_market_redirect_resolves_a_308() {
+    let (url, hits) = spawn_http(
+        "HTTP/1.1 308 Permanent Redirect\r\nLocation: https://www.edeka.de/maerkte/4030423/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+    );
+
+    let target = lechariot::scrapers::util::curl_redirect_url_with_backoff(&url, &[], &[0, 0, 0])
+        .expect("308 muss aufgelöst werden");
+
+    assert_eq!(target, "https://www.edeka.de/maerkte/4030423/");
+    assert_eq!(hits.load(Ordering::SeqCst), 1, "ein Erfolg braucht keinen zweiten Versuch");
+}
+
+/// **Der gemeldete Fall.** Antwort ohne Location — hier als 403, der Runner sah
+/// eine Akamai-Challenge. Der Lauf muss es erneut versuchen, und zwar begrenzt.
+#[test]
+fn a_blocked_market_redirect_is_retried_and_then_named() {
+    let (url, hits) = spawn_http("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+
+    let err = lechariot::scrapers::util::curl_redirect_url_with_backoff(&url, &[], &[0, 0, 0])
+        .expect_err("eine Blockade darf nicht als Erfolg durchgehen");
+
+    assert_eq!(hits.load(Ordering::SeqCst), 4, "einmal plus drei Wiederholungen");
+    let msg = format!("{err:#}");
+    assert!(msg.contains("403"), "der Status gehört in die Meldung: {msg}");
+    assert!(msg.contains("Blockade"), "die Meldung muss die Blockade benennen: {msg}");
+}
+
+/// Akamai antwortet auf eine geblockte Anfrage auch mit **200** und einer
+/// Challenge-Seite. Ohne Location ist das kein aufgelöster Redirect — sonst
+/// stünde eine Filiale mit geratener ID im Verzeichnis, und eine falsche ID
+/// ist schlimmer als keine.
+#[test]
+fn a_two_hundred_without_location_counts_as_blocked() {
+    let (url, hits) =
+        spawn_http("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nhi");
+
+    let err = lechariot::scrapers::util::curl_redirect_url_with_backoff(&url, &[], &[0])
+        .expect_err("200 ohne Location ist kein Redirect-Ziel");
+
+    assert_eq!(hits.load(Ordering::SeqCst), 2);
+    assert!(format!("{err:#}").contains("200"), "{err:#}");
+}
+
+/// **Und die Gegenprobe, damit der Wiederholungsversuch keinen echten Fehler
+/// zudeckt:** Eine Marktseite, die es nicht gibt, wird genau EINMAL gefragt.
+/// Vor dieser Runde kostete jeder tote Markt drei Anfragen und sechs Sekunden
+/// und meldete danach dasselbe wie eine Blockade.
+#[test]
+fn a_genuine_404_is_not_retried_and_says_so() {
+    let (url, hits) = spawn_http("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+
+    let err = lechariot::scrapers::util::curl_redirect_url_with_backoff(&url, &[], &[0, 0, 0])
+        .expect_err("404 ist ein Fehler, nur kein wiederholbarer");
+
+    assert_eq!(hits.load(Ordering::SeqCst), 1, "ein 404 wird nicht wiederholt");
+    let msg = format!("{err:#}");
+    assert!(msg.contains("404"), "{msg}");
+    assert!(
+        msg.contains("gibt es nicht"),
+        "die Meldung muss den echten Fehler beim Namen nennen: {msg}"
+    );
+    assert!(!msg.contains("Blockade"), "ein 404 ist keine Blockade: {msg}");
+}
+
+/// Die Einteilung ohne Netz, Fall für Fall — das ist die Entscheidung, an der
+/// alles hängt.
+#[test]
+fn the_redirect_verdict_separates_blocked_from_gone() {
+    use lechariot::scrapers::util::{RedirectOutcome, redirect_outcome};
+
+    assert_eq!(
+        redirect_outcome("308", "https://www.edeka.de/maerkte/4030423/"),
+        RedirectOutcome::Target("https://www.edeka.de/maerkte/4030423/".into())
+    );
+    // Ein Ziel gilt, egal mit welchem Status es kam.
+    assert!(matches!(redirect_outcome("301", "https://x/"), RedirectOutcome::Target(_)));
+
+    for status in ["404", "410"] {
+        assert!(
+            matches!(redirect_outcome(status, ""), RedirectOutcome::Gone(_)),
+            "{status} muss als „gibt es nicht“ gelten"
+        );
+    }
+    // 000 = curl kam nicht durch, 200 = Challenge-Seite, 429/5xx = zu viel.
+    for status in ["000", "200", "403", "429", "500", "503"] {
+        assert!(
+            matches!(redirect_outcome(status, ""), RedirectOutcome::Blocked(_)),
+            "{status} muss wiederholt werden"
+        );
+    }
+}
+
+/// Die echten Pausen bleiben begrenzt: Der Redirect fällt je Filiale an.
+#[test]
+fn the_backoff_stays_bounded() {
+    let total: u64 = lechariot::scrapers::util::REDIRECT_BACKOFF_MS.iter().sum();
+    assert!(total <= 13_000, "{total} ms Wartezeit je Filiale ist zu viel");
+    assert!(
+        lechariot::scrapers::util::REDIRECT_BACKOFF_MS.windows(2).all(|w| w[1] > w[0]),
+        "die Pausen müssen wachsen"
+    );
+}
