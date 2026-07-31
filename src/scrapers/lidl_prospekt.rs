@@ -1461,7 +1461,14 @@ pub fn products_as_offers(
     valid_until: Option<&str>,
 ) -> Vec<Offer> {
     let mut offers = Vec::new();
-    for product in flyer.products.values() {
+    // Nach Produkt-ID sortiert, aus demselben Grund wie in `cluster`: Die
+    // Onlineshop-Artikel stehen in einer `HashMap`, und die gibt sie in
+    // zufälliger Reihenfolge heraus. Gemessen am 2026-07-31 an zwei Läufen
+    // hintereinander: dieselben 393 Angebote, andere Reihenfolge — und alle
+    // Abweichungen waren Onlineshop-Zeilen.
+    let mut keys: Vec<&String> = flyer.products.keys().collect();
+    keys.sort();
+    for product in keys.into_iter().filter_map(|k| flyer.products.get(k)) {
         let Some(title) = product
             .get("title")
             .and_then(|v| v.as_str())

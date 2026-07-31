@@ -649,3 +649,43 @@ fn extraction_is_deterministic_across_runs() {
         );
     }
 }
+
+/// Auch die Onlineshop-Artikel kommen aus einer `HashMap` — dieselbe Falle wie
+/// bei den Prospektkacheln, nur eine Ebene weiter. Gemessen an zwei echten
+/// Läufen hintereinander am 2026-07-31: dieselben 393 Angebote, andere
+/// Reihenfolge, und jede Abweichung war eine Onlineshop-Zeile.
+#[test]
+fn online_shop_products_come_out_in_a_stable_order() {
+    let raw: serde_json::Value = serde_json::from_str(
+        r#"{"flyer":{"id":"f","name":"n","title":"t",
+             "offerStartDate":"2026-07-27","offerEndDate":"2026-08-01",
+             "pdfUrl":"https://example.invalid/x.pdf","fileSize":1,
+             "regions":[],"pages":[{"id":"p1","number":1,"width":1415,"height":2400}],
+             "products":{
+               "c":{"title":"Gamma Artikel","price":"3.00","categoryPrimary":"K/Drei"},
+               "a":{"title":"Alpha Artikel","price":"1.00","categoryPrimary":"K/Eins"},
+               "b":{"title":"Beta Artikel","price":"2.00","categoryPrimary":"K/Zwei"}}}}"#,
+    )
+    .unwrap();
+    // **Je Durchlauf neu geparst.** Dieselbe `HashMap` zweimal auszulesen
+    // liefert immer dieselbe Reihenfolge — der Zufall steckt im Seed, den jede
+    // neue Instanz bekommt. Ein Test, der das Flyer-Objekt wiederverwendet,
+    // besteht auch ohne die Sortierung und prüft damit nichts.
+    let parse = || scrapers::lidl_prospekt::parse_flyer(&raw).unwrap();
+
+    let first = scrapers::lidl_prospekt::products_as_offers(
+        &parse(), "LIDL_1988", Some("2026-07-27"), Some("2026-08-01"),
+    );
+    assert_eq!(first.len(), 3, "Fixture liefert drei Artikel");
+
+    for run in 1..=20 {
+        let again = scrapers::lidl_prospekt::products_as_offers(
+            &parse(), "LIDL_1988", Some("2026-07-27"), Some("2026-08-01"),
+        );
+        assert_eq!(
+            first.iter().map(|o| &o.title).collect::<Vec<_>>(),
+            again.iter().map(|o| &o.title).collect::<Vec<_>>(),
+            "Lauf {run} lieferte die Onlineshop-Artikel in anderer Reihenfolge"
+        );
+    }
+}
