@@ -2467,6 +2467,52 @@ mod tests {
     }
 
 
+    /// Messgerät, kein Test: nur der Textweg, damit die Verwurfsgründe je
+    /// Kachel sichtbar werden. Ohne `pdftohtml`, also in Sekunden statt Minuten.
+    #[test]
+    #[ignore]
+    fn measure_dropped_tiles() {
+        let pdf = std::env::var("LIDL_PDF").expect("LIDL_PDF fehlt");
+        let xml = run_pdftotext(std::path::Path::new(&pdf), "-bbox-layout").expect("pdftotext");
+        let (offers, _, _) = extract_offers_shots_and_open(&xml, "MESSUNG", None, None);
+        eprintln!("ANGEBOTE\t{}", offers.len());
+    }
+
+    /// Messgerät, kein Test: Abdeckung mit und ohne eingebettete Bilder,
+    /// gegen dasselbe PDF. `LIDL_PDF` zeigt auf eine lokale Prospekt-PDF.
+    ///
+    /// Beide Zahlen müssen aus demselben Prospekt stammen — ein Vorher/Nachher
+    /// aus zwei Wochen ist keins.
+    #[test]
+    #[ignore]
+    fn measure_union_coverage() {
+        let pdf = std::env::var("LIDL_PDF").expect("LIDL_PDF fehlt");
+        let path = std::path::Path::new(&pdf);
+        let xml = run_pdftotext(path, "-bbox-layout").expect("pdftotext");
+        let (offers, shots, open) =
+            extract_offers_shots_and_open(&xml, "MESSUNG", None, None);
+        let embedded = embedded_photos(path, &xml, &open);
+
+        let kacheln = shots.len() + open.len();
+        let vereint = shots.len() + embedded.len();
+        eprintln!("ANGEBOTE\t{}", offers.len());
+        eprintln!("KACHELN\t{kacheln}");
+        eprintln!(
+            "NUR_SCHNITT\t{}\t{:.1}%",
+            shots.len(),
+            100.0 * shots.len() as f64 / kacheln as f64
+        );
+        eprintln!("OFFEN\t{}", open.len());
+        eprintln!("EINGEBETTET_DAZU\t{}", embedded.len());
+        eprintln!(
+            "VEREINT\t{vereint}\t{:.1}%",
+            100.0 * vereint as f64 / kacheln as f64
+        );
+        for (id, url) in embedded.iter().take(400) {
+            println!("DAZU\t{id}\t{url}");
+        }
+    }
+
     /// Ein Bild-Rechteck von `pdftohtml` muss in PDF-Punkten landen, sonst
     /// vergleicht die Zuordnung Pixel mit Punkten.
     ///
