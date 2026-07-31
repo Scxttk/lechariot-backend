@@ -31,7 +31,7 @@
 //! `-bbox-layout` (Wortkoordinaten), Kachelbildung über Abstände und eine
 //! Zuordnung Produkt <-> Preis. Details bei [`extract_offers`].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::process::Command;
 use std::sync::LazyLock;
 
@@ -1257,14 +1257,40 @@ pub fn extract_offers(
 /// Kacheln. Getrennt gehalten, weil das Rastern das PDF braucht und diese
 /// Funktion rein auf der Textebene arbeitet — so bleibt sie gegen die Fixture
 /// prüfbar.
+/// Eine Kachel, für die der Schnitt kein Bild gefunden hat.
+///
+/// Sie ist nicht bildlos, sondern *ungeschnitten*: `photo_rect` verweigert,
+/// wenn der Platz über ihr zu hoch ist, um plausibel ihr eigenes Foto zu sein.
+/// Genau da greift das eingebettete Bild.
+#[derive(Debug, Clone)]
+struct OpenTile {
+    offer_id: String,
+    /// 1-basierte Seitenzahl im PDF.
+    page: usize,
+    tile: Island,
+}
+
 pub fn extract_offers_with_shots(
     xml: &str,
     market_id: &str,
     valid_from: Option<&str>,
     valid_until: Option<&str>,
 ) -> (Vec<Offer>, Vec<TileShot>) {
+    let (offers, shots, _) = extract_offers_shots_and_open(xml, market_id, valid_from, valid_until);
+    (offers, shots)
+}
+
+/// Wie [`extract_offers_with_shots`], liefert zusätzlich die Kacheln, für die
+/// der Schnitt nichts gefunden hat — die Kandidaten für ein eingebettetes Bild.
+fn extract_offers_shots_and_open(
+    xml: &str,
+    market_id: &str,
+    valid_from: Option<&str>,
+    valid_until: Option<&str>,
+) -> (Vec<Offer>, Vec<TileShot>, Vec<OpenTile>) {
     let mut offers = Vec::new();
     let mut shots = Vec::new();
+    let mut open: Vec<OpenTile> = Vec::new();
     let mut stats = Stats::default();
 
     for (page_index, islands) in parse_bbox_layout(xml).into_iter().enumerate() {
@@ -1453,6 +1479,16 @@ pub fn extract_offers_with_shots(
                         w,
                         h,
                     });
+                } else {
+                    // Der Schnitt verweigert — der Platz über der Kachel ist zu
+                    // hoch, um plausibel ihr eigenes Foto zu sein. Genau diese
+                    // Kacheln bekommen die zweite Chance über das eingebettete
+                    // Bild; die Kachel selbst wird dafür aufgehoben.
+                    open.push(OpenTile {
+                        offer_id: offer_id.clone(),
+                        page: page_index + 1,
+                        tile: tile_rect.clone(),
+                    });
                 }
 
                 offers.push(Offer {
@@ -1489,9 +1525,18 @@ pub fn extract_offers_with_shots(
     let kept: std::collections::HashSet<&str> = offers.iter().map(|o| o.id.as_str()).collect();
     let mut seen = std::collections::HashSet::new();
     shots.retain(|s| kept.contains(s.offer_id.as_str()) && seen.insert(s.offer_id.clone()));
+    // Dieselbe Buchführung für die offenen Kacheln — und zusätzlich: Was der
+    // Schnitt auf einer anderen Kachel doch bekommen hat, braucht hier keine
+    // zweite Quelle mehr.
+    let mut seen_open = std::collections::HashSet::new();
+    open.retain(|o| {
+        kept.contains(o.offer_id.as_str())
+            && !seen.contains(&o.offer_id)
+            && seen_open.insert(o.offer_id.clone())
+    });
 
     stats.report(offers.len());
-    (offers, shots)
+    (offers, shots, open)
 }
 
 /// Untertitel aus Packungsgröße, Grundpreis und Lidl-Plus-Hinweis.
@@ -1823,6 +1868,181 @@ fn refine_crop(path: &std::path::Path) -> Result<bool> {
     Ok(true)
 }
 
+/// Anteil grauer Pixel, ab dem ein Bild eine Alphamaske ist und kein Foto.
+///
+/// poppler gibt die Maske eines Bildes als **eigenes** `<image>` aus — eine
+/// graustufige Silhouette. Auf dem Prospekt vom 20.07. waren das 2 032 der
+/// 3 150 ausgeworfenen Dateien; ungefiltert war fast die Hälfte aller
+/// Zuordnungen ein leeres weißes Rechteck.
+const MASK_GREY_SHARE: u32 = 98;
+
+/// Höchstzahl belegter Farbeimer (4 bit je Kanal), unter der ein Bild
+/// Bedienelement ist und kein Produkt.
+///
+/// Gemessen an den 31 Zuordnungen des 20.07.-Prospekts: Der Knopf „Jetzt
+/// entdecken" belegt **17** Eimer, das ärmste echte Produktfoto — eine
+/// einfarbige Schürze vor Weiß — belegt **32**. Der Abstand ist der ganze
+/// Spielraum, den es hier gibt, deshalb liegt die Schranke bei 24 und nicht
+/// höher: Ein verworfenes Produkt kostet mehr als ein durchgelassener Knopf.
+///
+/// **Was diese Probe NICHT fängt**, gemessen und nicht vermutet: das Siegel
+/// „Geschützte Geografische Angabe" belegt 382 Eimer. Es ist ein dichter Ring
+/// aus Schrift und Sternen und sieht in jeder Farbkennzahl aus wie ein Foto.
+/// Wer die Schranke so weit anhebt, verliert echte Produkte — die Schürze
+/// liegt bei 32.
+const MIN_PHOTO_COLOUR_BINS: usize = 24;
+
+/// Ist dieses Bild Fläche statt Foto — Maske, Knopf, Logo?
+fn is_flat_artwork(img: &image::RgbImage) -> bool {
+    let total = img.pixels().len().max(1);
+    let grey = img
+        .pixels()
+        .filter(|px| {
+            let (r, g, b) = (px[0] as i32, px[1] as i32, px[2] as i32);
+            (r - g).abs() <= 8 && (g - b).abs() <= 8 && (r - b).abs() <= 8
+        })
+        .count();
+    if (grey * 100 / total) as u32 >= MASK_GREY_SHARE {
+        return true;
+    }
+    let mut bins: HashSet<(u8, u8, u8)> = HashSet::new();
+    for px in img.pixels() {
+        bins.insert((px[0] / 16, px[1] / 16, px[2] / 16));
+        if bins.len() > MIN_PHOTO_COLOUR_BINS {
+            return false;
+        }
+    }
+    true
+}
+
+/// Die zugeordneten eingebetteten Bilder in das Kachelbild-Verzeichnis legen
+/// und je Angebot ihre `file://`-URL liefern.
+///
+/// `assigned` bildet Angebots-ID auf die von `pdftohtml` geschriebene Datei
+/// ab. Was die Flächenprobe nicht besteht, fällt hier heraus — lieber kein
+/// Bild als ein Knopf neben einem Preis.
+fn place_embedded_photos(
+    extracted_dir: &std::path::Path,
+    assigned: &[(String, String)],
+) -> HashMap<String, String> {
+    if assigned.is_empty() {
+        return HashMap::new();
+    }
+    let dir = crop_dir();
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("WARNUNG [Lidl] Kachelbilder nicht ablegbar ({e}) — keine eingebetteten Bilder.");
+        return HashMap::new();
+    }
+    let (mut out, mut flat, mut failed) = (HashMap::new(), 0usize, 0usize);
+    for (offer_id, file) in assigned {
+        let src = extracted_dir.join(file);
+        let Ok(img) = image::open(&src) else {
+            failed += 1;
+            continue;
+        };
+        let rgb = img.to_rgb8();
+        if is_flat_artwork(&rgb) {
+            flat += 1;
+            continue;
+        }
+        let target = dir.join(format!("{offer_id}.png"));
+        match rgb.save(&target) {
+            Ok(()) => {
+                out.insert(offer_id.clone(), format!("file://{}", target.display()));
+            }
+            Err(e) => {
+                eprintln!("  Eingebettetes Bild nicht schreibbar ({offer_id}): {e}");
+                failed += 1;
+            }
+        }
+    }
+    println!(
+        "  {} eingebettete Bilder übernommen ({flat} als Fläche verworfen{})",
+        out.len(),
+        if failed > 0 { format!(", {failed} fehlgeschlagen") } else { String::new() }
+    );
+    out
+}
+
+/// Die eingebetteten Bilder für die Kacheln holen, die der Schnitt abgelehnt
+/// hat.
+///
+/// `pdftohtml -xml` schreibt die Bilder des PDFs als Dateien in ein
+/// Verzeichnis und nennt daneben ihre Rechtecke. Nur die Seiten, auf denen
+/// überhaupt eine offene Kachel sitzt, werden gelesen — auf dem Prospekt vom
+/// 20.07. sind das 46 von 69 Seiten, und der ganze Durchlauf kostete sonst
+/// 3 min 39 s und 234 MB.
+///
+/// Jeder Fehlschlag ist hier folgenlos: Es gibt dann kein zweites Bild, und
+/// die Kachel bleibt bei ihrem Emoji.
+fn embedded_photos(
+    pdf: &std::path::Path,
+    bbox_xml: &str,
+    open: &[OpenTile],
+) -> HashMap<String, String> {
+    if open.is_empty() {
+        return HashMap::new();
+    }
+    let (Some(first), Some(last)) = (
+        open.iter().map(|o| o.page).min(),
+        open.iter().map(|o| o.page).max(),
+    ) else {
+        return HashMap::new();
+    };
+
+    let dir = std::env::temp_dir().join(format!("lechariot-lidl-xobj-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("WARNUNG [Lidl] Bildauszug nicht ablegbar ({e}) — keine eingebetteten Bilder.");
+        return HashMap::new();
+    }
+
+    let out = dir.join("doc");
+    let status = Command::new("pdftohtml")
+        .args(["-xml", "-f", &first.to_string(), "-l", &last.to_string()])
+        .arg(pdf)
+        .arg(&out)
+        .status();
+    match status {
+        Ok(s) if s.success() => {}
+        other => {
+            eprintln!("WARNUNG [Lidl] pdftohtml fehlgeschlagen ({other:?}) — keine eingebetteten Bilder.");
+            let _ = std::fs::remove_dir_all(&dir);
+            return HashMap::new();
+        }
+    }
+
+    let xml = match std::fs::read_to_string(dir.join("doc.xml")) {
+        Ok(x) => x,
+        Err(e) => {
+            eprintln!("WARNUNG [Lidl] Bildauszug nicht lesbar ({e}) — keine eingebetteten Bilder.");
+            let _ = std::fs::remove_dir_all(&dir);
+            return HashMap::new();
+        }
+    };
+
+    // `-f N` lässt pdftohtml bei Seite N zu zählen anfangen; die Seitenmaße
+    // aus dem bbox-XML sind dagegen ab Seite 1 durchnummeriert.
+    let sizes = page_sizes(bbox_xml);
+    let window: Vec<(f64, f64)> =
+        sizes.get(first - 1..last.min(sizes.len())).unwrap_or(&[]).to_vec();
+    let images = parse_embedded_images(&xml, &window);
+
+    let mut taken: HashSet<String> = HashSet::new();
+    let mut assigned: Vec<(String, String)> = Vec::new();
+    for tile in open {
+        let Some(page) = images.get(tile.page - first) else { continue };
+        if let Some(img) = embedded_photo_for(&tile.tile, page, &taken) {
+            taken.insert(img.file.clone());
+            assigned.push((tile.offer_id.clone(), img.file.clone()));
+        }
+    }
+
+    let placed = place_embedded_photos(&dir, &assigned);
+    let _ = std::fs::remove_dir_all(&dir);
+    placed
+}
+
 fn render_shots(pdf: &std::path::Path, shots: &[TileShot]) -> HashMap<String, String> {
     if shots.is_empty() {
         return HashMap::new();
@@ -1998,7 +2218,7 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
         }
     };
 
-    let (mut offers, shots) = extract_offers_with_shots(
+    let (mut offers, shots, open) = extract_offers_shots_and_open(
         &xml,
         &market.id,
         flyer.offer_start_date.as_deref(),
@@ -2010,9 +2230,13 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
     }
 
     let crops = render_shots(&pdf_path, &shots);
+    // Zweiter Weg für die Kacheln, die der Schnitt abgelehnt hat. Scheitert er,
+    // ist das kein Fehler des Laufs — die Angebote stehen, nur einige tragen
+    // weiter ihr Emoji.
+    let embedded = embedded_photos(&pdf_path, &xml, &open);
     let _ = std::fs::remove_file(&pdf_path);
     for offer in &mut offers {
-        if let Some(url) = crops.get(&offer.id) {
+        if let Some(url) = crops.get(&offer.id).or_else(|| embedded.get(&offer.id)) {
             offer.images = vec![url.clone()];
         }
     }
@@ -2340,6 +2564,49 @@ mod tests {
         let images = vec![img_at(100.0, 100.0, 200.0, 200.0, "zu-weit.png")];
         let taken = std::collections::HashSet::new();
         assert_eq!(embedded_photo_for(&tile, &images, &taken), None);
+    }
+
+    /// poppler gibt die Alphamaske eines Bildes als eigenes `<image>` aus.
+    /// Ungefiltert war auf dem Prospekt vom 20.07. fast die Hälfte aller
+    /// Zuordnungen so ein leeres Rechteck — und in der App sähe das aus wie
+    /// ein kaputtes Bild.
+    #[test]
+    fn alpha_masks_are_not_product_photos() {
+        let mut mask = image::RgbImage::new(40, 40);
+        for (x, y, px) in mask.enumerate_pixels_mut() {
+            // Graustufen-Silhouette: R, G und B liegen gleichauf.
+            let v = if (x + y) % 7 == 0 { 20u8 } else { 240u8 };
+            *px = image::Rgb([v, v, v]);
+        }
+        assert!(is_flat_artwork(&mask));
+    }
+
+    /// Ein Knopf ist nicht grau, er ist arm an Farben. „Jetzt entdecken"
+    /// belegte 17 Farbeimer.
+    #[test]
+    fn interface_chrome_is_not_a_product_photo() {
+        let mut knopf = image::RgbImage::new(60, 20);
+        for (x, _y, px) in knopf.enumerate_pixels_mut() {
+            *px = if x % 9 == 0 {
+                image::Rgb([255, 255, 255]) // Schrift
+            } else {
+                image::Rgb([16, 82, 214]) // Knopffläche
+            };
+        }
+        assert!(is_flat_artwork(&knopf));
+    }
+
+    /// Und die Gegenprobe, die den Preis dieser Schranke festhält: Ein Foto
+    /// mit vielen Farbabstufungen muss durch. Das ärmste echte Produktfoto des
+    /// Prospekts — eine einfarbige Schürze vor Weiß — belegte 32 Eimer, die
+    /// Schranke liegt bei 24.
+    #[test]
+    fn a_photo_with_many_shades_survives() {
+        let mut foto = image::RgbImage::new(40, 40);
+        for (x, y, px) in foto.enumerate_pixels_mut() {
+            *px = image::Rgb([(x * 6) as u8, (y * 6) as u8, ((x + y) * 3) as u8]);
+        }
+        assert!(!is_flat_artwork(&foto));
     }
 
     /// Die Kachelbildung setzt mitunter mitten im Wort an. Was so entsteht,
