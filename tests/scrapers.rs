@@ -573,6 +573,85 @@ fn lidl_prospekt_rescues_a_price_tile_behind_a_plaque() {
     }
 }
 
+// Streichpreise: die Fixture ist die ungekürzte `pdftotext -bbox-layout`-
+// Ausgabe der Seiten 15 und 61 des Prospekts vom 27.07.2026 (Absatzregion von
+// 01219). **Ungekürzt mit Absicht** — schneidet man Flows heraus, verschiebt
+// sich die Kachelbildung, und dann prüft der Test eine Paarung, die es im
+// Prospekt so nie gab (beim Kürzen auf die halbe Seite 61 bekam DIAMANT Zucker
+// den Streichpreis von FOL EPI).
+//
+// Die zwei Seiten decken alle vier Schreibweisen ab, in denen der Prospekt den
+// alten Preis druckt, dazu die Kachel mit mehreren Preisen.
+#[test]
+fn lidl_prospekt_reads_the_crossed_out_price() {
+    let offers = scrapers::lidl_prospekt::extract_offers(
+        include_str!("fixtures/lidl/prospekt_streichpreis.xml"),
+        "LIDL_1988",
+        Some("2026-07-27"),
+        Some("2026-08-01"),
+    );
+    let find = |name: &str| {
+        offers
+            .iter()
+            .find(|o| o.title.starts_with(name))
+            .unwrap_or_else(|| panic!("{name} fehlt: {:?}", offers.iter().map(|o| &o.title).collect::<Vec<_>>()))
+    };
+
+    // Plakette mit Stichwort, ohne Rabattzahl: „d) UVP 3.49" neben 2.95*.
+    assert_eq!((find("WRIGLEY").price, find("WRIGLEY").regular_price), (Some(2.95), Some(3.49)));
+    // Stichwort mitten in der Beschreibungszeile: „… 1 kg = 11.10
+    // Normalpreis: 1.99 1 kg = 19.90".
+    assert_eq!((find("RITTER SPORT").price, find("RITTER SPORT").regular_price), (Some(1.11), Some(1.99)));
+    // Plakette ganz ohne Stichwort: „-44%" über „1.99" über „1.11*".
+    assert_eq!((find("APPEL").price, find("APPEL").regular_price), (Some(1.11), Some(1.99)));
+    // Stichwort und Rabattzahl in einer Plakette: „-19% UVP 4.98".
+    assert_eq!((find("WAGNER").price, find("WAGNER").regular_price), (Some(3.99), Some(4.98)));
+
+    // Und nie unter dem Angebotspreis — dann hätte die Kachel einen
+    // Grundpreis eingesammelt.
+    for o in &offers {
+        if let (Some(p), Some(r)) = (o.price, o.regular_price) {
+            assert!(r > p, "Streichpreis {r} <= Preis {p} bei {}", o.title);
+        }
+    }
+}
+
+/// Eine Kachel, drei Preise, ein Streichpreis.
+///
+/// WAGNER Steinofen Pizza steht auf Seite 61 mit 3.99*, 3.79* und 0.99* in
+/// einer Kachel und trägt genau eine Plakette („-19% UVP 4.98"). Bis
+/// 2026-07-31 bekamen **alle drei** den Streichpreis 4.98 — für den 0.99er
+/// wären das 80 % Rabatt, die der Prospekt nirgends behauptet. Der gedruckte
+/// Rabatt geht nur für 3.99 auf (19,88 %, abgeschnitten 19).
+#[test]
+fn a_crossed_out_price_belongs_to_exactly_one_product_of_its_tile() {
+    let offers = scrapers::lidl_prospekt::extract_offers(
+        include_str!("fixtures/lidl/prospekt_streichpreis.xml"),
+        "LIDL_1988",
+        Some("2026-07-27"),
+        Some("2026-08-01"),
+    );
+    let wagner: Vec<(Option<f64>, Option<f64>)> = offers
+        .iter()
+        .filter(|o| o.title.starts_with("WAGNER"))
+        .map(|o| (o.price, o.regular_price))
+        .collect();
+    assert_eq!(wagner.len(), 3, "Kachel hat nicht mehr drei Preise: {wagner:?}");
+    assert_eq!(
+        wagner.iter().filter(|(_, r)| r.is_some()).count(),
+        1,
+        "der Streichpreis hängt an mehr als einem Preis: {wagner:?}"
+    );
+    assert!(wagner.contains(&(Some(3.99), Some(4.98))), "am falschen Preis: {wagner:?}");
+
+    // Gegenstück ohne Rabattzahl: JOHNNIE WALKER trägt „Normalpreis: 15.99"
+    // in seiner Beschreibung, teilt sich die Kachel aber mit dem Wodka
+    // daneben. Welchem der beiden Preise die Zahl gehört, sagt der Prospekt
+    // nicht — also bekommt sie keiner.
+    let jw = offers.iter().find(|o| o.title.starts_with("JOHNNIE WALKER")).unwrap();
+    assert_eq!(jw.regular_price, None, "mehrdeutiger Streichpreis übernommen");
+}
+
 #[test]
 fn lidl_prospekt_marks_loyalty_prices_as_such() {
     let offers = scrapers::lidl_prospekt::extract_offers(
