@@ -579,6 +579,170 @@ fn photo_rect(tile: &Island, others: &[(f64, f64, f64, f64)]) -> Option<(f64, f6
     (height >= MIN_SHOT_PT).then_some((tile.x0, top, width, height))
 }
 
+// ------------------------------------------------------- Eingebettete Bilder
+//
+// Der Schnitt (`photo_rect`) rastert den Platz ÜBER einer Kachel. Wo dieser
+// Platz zu hoch ist, um plausibel das eigene Foto zu sein, verweigert er —
+// lieber kein Bild als ein fremdes. Genau dort hilft der zweite Weg: Die
+// Produktfotos liegen im Prospekt-PDF als eigene XObjekte, nicht flach in ein
+// Seitenbild gerechnet, und `pdftohtml -xml` legt sie als Dateien ab und
+// nennt ihre Rechtecke.
+//
+// Beide Wege ersetzen einander nicht, sie ergänzen sich: Auf dem Prospekt vom
+// 20.07. schneidet der eine 160 von 227 Kacheln, und die eingebetteten Bilder
+// füllen 31 der 67 Lücken.
+
+/// Ein eingebettetes Bild des PDFs, umgerechnet in PDF-Punkte.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EmbeddedImage {
+    pub x0: f64,
+    pub y0: f64,
+    pub x1: f64,
+    pub y1: f64,
+    /// Dateiname, den `pdftohtml` neben das XML geschrieben hat.
+    pub file: String,
+}
+
+impl EmbeddedImage {
+    fn width(&self) -> f64 {
+        self.x1 - self.x0
+    }
+    fn height(&self) -> f64 {
+        self.y1 - self.y0
+    }
+}
+
+/// Seitenmaße in PDF-Punkten, aus der `pdftotext -bbox-layout`-Ausgabe.
+///
+/// Sie sind der Maßstab, mit dem die Bildrechtecke von `pdftohtml`
+/// zurückgerechnet werden — siehe [`parse_embedded_images`].
+fn page_sizes(bbox_xml: &str) -> Vec<(f64, f64)> {
+    let mut out = Vec::new();
+    for line in bbox_xml.lines().map(str::trim) {
+        if let Some(rest) = line.strip_prefix("<page ") {
+            let w = attr_f64(rest, "width");
+            let h = attr_f64(rest, "height");
+            out.push((w.unwrap_or(0.0), h.unwrap_or(0.0)));
+        }
+    }
+    out
+}
+
+/// Ein Zahlen-Attribut aus einem Tag-Rest lesen (`width="467.72"`).
+fn attr_f64(rest: &str, name: &str) -> Option<f64> {
+    let needle = format!("{name}=\"");
+    let start = rest.find(&needle)? + needle.len();
+    let end = rest[start..].find('"')? + start;
+    rest[start..end].parse().ok()
+}
+
+/// Die Bilder je Seite aus `pdftohtml -xml`, in PDF-Punkte umgerechnet.
+///
+/// **Der Maßstab ist das Seitenrechteck, nicht ein Textabgleich.** `pdftohtml`
+/// rastert mit festem Zoom, der Faktor ist also schlicht das Verhältnis der
+/// Seitenmaße und der Versatz null. Das ist nachgemessen, nicht angenommen:
+/// Auf den 33 Seiten des Prospekts vom 20.07., auf denen sich zusätzlich eine
+/// Ausgleichsgerade über eindeutige Textzeilen legen ließ, weichen beide Wege
+/// um **höchstens 0,72 pt** voneinander ab — weniger als eine Zeilenhöhe, und
+/// die Zuordnung unten arbeitet mit Toleranzen von Dutzenden Punkten. Der
+/// Textabgleich scheiterte dafür auf 13 Seiten (zu wenige eindeutige Zeilen);
+/// das Seitenrechteck gibt es immer.
+///
+/// Seiten ohne bekanntes PDF-Maß liefern nichts — ohne Maßstab wäre jedes
+/// Rechteck geraten.
+fn parse_embedded_images(xml: &str, pdf_pages: &[(f64, f64)]) -> Vec<Vec<EmbeddedImage>> {
+    let mut pages: Vec<Vec<EmbeddedImage>> = Vec::new();
+    let mut scale: Option<(f64, f64)> = None;
+
+    for line in xml.lines().map(str::trim) {
+        if let Some(rest) = line.strip_prefix("<page number=") {
+            let idx = pages.len();
+            pages.push(Vec::new());
+            let hw = attr_f64(rest, "width").unwrap_or(0.0);
+            let hh = attr_f64(rest, "height").unwrap_or(0.0);
+            scale = match pdf_pages.get(idx) {
+                Some(&(pw, ph)) if hw > 0.0 && hh > 0.0 && pw > 0.0 && ph > 0.0 => {
+                    Some((pw / hw, ph / hh))
+                }
+                _ => None,
+            };
+        } else if let Some(rest) = line.strip_prefix("<image ") {
+            let (Some((sx, sy)), Some(page)) = (scale, pages.last_mut()) else { continue };
+            let (Some(l), Some(t), Some(w), Some(h)) = (
+                attr_f64(rest, "left"),
+                attr_f64(rest, "top"),
+                attr_f64(rest, "width"),
+                attr_f64(rest, "height"),
+            ) else {
+                continue;
+            };
+            let needle = "src=\"";
+            let Some(s) = rest.find(needle).map(|i| i + needle.len()) else { continue };
+            let Some(e) = rest[s..].find('"').map(|i| i + s) else { continue };
+            page.push(EmbeddedImage {
+                x0: l * sx,
+                y0: t * sy,
+                x1: (l + w) * sx,
+                y1: (t + h) * sy,
+                file: rest[s..e].to_string(),
+            });
+        }
+    }
+    pages
+}
+
+/// Wie weit ein eingebettetes Bild breiter sein darf als seine Kachel.
+///
+/// Dieselbe Sorge wie bei [`MAX_SHOT_ASPECT`]: Ein Bild, das viel breiter ist
+/// als die Kachel, gehört ihr nicht allein — es ist der Seitenhintergrund oder
+/// das Foto einer ganzen Kachelgruppe. Auf dem Prospekt vom 20.07. kostet die
+/// Schranke 13 Zuordnungen (44 statt 31) und verhindert dafür ebenso viele
+/// falsche.
+const MAX_EMBEDDED_WIDTH_RATIO: f64 = 1.6;
+
+/// Größter Abstand zwischen Bildunterkante und Kacheloberkante (pt).
+const MAX_EMBEDDED_GAP_PT: f64 = 60.0;
+
+/// Das eingebettete Bild über dieser Kachel — oder keines.
+///
+/// Gesucht wird wie beim Schnitt: unmittelbar **über** dem Kacheltext, in
+/// derselben Spalte. Von mehreren Kandidaten gewinnt der mit dem kleinsten
+/// Abstand plus Mittenversatz.
+///
+/// `taken` sind die Dateien, die schon einer anderen Kachel gehören — ein Bild
+/// steht genau einer Kachel zu, sonst trägt eine Reihe von Kacheln dasselbe
+/// Foto.
+fn embedded_photo_for<'a>(
+    tile: &Island,
+    images: &'a [EmbeddedImage],
+    taken: &std::collections::HashSet<String>,
+) -> Option<&'a EmbeddedImage> {
+    let tile_width = tile.x1 - tile.x0;
+    let tile_mid = (tile.x0 + tile.x1) / 2.0;
+    images
+        .iter()
+        .filter(|img| !taken.contains(&img.file))
+        .filter(|img| img.width() >= MIN_SHOT_PT && img.height() >= MIN_SHOT_PT)
+        .filter(|img| img.width() <= MAX_EMBEDDED_WIDTH_RATIO * tile_width)
+        // Dieselbe Spalte: die Rechtecke überlappen sich in x deutlich.
+        .filter(|img| {
+            let overlap = img.x1.min(tile.x1) - img.x0.max(tile.x0);
+            overlap > 0.35 * tile_width.min(img.width())
+        })
+        // Über der Kachel. Etwas Überlappung ist erlaubt — Prospektfotos ragen
+        // gern unter ihren eigenen Text.
+        .filter(|img| {
+            let gap = tile.y0 - img.y1;
+            gap >= -0.5 * img.height() && gap <= MAX_EMBEDDED_GAP_PT
+        })
+        .min_by(|a, b| {
+            let cost = |i: &EmbeddedImage| {
+                (tile.y0 - i.y1).abs() + ((i.x0 + i.x1) / 2.0 - tile_mid).abs()
+            };
+            cost(a).total_cmp(&cost(b))
+        })
+}
+
 /// `pdftotext -bbox-layout`-Ausgabe in Seiten aus Textinseln zerlegen.
 ///
 /// Bewusst ein Zeilenparser statt eines XML-Parsers: Das Format ist streng
@@ -2078,6 +2242,105 @@ mod tests {
         assert!((h - 80.0).abs() < 0.001);
     }
 
+
+    /// Ein Bild-Rechteck von `pdftohtml` muss in PDF-Punkten landen, sonst
+    /// vergleicht die Zuordnung Pixel mit Punkten.
+    ///
+    /// Die Maße sind die echten des Prospekts: 467 x 794 pt, gerastert auf
+    /// 700 x 1191 px — Faktor 1,499, wie im Lauf gemessen.
+    #[test]
+    fn embedded_images_come_back_in_pdf_points() {
+        let bbox = r#"<page width="467.72" height="794.00">"#;
+        let html = concat!(
+            r#"<page number="1" position="absolute" top="0" left="0" height="1191" width="700">"#,
+            "\n",
+            r#"<image top="150" left="100" width="200" height="240" src="doc-1_7.png"/>"#,
+        );
+        let pages = parse_embedded_images(html, &page_sizes(bbox));
+
+        assert_eq!(pages.len(), 1);
+        let img = &pages[0][0];
+        assert_eq!(img.file, "doc-1_7.png");
+        // 100 px * 467.72/700 = 66.8 pt
+        assert!((img.x0 - 66.8).abs() < 0.1, "x0 = {}", img.x0);
+        assert!((img.y0 - 100.0).abs() < 0.2, "y0 = {}", img.y0);
+        assert!((img.width() - 133.6).abs() < 0.1, "Breite = {}", img.width());
+    }
+
+    /// Ohne bekanntes Seitenmaß gibt es keinen Maßstab — dann lieber kein Bild
+    /// als eines an geratener Stelle.
+    #[test]
+    fn images_without_a_page_size_are_dropped() {
+        let html = concat!(
+            r#"<page number="1" height="1191" width="700">"#,
+            "\n",
+            r#"<image top="150" left="100" width="200" height="240" src="doc-1_7.png"/>"#,
+        );
+        assert!(parse_embedded_images(html, &[]).concat().is_empty());
+    }
+
+    fn tile_at(x0: f64, y0: f64, x1: f64, y1: f64) -> Island {
+        Island { x0, y0, x1, y1, lines: vec!["Produkt".to_string()] }
+    }
+
+    fn img_at(x0: f64, y0: f64, x1: f64, y1: f64, file: &str) -> EmbeddedImage {
+        EmbeddedImage { x0, y0, x1, y1, file: file.to_string() }
+    }
+
+    /// Das Bild unmittelbar über der Kachel gewinnt, nicht das weiter oben.
+    #[test]
+    fn the_image_directly_above_the_tile_wins() {
+        let tile = tile_at(100.0, 300.0, 200.0, 340.0);
+        let images = vec![
+            img_at(100.0, 100.0, 200.0, 180.0, "weit-oben.png"),
+            img_at(100.0, 200.0, 200.0, 295.0, "direkt-drueber.png"),
+        ];
+        let taken = std::collections::HashSet::new();
+        assert_eq!(
+            embedded_photo_for(&tile, &images, &taken).map(|i| i.file.as_str()),
+            Some("direkt-drueber.png")
+        );
+    }
+
+    /// Ein Bild, das viel breiter ist als die Kachel, gehört ihr nicht allein —
+    /// dieselbe Regel wie `MAX_SHOT_ASPECT` beim Schnitt. Auf dem Prospekt vom
+    /// 20.07. kostet sie 13 Zuordnungen und verhindert ebenso viele falsche.
+    #[test]
+    fn an_image_far_wider_than_its_tile_belongs_to_no_one() {
+        let tile = tile_at(100.0, 300.0, 200.0, 340.0);
+        // 300 pt breit gegen 100 pt Kachel: Seitenhintergrund, nicht Produkt.
+        let images = vec![img_at(50.0, 200.0, 350.0, 295.0, "hintergrund.png")];
+        let taken = std::collections::HashSet::new();
+        assert_eq!(embedded_photo_for(&tile, &images, &taken), None);
+    }
+
+    /// Die Nachbarspalte zählt nicht, auch wenn ihr Bild näher liegt.
+    #[test]
+    fn images_in_the_neighbouring_column_are_ignored() {
+        let tile = tile_at(100.0, 300.0, 200.0, 340.0);
+        let images = vec![img_at(210.0, 250.0, 300.0, 298.0, "nachbar.png")];
+        let taken = std::collections::HashSet::new();
+        assert_eq!(embedded_photo_for(&tile, &images, &taken), None);
+    }
+
+    /// Ein Bild gehört genau einer Kachel. Ohne diese Buchführung trüge eine
+    /// ganze Kachelreihe dasselbe Foto.
+    #[test]
+    fn an_image_is_only_given_away_once() {
+        let tile = tile_at(100.0, 300.0, 200.0, 340.0);
+        let images = vec![img_at(100.0, 200.0, 200.0, 295.0, "schon-vergeben.png")];
+        let taken = std::collections::HashSet::from(["schon-vergeben.png".to_string()]);
+        assert_eq!(embedded_photo_for(&tile, &images, &taken), None);
+    }
+
+    /// Zu weit über der Kachel heißt: gehört der Kachel darüber.
+    #[test]
+    fn an_image_too_far_above_is_not_this_tiles_photo() {
+        let tile = tile_at(100.0, 300.0, 200.0, 340.0);
+        let images = vec![img_at(100.0, 100.0, 200.0, 200.0, "zu-weit.png")];
+        let taken = std::collections::HashSet::new();
+        assert_eq!(embedded_photo_for(&tile, &images, &taken), None);
+    }
 
     /// Die Kachelbildung setzt mitunter mitten im Wort an. Was so entsteht,
     /// trägt die Marke im Fragment und besteht deshalb jede Prüfung, die nur
