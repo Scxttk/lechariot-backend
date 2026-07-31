@@ -458,6 +458,94 @@ fn a_crop_that_cannot_be_uploaded_becomes_no_image() {
     assert!(bodies.contains("\"image_url\":null"), "Bild nicht auf null gesetzt: {bodies}");
 }
 
+/// Netto-Bilder werden IMMER gespiegelt, auch wenn das Spiegeln der übrigen
+/// Händler-Bilder aus ist — und ohne dass sich für andere Ketten etwas ändert.
+///
+/// Grund (gemessen 2026-07-31): Das Netto-CDN weist jeden schlichten Client
+/// mit 403 ab, auch mit Referer und iPhone-UA — kein Hotlink-Schutz, Akamai.
+/// Die Händler-URL ist für die App ein toter Link; 1.722 gültige Angebote
+/// standen deshalb ohne Bild da. Der Cache ist hier vorbelegt (stellt einen
+/// früheren Spiegel-Lauf dar), damit der Test ohne Live-Netzwerk auskommt —
+/// der Cache-Treffer greift nur, wenn die Scope-Zuordnung die Netto-URL
+/// überhaupt in einen Durchgang aufnimmt. Wer die Zuordnung kaputtmacht,
+/// sieht diesen Test fallen.
+#[test]
+fn netto_images_are_mirrored_even_when_mirroring_is_off() {
+    let db_path = temp_db("netto-spiegeln");
+    let _ = std::fs::remove_file(&db_path);
+    let netto_src = "https://www.netto-online.de/media_nfs/images/2026-31/42-450x450-Blumenkohl-n.webp";
+    let rewe_src = "https://img.rewe-static.de/gouda.jpg";
+    {
+        let conn = db::open(&db_path).unwrap();
+        db::upsert_market(&conn, &Market::new("9110", "Netto Marken-Discount Dresden").with_chain("Netto")).unwrap();
+        db::upsert_market(&conn, &Market::new("565005", "REWE Supermarkt").with_chain("REWE")).unwrap();
+        let mut n = offer("Blumenkohl", Some(0.99));
+        n.market_id = "9110".to_string();
+        n.id = Offer::build_id("9110", "Blumenkohl", Some("2026-07-13"));
+        n.images = vec![netto_src.to_string()];
+        db::upsert_offer(&conn, &n).unwrap();
+        let mut r = offer("Gouda", Some(1.99));
+        r.market_id = "565005".to_string();
+        r.id = Offer::build_id("565005", "Gouda", Some("2026-07-13"));
+        r.images = vec![rewe_src.to_string()];
+        db::upsert_offer(&conn, &r).unwrap();
+    }
+    let (base_url, log) = spawn_mock();
+    // Cache für BEIDE URLs vorbelegen: Käme die REWE-URL in einen Durchgang,
+    // würde auch sie zur Bucket-URL — dass sie es nicht wird, ist die zweite
+    // Hälfte der Behauptung (kein Verhaltenswechsel für andere Ketten).
+    let netto_bucket = storage::public_url(&base_url, &storage::object_path(netto_src));
+    let rewe_bucket = storage::public_url(&base_url, &storage::object_path(rewe_src));
+    {
+        let conn = db::open(&db_path).unwrap();
+        db::cache_image_url(&conn, netto_src, &netto_bucket).unwrap();
+        db::cache_image_url(&conn, rewe_src, &rewe_bucket).unwrap();
+    }
+
+    // run_push setzt mirror_images: false — genau der Fall der Nightly.
+    run_push(&db_path, &base_url).unwrap();
+
+    let reqs = log.lock().unwrap().clone();
+    let offer_posts: Vec<&Req> = reqs
+        .iter()
+        .filter(|r| r.method == "POST" && r.target.starts_with("/rest/v1/offers"))
+        .collect();
+    // Phase 1: Der erste Upsert trägt noch die Händler-URL — die Angebote
+    // warten nicht auf Bilder.
+    assert!(
+        offer_posts.first().unwrap().body.contains(netto_src),
+        "Phase 1 muss die Händler-URL upserten: {}",
+        offer_posts.first().unwrap().body
+    );
+    // Phase 2: Der Bild-Nachtrag trägt die Bucket-URL für Netto …
+    let bodies: String = offer_posts.iter().map(|r| r.body.as_str()).collect();
+    assert!(
+        bodies.contains(&netto_bucket),
+        "Netto-Zeile wurde nie auf die Bucket-URL umgeschrieben: {bodies}"
+    );
+    // … und NUR für Netto: Die REWE-Zeile behält ihre Händler-URL, obwohl der
+    // Cache eine Bucket-URL für sie hätte.
+    assert!(
+        !bodies.contains(&rewe_bucket),
+        "REWE darf ohne mirror_images nicht gespiegelt werden: {bodies}"
+    );
+    // Der Nachtrag enthält genau die eine Netto-Zeile, nicht den ganzen Satz.
+    let patch = offer_posts.iter().find(|r| r.body.contains(&netto_bucket)).unwrap();
+    assert!(
+        !patch.body.contains("Gouda"),
+        "Bild-Nachtrag fasst fremde Zeilen an: {}",
+        patch.body
+    );
+    // Der Nachtrag muss NACH dem ersten Upsert liegen (Angebote zuerst,
+    // Bilder später — die App soll nicht auf Bilder warten).
+    let first = reqs
+        .iter()
+        .position(|r| r.method == "POST" && r.target.starts_with("/rest/v1/offers"))
+        .unwrap();
+    let patch_pos = reqs.iter().position(|r| r.body.contains(&netto_bucket)).unwrap();
+    assert!(first < patch_pos);
+}
+
 #[test]
 fn push_batches_deletes_and_upserts() {
     let db_path = temp_db("batch");
