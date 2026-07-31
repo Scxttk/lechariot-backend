@@ -275,8 +275,7 @@ editor. Refreshed weekly by `.github/workflows/branches.yml`.
 | Rewe | yes — TLS cert + `rewerse` | store-specific (ZIP) | ~323 |
 | Penny | no | store-specific (ZIP) | ~540 |
 | Kaufland | no | store-specific (ZIP) | varies (not every ZIP) |
-| Lidl | no | regional (marktguru) | ~750 (2–3 weeks) |
-| Lidl — own leaflet² | no (needs `pdftotext`) | sales region of the store | ~382 (1 week) |
+| Lidl² | no (needs `pdftotext`) | sales region of the store | ~382 (1 week) |
 | Netto | no (curl) | store-specific (ZIP) | ~190 |
 | ALDI Nord | no | national¹ | ~240 |
 | ALDI Süd | no (curl) | national¹ | ~75 |
@@ -288,15 +287,20 @@ for this ZIP — both are region-dependent. The Rewe number (~323) comes from a
 live fetch for ZIP 01219 (Dresden, store "REWE Supermarkt", ID 565005) on
 2026-07-18.
 
-² Lidl comes from Lidl's own weekly leaflet (`LIDL_SOURCE=prospekt`, set in
-the nightly workflow and in `~/.config/lechariot/env`; template in
-`scripts/env.example`) — a PDF with a real text layer, read via
-`pdftotext -bbox-layout` (install `poppler-utils`), plus the online-shop
-articles from the leaflet JSON. It carries struck-through prices,
-page-accurate validity windows, images and categories. No API key, no LLM.
-If the variable is unset, the code falls back to the third-party marktguru
-web API — the original source, which the leaflet covered to 96 % when it
-took over on 2026-07-27.
+² Lidl comes from Lidl's own weekly leaflet — a PDF with a real text layer,
+read via `pdftotext -bbox-layout` (install `poppler-utils`), plus the
+online-shop articles from the leaflet JSON. It carries struck-through prices,
+page-accurate validity windows and categories. No API key, no LLM.
+
+This is now the only Lidl source. Until 2026-07-31 an unset `LIDL_SOURCE`
+fell back to the third-party marktguru web API — the original source, which
+the leaflet covered to 96 % when it took over on 2026-07-27. marktguru was
+removed so that nothing can reach it by accident; `LIDL_SOURCE` now only
+chooses between `prospekt` (default) and `prospekt-llm`.
+
+**What that costs:** marktguru was the only Lidl source carrying product
+images. The leaflet paths supply none, so until image crops are extracted
+from the leaflet pages every Lidl offer falls back to its emoji.
 
 An optional third mode, `LIDL_SOURCE=prospekt-llm`, reads the same text layer
 page by page through GitHub Models (free with the GitHub Student pack) to pick

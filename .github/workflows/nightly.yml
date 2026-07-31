@@ -31,8 +31,11 @@ jobs:
       REWE_SECRETS_SET: ${{ secrets.REWE_CERT_PEM != '' && secrets.REWE_KEY_PEM != '' }}
       DB: ${{ github.workspace }}/nightly.db
       LOG: ${{ github.workspace }}/nightly.log
-      # Lidl aus dem eigenen Prospekt statt marktguru (Code-Default bleibt
-      # marktguru als Rückfall, wenn die Variable fehlt).
+      # Lidl aus dem eigenen Prospekt. Seit dem 2026-07-31 ist das auch der
+      # Code-Default — die Zeile steht als Absicht hier, nicht als Schalter.
+      # Vorher fiel eine fehlende Variable auf marktguru zurück, und genau
+      # daran hing der Fehler: `branches.yml` setzt sie nicht und holte
+      # deshalb aus einer anderen Quelle als dieser Lauf.
       LIDL_SOURCE: prospekt
     steps:
       - uses: actions/checkout@v4

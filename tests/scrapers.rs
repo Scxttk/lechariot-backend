@@ -250,59 +250,6 @@ fn penny_duplicate_titles_across_categories_are_deduped() {
 
 // ---------------------------------------------------------------- Lidl
 
-// Quelle seit 2026-07: marktguru-Web-API (Wochenprospekt inkl. Lebensmittel).
-// Die frühere lidl.de-Onlineshop-Suche (store=1) enthielt nur Non-Food +
-// Weinwelt — die Filial-Lebensmittelangebote fehlten komplett.
-#[test]
-fn lidl_marktguru_fixture_parses_offers_and_skips_foreign_advertisers() {
-    let raw: serde_json::Value =
-        serde_json::from_str(include_str!("fixtures/lidl/marktguru_offers.json")).unwrap();
-    let items = raw["results"].as_array().unwrap();
-    assert_eq!(items.len(), 7);
-
-    let offers: Vec<_> = items
-        .iter()
-        .filter_map(|it| scrapers::lidl::parse_offer(it, "LIDL_5745"))
-        .collect();
-    // Der letzte Treffer ist ein Fremdhändler (q=lidl ist Volltextsuche) und
-    // muss übersprungen werden.
-    assert_eq!(offers.len(), 6, "6 Lidl-Offers, Fremdhändler raus");
-    assert!(offers.iter().all(|o| o.title != "Fremdhändler-Produkt"));
-
-    let filet = &offers[0];
-    assert_eq!(filet.title, "Hähnchen-Brustfilet");
-    assert_eq!(filet.price, Some(5.19));
-    assert_eq!(filet.subtitle.as_deref(), Some("0.6 kg"));
-    assert_eq!(filet.overline.as_deref(), Some("Metzgerfrisch"));
-    assert_eq!(filet.category.as_deref(), Some("Geflügel"));
-    // UTC "2026-07-12T22:00:00Z" = Montag 00:00 Europe/Berlin
-    assert_eq!(filet.valid_from.as_deref(), Some("2026-07-13"));
-    assert_eq!(filet.valid_until.as_deref(), Some("2026-07-18"));
-    assert_eq!(
-        filet.images,
-        vec!["https://mg2de.b-cdn.net/api/v1/offers/23984798/images/default/0/medium.jpg"]
-    );
-
-    // Dummy-Brand "thisisnobrand123" darf nicht als Overline durchkommen
-    let nektarinen = offers.iter().find(|o| o.title == "Nektarinen").unwrap();
-    assert_eq!(nektarinen.overline, None);
-
-    // Halbwochen-Angebot (Do–Sa): eigenes Zeitfenster aus validityDates
-    let kaese = offers.iter().find(|o| o.title == "XXL Käsescheiben").unwrap();
-    assert_eq!(kaese.valid_from.as_deref(), Some("2026-07-16"));
-    assert_eq!(kaese.valid_until.as_deref(), Some("2026-07-18"));
-
-    // quantity > 1 landet im Untertitel
-    let brot = offers.iter().find(|o| o.title == "Fladenbrot mit Kümmel und Sesam").unwrap();
-    assert_eq!(brot.subtitle.as_deref(), Some("3 x 1 Stk"));
-
-    for o in &offers {
-        assert!(o.price.is_some(), "Preis fehlt bei {}", o.title);
-        assert!(o.valid_from.is_some(), "valid_from fehlt bei {}", o.title);
-        assert!(o.valid_until.is_some(), "valid_until fehlt bei {}", o.title);
-    }
-}
-
 // ---------------------------------------------------------------- Store-Finder
 // Offline-Fixtures der Filialfinder (Lidl: Bing SDS, ALDI: Uberall) und des
 // Nominatim-Geocoders, gekürzte Live-Antworten vom 2026-07-17 (PLZ 01219).
@@ -495,7 +442,7 @@ fn store_finder_resolve_falls_back_to_national_on_error() {
 
 // ------------------------------------------------- Lidl-Prospekt (eigene Quelle)
 
-// Zweiter, von marktguru unabhängiger Weg für Lidl: Lidls eigener
+// Der Weg für Lidl, seit marktguru am 2026-07-31 entfernt wurde: Lidls eigener
 // Wochenprospekt als PDF mit Textebene. Die Fixture ist die gekürzte
 // `pdftotext -bbox-layout`-Ausgabe der oberen Hälfte von Seite 15 des
 // Prospekts vom 2026-07-20 (Absatzregion 20, Dresden) — echte
@@ -587,8 +534,8 @@ fn store_finder_reads_the_absatzregion_as_number_or_string() {
     assert_eq!(scrapers::store_finder::parse_region_code(&empty), None);
 }
 
-// Die zehn marktguru-Angebote, deren Preis nirgends im Prospekttext steht,
-// waren am 2026-07-25 ausnahmslos Onlineshop-Möbel. Genau die stehen sauber
+// Die zehn Angebote des damaligen marktguru-Abgleichs, deren Preis nirgends
+// im Prospekttext steht, waren am 2026-07-25 ausnahmslos Onlineshop-Möbel. Genau die stehen sauber
 // strukturiert im `products`-Feld des Prospekt-JSON — inklusive Bild und
 // Kategorie, die der PDF-Weg gar nicht liefern kann.
 #[test]
