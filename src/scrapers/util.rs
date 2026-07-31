@@ -142,11 +142,66 @@ pub fn curl_get(url: &str, extra_headers: &[(&str, &str)]) -> Result<String> {
     bail!("Wiederholte Fehler für {url} (Akamai-Blockade?)")
 }
 
-// GET ohne Redirect-Folgen; liefert das Redirect-Ziel (Location) einer 3xx-Antwort.
+/// Wie eine Antwort ohne Redirect-Ziel zu lesen ist.
+///
+/// Der Unterschied ist der ganze Punkt: „Die Seite gibt es nicht" ist ein
+/// Ergebnis, „ich wurde geblockt" ist ein Ausfall. Bis 2026-07-31 sahen beide
+/// Fälle gleich aus — leeres `%{redirect_url}` — und wurden gleich behandelt:
+/// dreimal versuchen, dann dieselbe Meldung. Damit war ein echter 404 dreimal
+/// so langsam wie nötig und eine Akamai-Blockade nicht als solche zu erkennen.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RedirectOutcome {
+    /// 3xx mit `Location` — der Normalfall.
+    Target(String),
+    /// 404/410: Diese Marktseite gibt es nicht. Nicht wiederholen, sie kommt
+    /// beim zweiten Versuch auch nicht wieder.
+    Gone(String),
+    /// Alles andere: 403/429/5xx, `000` (Verbindung kam nicht zustande) und
+    /// **200 ohne Location** — Akamai beantwortet eine geblockte Anfrage mit
+    /// einer Challenge-Seite, nicht mit einem Fehlerstatus. Wiederholen lohnt.
+    Blocked(String),
+}
+
+/// Die Einteilung als reine Funktion, damit ein Test sie ohne Netz fassen kann.
+pub fn redirect_outcome(status: &str, target: &str) -> RedirectOutcome {
+    let target = target.trim();
+    if !target.is_empty() {
+        return RedirectOutcome::Target(target.to_string());
+    }
+    match status.trim() {
+        "404" | "410" => RedirectOutcome::Gone(status.trim().to_string()),
+        other => RedirectOutcome::Blocked(other.to_string()),
+    }
+}
+
+/// Wartezeiten zwischen den Versuchen, in Millisekunden. Begrenzt und
+/// aufsteigend: Der gemeldete Ausfall (2026-07-30, EDEKA Böse in Ahlbeck) hat
+/// die bisherigen 3 s × 2 zweimal überdauert, und eine IP-Blockade bei Akamai
+/// hält länger als eine Sekunde. Länger als 13 s insgesamt darf es nicht
+/// werden — der Redirect fällt je Filiale an, und ein Gebiet hat ein Dutzend.
+pub const REDIRECT_BACKOFF_MS: &[u64] = &[1_000, 3_000, 9_000];
+
+/// GET ohne Redirect-Folgen; liefert das Redirect-Ziel (Location) einer
+/// 3xx-Antwort.
+///
+/// Wiederholt **nur** bei [`RedirectOutcome::Blocked`], mit wachsender Pause.
+/// Ein 404 kommt sofort zurück: Papier über einen echten Fehler wäre genau
+/// das, was hier nicht passieren soll.
 pub fn curl_redirect_url(url: &str, extra_headers: &[(&str, &str)]) -> Result<String> {
-    for attempt in 0..RETRIES {
+    curl_redirect_url_with_backoff(url, extra_headers, REDIRECT_BACKOFF_MS)
+}
+
+/// Wie [`curl_redirect_url`], nur mit einstellbaren Pausen — der Test soll die
+/// Wiederholungen zählen, nicht 13 Sekunden schlafen.
+pub fn curl_redirect_url_with_backoff(
+    url: &str,
+    extra_headers: &[(&str, &str)],
+    backoff_ms: &[u64],
+) -> Result<String> {
+    let mut last = RedirectOutcome::Blocked("000".to_string());
+    for attempt in 0..=backoff_ms.len() {
         if attempt > 0 {
-            std::thread::sleep(std::time::Duration::from_secs(3));
+            std::thread::sleep(Duration::from_millis(backoff_ms[attempt - 1]));
         }
         polite_pause(url);
         let mut cmd = std::process::Command::new("curl");
@@ -156,7 +211,7 @@ pub fn curl_redirect_url(url: &str, extra_headers: &[(&str, &str)]) -> Result<St
             .arg("--max-time")
             .arg("30")
             .arg("-w")
-            .arg("%{redirect_url}")
+            .arg("%{http_code} %{redirect_url}")
             .args(["-H", &format!("User-Agent: {USER_AGENT}")])
             .args(["-H", "Accept-Language: de-DE,de;q=0.9,en;q=0.8"])
             .args(["-H", "Accept-Encoding: gzip, deflate, br"]);
@@ -168,10 +223,25 @@ pub fn curl_redirect_url(url: &str, extra_headers: &[(&str, &str)]) -> Result<St
             .output()
             .context("curl nicht gefunden — wird für diesen Scraper benötigt")?;
 
-        let target = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !target.is_empty() {
-            return Ok(target);
+        let written = String::from_utf8_lossy(&output.stdout);
+        let (status, target) = written.trim().split_once(' ').unwrap_or((written.trim(), ""));
+        last = redirect_outcome(status, target);
+        match &last {
+            RedirectOutcome::Target(t) => return Ok(t.clone()),
+            // Ein 404 ist eine Antwort, kein Ausfall — sofort zurück.
+            RedirectOutcome::Gone(status) => {
+                bail!("{url} beantwortet den Markt-Redirect mit HTTP {status} — diese Marktseite gibt es nicht")
+            }
+            RedirectOutcome::Blocked(_) => continue,
         }
     }
-    bail!("Kein Redirect-Ziel für {url} erhalten")
+    let RedirectOutcome::Blocked(status) = last else {
+        unreachable!("Target und Gone kehren in der Schleife zurück");
+    };
+    bail!(
+        "Kein Redirect-Ziel für {url} nach {} Versuchen (zuletzt HTTP {status}) — \
+         die Seite antwortet, aber ohne Location; von einem Mac beantwortet dieselbe \
+         URL sie sofort mit 308, das riecht nach einer Blockade der Runner-IP",
+        backoff_ms.len() + 1
+    )
 }

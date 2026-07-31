@@ -9,4 +9,7 @@ pub mod penny;
 pub mod rewe;
 pub mod store_finder;
 
-pub(crate) mod util;
+// Öffentlich seit dem Markt-Redirect (2026-07-31): Die Entscheidung
+// „geblockt oder gibt es nicht" ist das, woran der stille Filialverlust hing,
+// und ein Test muss sie fassen können.
+pub mod util;

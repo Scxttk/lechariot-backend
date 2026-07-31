@@ -203,8 +203,23 @@ pub fn resolve(draft: BranchDraft) -> Result<Branch> {
         Some(id) => id.to_string(),
         None => {
             // Alte URL -> 308-Redirect -> https://www.edeka.de/maerkte/<id>/
-            let target = curl_redirect_url(url, MARKET_PAGE_HEADERS)
-                .with_context(|| util::ctx("EDEKA", "Markt-Redirect auflösen", url))?;
+            //
+            // Der Name gehört in die Meldung, nicht nur der Slug: Die
+            // Zusammenfassung des Laufs zeigt seit #36 jede WARNUNG-Zeile an,
+            // und „EDEKA Böse, Ahlbeck" ist das, wonach jemand sucht, der
+            // seine Filiale vermisst — nicht `/eh/mv/edeka-boese-.../`.
+            let target = curl_redirect_url(url, MARKET_PAGE_HEADERS).with_context(|| {
+                format!(
+                    "{} — Filiale „{}“{}",
+                    util::ctx("EDEKA", "Markt-Redirect auflösen", url),
+                    draft.name,
+                    draft
+                        .city
+                        .as_deref()
+                        .map(|c| format!(" in {c}"))
+                        .unwrap_or_default()
+                )
+            })?;
             market_id_from_url(&target)
                 .with_context(|| format!("Unerwartetes Redirect-Ziel für EDEKA-Markt: {target}"))?
                 .to_string()
