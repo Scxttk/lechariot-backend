@@ -105,7 +105,16 @@ fn jitter_ms(range: u64) -> u64 {
 }
 
 // GET über System-curl; liefert den Response-Body als String (nur bei HTTP 200).
+//
+// Der beobachtete Status steht in der Fehlermeldung. Bis 2026-08-01 stand er
+// dort nicht, und das hat einen ganzen Ausfall unerklärbar gemacht: In der
+// Nightly 30713329472 wiesen Nettos vier Angebotsseiten **jeden** der drei
+// Versuche ab, 35 Minuten lang, über sieben Filialen. Ob das 403 (Blockade),
+// 429 (zu schnell) oder 000 (Verbindung kam nicht zustande) war, stand
+// nirgends — und ohne diese eine Zahl ist die Ursache nicht zu benennen.
+// Dieselbe Unterscheidung führt `curl_redirect_url` unten schon länger.
 pub fn curl_get(url: &str, extra_headers: &[(&str, &str)]) -> Result<String> {
+    let mut gesehen: Vec<String> = Vec::new();
     for attempt in 0..RETRIES {
         if attempt > 0 {
             std::thread::sleep(std::time::Duration::from_secs(3));
@@ -133,13 +142,35 @@ pub fn curl_get(url: &str, extra_headers: &[(&str, &str)]) -> Result<String> {
         let body = String::from_utf8_lossy(&output.stdout);
         let (content, status) = match body.rsplit_once('\n') {
             Some((c, s)) => (c, s.trim()),
-            None => continue,
+            // Ohne die angehängte Statuszeile hat curl gar nichts geschrieben.
+            None => {
+                gesehen.push("ohne Ausgabe".to_string());
+                continue;
+            }
         };
         if status == "200" {
             return Ok(content.to_string());
         }
+        gesehen.push(status.to_string());
     }
-    bail!("Wiederholte Fehler für {url} (Akamai-Blockade?)")
+    bail!("{url} in {RETRIES} Versuchen abgewiesen (HTTP {})", gesehen.join("/"))
+}
+
+#[cfg(test)]
+mod curl_get_tests {
+    /// Der Status muss aus curl bis in die Fehlermeldung durchkommen — sonst
+    /// ist die Zeile im Log wieder so stumm wie am 01.08.2026. Live, weil
+    /// genau die Strecke curl → Meldung geprüft wird; ein Stub prüfte sie nicht.
+    ///
+    /// `cargo test --lib curl_get -- --ignored --nocapture`
+    #[test]
+    #[ignore = "Live-Test: braucht Netz"]
+    fn status_steht_in_der_meldung() {
+        let err = super::curl_get("https://www.netto-online.de/gibt-es-nicht-404", &[])
+            .expect_err("404 darf kein Ok sein");
+        let meldung = format!("{err:#}");
+        assert!(meldung.contains("404"), "Status fehlt in: {meldung}");
+    }
 }
 
 /// Wie eine Antwort ohne Redirect-Ziel zu lesen ist.

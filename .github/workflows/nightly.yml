@@ -228,21 +228,37 @@ jobs:
           # Lauf drei Lidl-Märkte fallen lassen; die Zeile stand im Log, sah
           # aus wie eine Notiz, und niemand hat sie drei Wochen lang gelesen.
           # Der Doppelpunkt gehört nur der Hälfte der Meldungen: sync.rs
-          # schreibt "WARNUNG: …", die Scraper "WARNUNG [EDEKA] …". Ohne den
-          # zweiten Schnitt stand das Wort in jeder Scraper-Annotation doppelt.
+          # schreibt "…: …", die Scraper "… [EDEKA] …". Ohne den zweiten
+          # Schnitt stand das Wort in jeder Scraper-Annotation doppelt.
+          #
+          # Das Suchmuster steht **einmal** in einer Variablen, und das ist
+          # Absicht. Actions schreibt den Quelltext dieses Schritts oben in
+          # das Konsolen-Log; jedes Vorkommen des Wortes im Skript ist dort
+          # ein weiterer Treffer. Wer `grep -c` über das heruntergeladene
+          # Konsolen-Log laufen lässt, zählt deshalb die Meldungen des Laufs
+          # **plus** dieses Skript — am 01.08.2026 waren das 19 statt 10.
+          # Die belastbare Zahl steht unten als "Warnungen im Lauf" und im
+          # Artefakt `nightly.log`, das nur der Sync beschreibt.
+          PRAEFIX='WARNUNG'
+          MUSTER="^$PRAEFIX"
           while IFS= read -r zeile; do
-            zeile="${zeile#WARNUNG: }"
-            echo "::warning title=Nightly sync::${zeile#WARNUNG }"
-          done < <(grep "^WARNUNG" "$LOG" 2>/dev/null || true)
+            zeile="${zeile#"$PRAEFIX": }"
+            echo "::warning title=Nightly sync::${zeile#"$PRAEFIX" }"
+          done < <(grep "$MUSTER" "$LOG" 2>/dev/null || true)
 
-          warnungen=$(grep -c "^WARNUNG" "$LOG" 2>/dev/null || true)
+          warnungen=$(grep -c "$MUSTER" "$LOG" 2>/dev/null || true)
+          echo "Warnungen im Lauf: ${warnungen:-0} (Quelle: $LOG)"
 
           {
             echo "## Nightly sync"
-            if grep -q "^WARNUNG.*übersprungen" "$LOG" 2>/dev/null; then
+            if grep -q "$MUSTER.*übersprungen" "$LOG" 2>/dev/null; then
               echo ""
-              grep "^WARNUNG.*übersprungen" "$LOG" \
-                | sed 's/^WARNUNG: /> ⚠️ **/; s/$/**/'
+              # Beide Formen abschneiden, nicht nur die mit Doppelpunkt. Die
+              # Annotation oben tut das seit #16, diese Zeile nicht — eine
+              # Scraper-Meldung ("… [Lidl] …") behielt deshalb ihr Präfix,
+              # verlor das Blockquote und bekam am Ende ein nacktes "**".
+              grep "$MUSTER.*übersprungen" "$LOG" \
+                | sed "s/^$PRAEFIX: /> ⚠️ **/; s/^$PRAEFIX /> ⚠️ **/; s/\$/**/"
               echo ""
               echo "> Die Zusammenfassung unten ist damit unvollständig."
             fi
@@ -283,7 +299,7 @@ jobs:
               echo ""
               echo "### Warnungen ($warnungen)"
               echo ""
-              grep "^WARNUNG" "$LOG" | sed 's/^/- /'
+              grep "$MUSTER" "$LOG" | sed 's/^/- /'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -332,6 +348,78 @@ jobs:
             exit 1
           fi
           echo "$COUNT Angebote in der DB."
+
+          # ----------------------------------------------------------------
+          # Ketten-Wächter: Auch EINE stumme Kette ist ein Ausfall.
+          #
+          # Die Prüfung oben schlägt erst an, wenn der ganze Lauf nichts
+          # geholt hat. Am 01.08.2026 (Lauf 30713329472) lieferte Netto in
+          # 7 von 7 Filialen null Angebote — jede der vier Angebotsseiten
+          # wies jeden der drei Versuche ab, 35 Minuten lang. Acht andere
+          # Ketten luden normal hoch, die Gesamtsumme war fünfstellig, und
+          # der Lauf war grün. Vier Stunden vorher hatte dieselbe Kette
+          # 2.009 Angebote gebracht. Gemerkt hat es niemand.
+          #
+          # Verglichen wird **innerhalb dieses Laufs**, nicht gegen den
+          # vorigen: Welche Ketten wurden versucht ("Filial-Sync: [Kette]",
+          # "Bundesweit-Sync: [Kette]" aus sync.rs), und welche davon haben
+          # etwas hochgeladen ("[Kette] N Angebote hochgeladen" aus
+          # push.rs)? Das kommt ohne `gh run download` aus und hält auch
+          # dann, wenn das Artefakt des Vorlaufs nach 7 Tagen weg ist.
+          KETTEN=$(awk '
+            /^Filial-Sync: \[/ || /^Bundesweit-Sync: \[/ {
+              if (match($0, /\[[^]]*\]/)) {
+                k = substr($0, RSTART + 1, RLENGTH - 2); versuche[k]++
+              }
+              next
+            }
+            /Angebote hochgeladen/ {
+              if (match($0, /\[[^]]*\]/)) {
+                k = substr($0, RSTART + 1, RLENGTH - 2)
+                # Alles hinter "[Kette]" beginnt mit der Zahl; awk liest sie
+                # über die Leerzeichen hinweg.
+                geladen[k] += substr($0, RSTART + RLENGTH) + 0
+                pushes[k]++
+              }
+            }
+            END {
+              for (k in versuche)
+                printf "%s\t%d\t%d\t%d\n", k, versuche[k], pushes[k] + 0, geladen[k] + 0
+            }
+          ' "$LOG" 2>/dev/null | sort || true)
+
+          STUMM=""
+          {
+            echo ""
+            echo "### Ketten"
+            echo ""
+            echo "| Kette | Syncs | Pushes | Angebote |"
+            echo "|---|---:|---:|---:|"
+            while IFS=$'\t' read -r kette versuche pushes geladen; do
+              [ -n "$kette" ] || continue
+              if [ "${geladen:-0}" -eq 0 ]; then
+                STUMM="${STUMM}${STUMM:+, }$kette"
+                echo "| ❌ **$kette** | $versuche | $pushes | **0** |"
+              else
+                echo "| $kette | $versuche | $pushes | $geladen |"
+              fi
+            done <<< "$KETTEN"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -n "$STUMM" ]; then
+            # Bei einem Lauf für EINE Filiale ist eine stumme Kette dasselbe
+            # harmlose Ereignis wie oben bei COUNT=0 — die Filiale
+            # veröffentlicht eben nichts. Nur der volle Lauf macht daraus
+            # einen Fehler: Dort steht hinter jeder Kette ein Dutzend
+            # Filialen, und dass die alle gleichzeitig nichts haben, gibt es
+            # nicht.
+            if [ -n "$ONLY_MARKET" ]; then
+              echo "::warning title=Nightly sync::$STUMM lieferte für Filiale $ONLY_MARKET keine Angebote — bei einem Einzel-Lauf kein Fehler."
+              exit 0
+            fi
+            echo "::error title=Kette ohne Angebote::$STUMM wurde gesynct, hat aber 0 Angebote hochgeladen. Andere Ketten liefen durch, es ist also kein Runner-Ausfall — Log auf abgewiesene Seiten (HTTP-Status) prüfen."
+            exit 1
+          fi
 
       # Verwaiste Bucket-Bilder aufräumen: der Push löscht veraltete offer-Zeilen
       # (push.rs), aber nie ihre gespiegelten Bilder — der offer-images-Bucket
