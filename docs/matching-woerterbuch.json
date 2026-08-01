@@ -8,14 +8,18 @@
     "toast",
     "baguette",
     "ciabatta",
-    "croutons"
+    "croutons",
+    "buns",
+    "brioche"
    ],
    "suffix": [
     "brot",
     "broetchen",
     "brötchen",
-    "toast"
+    "toast",
+    "baguette"
    ],
+   "prefix": [],
    "block": [
     "brotaufstrich",
     "aufbackbrötchen?",
@@ -35,6 +39,7 @@
    "suffix": [
     "milch"
    ],
+   "prefix": [],
    "block": [
     "milchreis",
     "milchschnitte",
@@ -62,7 +67,12 @@
     "kaergarden",
     "kräuterbutter"
    ],
-   "suffix": [],
+   "suffix": [
+    "butter"
+   ],
+   "prefix": [
+    "butter"
+   ],
    "block": [
     "butterkäse",
     "buttergemüse",
@@ -95,11 +105,19 @@
     "tilsiter",
     "camembert",
     "käsestangen",
-    "schmelzkäse"
+    "schmelzkäse",
+    "burrata",
+    "mascarpone",
+    "pecorino",
+    "appenzeller",
+    "harzer"
    ],
    "suffix": [
     "käse",
     "kaese"
+   ],
+   "prefix": [
+    "schmelzkäse"
    ],
    "block": [
     "käsekuchen",
@@ -113,7 +131,8 @@
     "käsestange",
     "käsegebäck",
     "fleischkäse",
-    "twister"
+    "twister",
+    "mascarpone joghurt"
    ]
   },
   "frischkäse": {
@@ -122,13 +141,20 @@
     "frischkaese"
    ],
    "suffix": [],
+   "prefix": [
+    "frischkäse"
+   ],
    "block": []
   },
   "mozzarella": {
    "exact": [
-    "mozzarella"
+    "mozzarella",
+    "mozzarelline"
    ],
    "suffix": [
+    "mozzarella"
+   ],
+   "prefix": [
     "mozzarella"
    ],
    "block": []
@@ -140,6 +166,7 @@
     "schafskäse"
    ],
    "suffix": [],
+   "prefix": [],
    "block": []
   },
   "quark": {
@@ -151,19 +178,27 @@
    "suffix": [
     "quark"
    ],
+   "prefix": [
+    "quark"
+   ],
    "block": [
-    "quarkbällchen"
+    "quarkbällchen",
+    "quarktasche"
    ]
   },
   "joghurt": {
    "exact": [
     "joghurt",
-    "jogurt"
+    "jogurt",
+    "kefir"
    ],
    "suffix": [
     "joghurt",
     "jogurt",
     "ghurt"
+   ],
+   "prefix": [
+    "joghurt"
    ],
    "block": []
   },
@@ -173,11 +208,15 @@
     "schlagsahne",
     "schmand",
     "creme fraiche",
-    "crème fraîche"
+    "crème fraîche",
+    "schlagrahm",
+    "schlag rahm",
+    "sauerrahm"
    ],
    "suffix": [
     "sahne"
    ],
+   "prefix": [],
    "block": [
     "sahnetorte",
     "sahnebonbon"
@@ -193,6 +232,7 @@
    "suffix": [
     "eier"
    ],
+   "prefix": [],
    "block": [
     "eierlikör",
     "eiernudeln",
@@ -213,6 +253,7 @@
    "suffix": [
     "tomaten"
    ],
+   "prefix": [],
    "block": [
     "tomatenmark",
     "tomatensoße",
@@ -234,6 +275,7 @@
     "gurke",
     "gurken"
    ],
+   "prefix": [],
    "block": [
     "gewürzgurken",
     "essiggurken",
@@ -248,6 +290,7 @@
    "suffix": [
     "paprika"
    ],
+   "prefix": [],
    "block": [
     "paprikachips",
     "paprikasauce"
@@ -266,6 +309,9 @@
    "suffix": [
     "salat"
    ],
+   "prefix": [
+    "salat"
+   ],
    "block": [
     "salatdressing",
     "salatsoße",
@@ -279,7 +325,9 @@
     "matjessalat",
     "thunfisch-salat",
     "salatcreme",
-    "salatmayonnaise"
+    "salatmayonnaise",
+    "salatgurke",
+    "salatgurken"
    ]
   },
   "zwiebeln": {
@@ -293,6 +341,7 @@
    "suffix": [
     "zwiebeln"
    ],
+   "prefix": [],
    "block": [
     "röstzwiebeln",
     "zwiebelringe",
@@ -305,6 +354,7 @@
     "knoblauch"
    ],
    "suffix": [],
+   "prefix": [],
    "block": [
     "knoblauchbaguette",
     "knoblauchsauce"
@@ -320,13 +370,18 @@
    "suffix": [
     "kartoffeln"
    ],
+   "prefix": [
+    "kartoffel"
+   ],
    "block": [
     "kartoffelsalat",
     "kartoffelchips",
     "kartoffelknödel",
     "kartoffelpuffer",
     "süßkartoffeln",
-    "kartoffelecken"
+    "kartoffelecken",
+    "kartoffelsnacks",
+    "kartoffelprodukt"
    ]
   },
   "möhren": {
@@ -335,11 +390,13 @@
     "möhren",
     "karotten",
     "moehren",
-    "bundmöhren"
+    "bundmöhren",
+    "möhrchen"
    ],
    "suffix": [
     "möhren"
    ],
+   "prefix": [],
    "block": []
   },
   "äpfel": {
@@ -351,6 +408,7 @@
    "suffix": [
     "äpfel"
    ],
+   "prefix": [],
    "block": [
     "apfelsaft",
     "apfelmus",
@@ -366,6 +424,7 @@
     "bananen"
    ],
    "suffix": [],
+   "prefix": [],
    "block": [
     "bananenmilch"
    ]
@@ -377,6 +436,7 @@
     "limetten"
    ],
    "suffix": [],
+   "prefix": [],
    "block": [
     "zitronensaft",
     "zitronenlimonade"
@@ -390,6 +450,7 @@
     "clementinen"
    ],
    "suffix": [],
+   "prefix": [],
    "block": [
     "orangensaft",
     "orangenlimonade"
@@ -408,6 +469,9 @@
    "suffix": [
     "beeren"
    ],
+   "prefix": [
+    "beeren"
+   ],
    "block": [
     "erdbeermarmelade",
     "erdbeerjoghurt"
@@ -422,6 +486,7 @@
    "suffix": [
     "trauben"
    ],
+   "prefix": [],
    "block": [
     "traubensaft",
     "traubenzucker"
@@ -438,6 +503,7 @@
    "suffix": [
     "melone"
    ],
+   "prefix": [],
    "block": []
   },
   "pfirsich": {
@@ -460,6 +526,7 @@
     "nektarinen",
     "pflaumen"
    ],
+   "prefix": [],
    "block": [
     "pflaumentomaten",
     "minipflaumen"
@@ -471,6 +538,7 @@
     "avocados"
    ],
    "suffix": [],
+   "prefix": [],
    "block": []
   },
   "zucchini": {
@@ -478,6 +546,7 @@
     "zucchini"
    ],
    "suffix": [],
+   "prefix": [],
    "block": []
   },
   "aubergine": {
@@ -486,6 +555,7 @@
     "auberginen"
    ],
    "suffix": [],
+   "prefix": [],
    "block": []
   },
   "brokkoli": {
@@ -502,9 +572,15 @@
     "pak-choi",
     "zuckermais",
     "rote bete",
-    "ingwerstücke"
+    "ingwerstücke",
+    "lauch",
+    "sellerie",
+    "staudensellerie"
    ],
-   "suffix": [],
+   "suffix": [
+    "brokkoli"
+   ],
+   "prefix": [],
    "block": []
   },
   "pilze": {
@@ -518,6 +594,7 @@
     "pilze",
     "champignons"
    ],
+   "prefix": [],
    "block": [
     "pilzpfanne",
     "pilzsauce"
@@ -534,6 +611,9 @@
    "suffix": [
     "hackfleisch",
     "hack"
+   ],
+   "prefix": [
+    "hackfleisch"
    ],
    "block": [
     "hacksteaks"
@@ -555,6 +635,10 @@
     "hähnchen",
     "medaillons"
    ],
+   "prefix": [
+    "hähnchen",
+    "chicken"
+   ],
    "block": [
     "schweinemedaillons",
     "rindfleisch",
@@ -572,6 +656,9 @@
    "suffix": [
     "pute"
    ],
+   "prefix": [
+    "pute"
+   ],
    "block": [
     "putenwurst"
    ]
@@ -581,6 +668,7 @@
     "kondensmilch"
    ],
    "suffix": [],
+   "prefix": [],
    "block": []
   },
   "kokosmilch": {
@@ -589,6 +677,7 @@
     "kokosnussmilch"
    ],
    "suffix": [],
+   "prefix": [],
    "block": []
   },
   "lamm": {
@@ -599,6 +688,9 @@
     "lammkeule"
    ],
    "suffix": [],
+   "prefix": [
+    "lammkeule"
+   ],
    "block": []
   },
   "schwein": {
@@ -619,12 +711,19 @@
     "spare ribs",
     "schälrippchen",
     "jägerschnitzel",
-    "cordon"
+    "cordon",
+    "krustenbraten",
+    "bauchrippe",
+    "wammerl",
+    "ribs"
    ],
    "suffix": [
     "kotelett",
     "rücken",
     "rippchen"
+   ],
+   "prefix": [
+    "schweine"
    ],
    "block": []
   },
@@ -642,17 +741,23 @@
     "gulasch",
     "corned beef",
     "hüftsteaks",
-    "patties"
+    "patties",
+    "rind",
+    "jungbullen"
    ],
    "suffix": [
     "steak",
     "steaks"
    ],
+   "prefix": [
+    "steak"
+   ],
    "block": [
     "nackensteaks",
     "schweinesteaks",
     "hacksteaks",
-    "putensteaks"
+    "putensteaks",
+    "steakhouse"
    ]
   },
   "bratwurst": {
@@ -665,6 +770,9 @@
    "suffix": [
     "bratwurst",
     "bratwürste"
+   ],
+   "prefix": [
+    "bratwurst"
    ],
    "block": []
   },
@@ -696,16 +804,41 @@
     "markenspeck",
     "räucherlendchen",
     "schinkenspeck",
-    "schinkenkrakauer"
+    "schinkenkrakauer",
+    "bockwurst",
+    "bockwürste",
+    "frankfurter",
+    "weißwurst",
+    "weißwürste",
+    "leberpastete",
+    "pastete",
+    "krakauer",
+    "pfefferbeißer",
+    "bierbeißer",
+    "salametti",
+    "speck",
+    "salsiccia",
+    "krainer",
+    "käsekrainer",
+    "fleischkäse",
+    "leberkäs"
    ],
    "suffix": [
     "wurst",
     "würstchen",
     "schinken",
     "salami",
-    "aufschnitt"
+    "aufschnitt",
+    "wiener"
    ],
-   "block": []
+   "prefix": [
+    "wurst",
+    "schinken",
+    "wiener"
+   ],
+   "block": [
+    "twister"
+   ]
   },
   "fisch": {
    "exact": [
@@ -729,11 +862,22 @@
     "wildlachs",
     "surimi",
     "calamares",
-    "heringsspezialitäten"
+    "heringsspezialitäten",
+    "makrele",
+    "makrelen",
+    "prawns",
+    "octopus",
+    "oktopus"
    ],
    "suffix": [
     "fisch",
     "filet",
+    "garnelen",
+    "hering",
+    "forelle"
+   ],
+   "prefix": [
+    "lachs",
     "garnelen"
    ],
    "block": [
@@ -746,7 +890,9 @@
     "hähnchen",
     "brustfilet",
     "innenfilet",
-    "putenbrustfilet"
+    "putenbrustfilet",
+    "lachsschinken",
+    "lachsrolle"
    ]
   },
   "nudeln": {
@@ -770,6 +916,9 @@
    "suffix": [
     "nudeln"
    ],
+   "prefix": [
+    "teigwaren"
+   ],
    "block": [
     "nudelsalat",
     "nudelsuppe"
@@ -787,6 +936,7 @@
    "suffix": [
     "reis"
    ],
+   "prefix": [],
    "block": [
     "milchreis",
     "reiswaffeln",
@@ -807,6 +957,7 @@
    "suffix": [
     "mehl"
    ],
+   "prefix": [],
    "block": []
   },
   "zucker": {
@@ -818,6 +969,7 @@
    "suffix": [
     "zucker"
    ],
+   "prefix": [],
    "block": [
     "traubenzucker",
     "vanillezucker",
@@ -831,6 +983,7 @@
     "speisesalz"
    ],
    "suffix": [],
+   "prefix": [],
    "block": [
     "salzstangen",
     "salzbrezeln"
@@ -845,12 +998,15 @@
     "speiseöl",
     "erdnussöl",
     "sesamöl",
-    "kokosöl"
+    "kokosöl",
+    "keimöl",
+    "würzöl"
    ],
    "suffix": [
     "öl",
     "oel"
    ],
+   "prefix": [],
    "block": []
   },
   "essig": {
@@ -859,6 +1015,9 @@
     "balsamico"
    ],
    "suffix": [
+    "essig"
+   ],
+   "prefix": [
     "essig"
    ],
    "block": [
@@ -880,6 +1039,7 @@
     "müsli",
     "flocken"
    ],
+   "prefix": [],
    "block": [
     "müsliriegel"
    ]
@@ -892,12 +1052,16 @@
     "brotaufstrich",
     "honig",
     "nutella",
-    "nussnougatcreme"
+    "nussnougatcreme",
+    "apfelmus",
+    "pflaumenmus"
    ],
    "suffix": [
     "marmelade",
-    "konfitüre"
+    "konfitüre",
+    "brotaufstrich"
    ],
+   "prefix": [],
    "block": [
     "eisbecher",
     "biscuits"
@@ -914,11 +1078,13 @@
     "kaffeekapseln",
     "caffe",
     "barista",
-    "kaffeegetränk"
+    "kaffeegetränk",
+    "entkoffeiniert"
    ],
    "suffix": [
     "kaffee"
    ],
+   "prefix": [],
    "block": [
     "kaffeesahne",
     "eiskaffee",
@@ -934,11 +1100,13 @@
     "grüner tee",
     "schwarztee",
     "matcha",
-    "ländertee"
+    "ländertee",
+    "chai"
    ],
    "suffix": [
     "tee"
    ],
+   "prefix": [],
    "block": [
     "eistee"
    ]
@@ -952,6 +1120,7 @@
    "suffix": [
     "wasser"
    ],
+   "prefix": [],
    "block": []
   },
   "saft": {
@@ -967,6 +1136,7 @@
     "saft",
     "schorle"
    ],
+   "prefix": [],
    "block": []
   },
   "limonade": {
@@ -983,11 +1153,18 @@
     "energydrink",
     "kombucha",
     "malztrunk",
-    "erfrischungsgetränk"
+    "erfrischungsgetränk",
+    "bionade",
+    "tonic",
+    "ginger ale",
+    "mate",
+    "softdrink",
+    "spezi"
    ],
    "suffix": [
     "limonade"
    ],
+   "prefix": [],
    "block": []
   },
   "bier": {
@@ -1002,15 +1179,23 @@
     "schwarzbier",
     "biermischgetränk",
     "klostergold",
-    "lager"
+    "lager",
+    "kölsch",
+    "märzen",
+    "hefeweizen",
+    "bock",
+    "pilsner",
+    "hell"
    ],
    "suffix": [
     "bier"
    ],
+   "prefix": [],
    "block": [
     "bierschinken",
     "trauben",
-    "tafeltrauben"
+    "tafeltrauben",
+    "brötchen hell"
    ]
   },
   "wein": {
@@ -1038,9 +1223,22 @@
     "cremant",
     "imiglykos",
     "rosato",
-    "weinhaltiges"
+    "weinhaltiges",
+    "sangria",
+    "lambrusco",
+    "burgunder",
+    "trollinger",
+    "portugieser",
+    "weißherbst",
+    "frizzante",
+    "spritz",
+    "sprizz"
    ],
    "suffix": [
+    "wein",
+    "burgunder"
+   ],
+   "prefix": [
     "wein"
    ],
    "block": [
@@ -1061,11 +1259,15 @@
     "kaubonbons",
     "lollipops",
     "konfekties",
-    "tiramisu"
+    "tiramisu",
+    "fruchtgummi",
+    "fruchtkaramellen",
+    "karamellen"
    ],
    "suffix": [
     "schokolade"
    ],
+   "prefix": [],
    "block": [
     "schokoladenpudding",
     "trinkschokolade"
@@ -1077,13 +1279,20 @@
     "butterkeks",
     "cookies",
     "gebäck",
-    "waffeln"
+    "waffeln",
+    "biskuit",
+    "biskuits"
    ],
    "suffix": [
     "kekse",
-    "keks"
+    "keks",
+    "waffeln"
    ],
-   "block": []
+   "prefix": [],
+   "block": [
+    "reiswaffeln",
+    "maiswaffeln"
+   ]
   },
   "chips": {
    "exact": [
@@ -1096,11 +1305,13 @@
     "salzstangen",
     "kartoffelringe",
     "krupuk",
-    "cheese balls"
+    "cheese balls",
+    "popcorn"
    ],
    "suffix": [
     "chips"
    ],
+   "prefix": [],
    "block": []
   },
   "eis": {
@@ -1116,11 +1327,13 @@
     "icesticks",
     "raketeneis",
     "stracciatella",
-    "eisfrüchte"
+    "eisfrüchte",
+    "stieleis"
    ],
    "suffix": [
     "eis"
    ],
+   "prefix": [],
    "block": [
     "eistee",
     "eiswürfel",
@@ -1135,6 +1348,7 @@
    "suffix": [
     "pizza"
    ],
+   "prefix": [],
    "block": [
     "pizzabrötchen",
     "pizzakäse"
@@ -1152,7 +1366,12 @@
    "suffix": [
     "gemüse"
    ],
-   "block": []
+   "prefix": [
+    "gemüse"
+   ],
+   "block": [
+    "gemüsebrühe"
+   ]
   },
   "pommes": {
    "exact": [
@@ -1160,9 +1379,12 @@
     "pommes frites",
     "wedges",
     "kroketten",
-    "rösti"
+    "rösti",
+    "fritte",
+    "fritten"
    ],
    "suffix": [],
+   "prefix": [],
    "block": []
   },
   "tofu": {
@@ -1176,6 +1398,7 @@
     "gemüsebällchen"
    ],
    "suffix": [],
+   "prefix": [],
    "block": []
   },
   "eintopf": {
@@ -1183,12 +1406,15 @@
     "eintopf",
     "suppe",
     "brühe",
-    "bouillon"
+    "bouillon",
+    "eintöpfe",
+    "fond"
    ],
    "suffix": [
     "eintopf",
     "suppe"
    ],
+   "prefix": [],
    "block": []
   },
   "konserven": {
@@ -1206,10 +1432,20 @@
     "oliven",
     "pfefferoni",
     "brechbohnen",
-    "datteln"
+    "datteln",
+    "hülsenfrüchte",
+    "artischocke",
+    "artischocken",
+    "antipasti",
+    "buschbohnen"
    ],
-   "suffix": [],
-   "block": []
+   "suffix": [
+    "rotkohl"
+   ],
+   "prefix": [],
+   "block": [
+    "antipasti creme"
+   ]
   },
   "soßen": {
    "exact": [
@@ -1230,7 +1466,9 @@
     "zaziki",
     "tsatsiki",
     "dip",
-    "dips"
+    "dips",
+    "hummus",
+    "meerrettich"
    ],
    "suffix": [
     "sauce",
@@ -1238,6 +1476,7 @@
     "sosse",
     "ketchup"
    ],
+   "prefix": [],
    "block": []
   },
   "gewürze": {
@@ -1250,11 +1489,13 @@
     "gewürzmischung",
     "kräuter",
     "koriander",
-    "ingwer"
+    "ingwer",
+    "petersilie"
    ],
    "suffix": [
     "gewürz"
    ],
+   "prefix": [],
    "block": [
     "gewürzgurken"
    ]
@@ -1282,7 +1523,11 @@
     "blätterteig",
     "quarkbällchen",
     "börekstick",
-    "eisgebäck"
+    "eisgebäck",
+    "baklava",
+    "mohnhappen",
+    "schweinsöhrchen",
+    "laugenstange"
    ],
    "suffix": [
     "kuchen",
@@ -1290,8 +1535,10 @@
     "törtchen",
     "croissant",
     "brezel",
-    "ciabatta"
+    "ciabatta",
+    "gebäck"
    ],
+   "prefix": [],
    "block": []
   },
   "windeln/hygiene": {
@@ -1315,6 +1562,7 @@
     "papier",
     "waschmittel"
    ],
+   "prefix": [],
    "block": [
     "stofftaschentücher"
    ]
@@ -1348,12 +1596,15 @@
     "sherry",
     "veterano",
     "cocktails",
-    "bittergetränk"
+    "bittergetränk",
+    "aquavit",
+    "weizenkorn"
    ],
    "suffix": [
     "likör",
     "limes"
    ],
+   "prefix": [],
    "block": []
   },
   "pudding": {
@@ -1364,9 +1615,15 @@
     "grießpudding",
     "mousse",
     "milchreis",
-    "puddingpulver"
+    "puddingpulver",
+    "grütze",
+    "rote grütze"
    ],
    "suffix": [
+    "pudding",
+    "dessert"
+   ],
+   "prefix": [
     "pudding"
    ],
    "block": []
@@ -1383,11 +1640,17 @@
     "pistazienkerne",
     "walnüsse",
     "studentenfutter",
-    "trockenfrüchte"
+    "trockenfrüchte",
+    "walnusskerne",
+    "apfelringe"
    ],
    "suffix": [
     "kerne",
     "nüsse"
+   ],
+   "prefix": [
+    "cashewkerne",
+    "walnusskerne"
    ],
    "block": []
   },
@@ -1401,6 +1664,7 @@
    "suffix": [
     "margarine"
    ],
+   "prefix": [],
    "block": []
   },
   "fertiggericht": {
@@ -1420,12 +1684,15 @@
     "frühlingsrollen",
     "frühlingsrolle",
     "gua bao",
-    "jjigae"
+    "jjigae",
+    "dumpling",
+    "dumplings"
    ],
    "suffix": [
     "gericht",
     "teigtaschen"
    ],
+   "prefix": [],
    "block": [
     "tortilla"
    ]
@@ -1439,6 +1706,7 @@
     "reiswaffeln"
    ],
    "suffix": [],
+   "prefix": [],
    "block": []
   },
   "schoten/hülsen": {
@@ -1451,6 +1719,7 @@
    "suffix": [
     "schoten"
    ],
+   "prefix": [],
    "block": []
   },
   "protein/fitness": {
@@ -1464,6 +1733,7 @@
     "trinkmahlzeit"
    ],
    "suffix": [],
+   "prefix": [],
    "block": []
   },
   "fleisch": {
@@ -1471,6 +1741,7 @@
    "suffix": [
     "frikadellen"
    ],
+   "prefix": [],
    "block": []
   },
   "obst": {
@@ -1482,10 +1753,21 @@
     "kiwi",
     "ananas",
     "mango",
-    "sungold"
+    "sungold",
+    "grapefruit",
+    "grapefruits",
+    "passionsfrucht"
    ],
    "suffix": [],
-   "block": []
+   "prefix": [
+    "obst"
+   ],
+   "block": [
+    "schöfferhofer",
+    "radler",
+    "naturradler",
+    "obstgarten"
+   ]
   },
   "kakao": {
    "exact": [
@@ -1496,6 +1778,7 @@
    "suffix": [
     "kakao"
    ],
+   "prefix": [],
    "block": []
   },
   "ente": {
@@ -1505,6 +1788,7 @@
     "entenbrust"
    ],
    "suffix": [],
+   "prefix": [],
    "block": []
   }
  },
@@ -1960,7 +2244,19 @@
   "instantgerichte": "fertiggericht",
   "herzhafte aufstriche": "soßen",
   "dips": "soßen",
-  "windeln": "windeln/hygiene"
+  "windeln": "windeln/hygiene",
+  "bier": "bier",
+  "fisch": "fisch",
+  "schnittkäse": "käse",
+  "kaffee": "kaffee",
+  "schinken": "wurst",
+  "bäckerei": "backwaren",
+  "sportnahrung": "protein/fitness",
+  "chips knabbereien": "chips",
+  "lakritz fruchtgummi": "schokolade",
+  "nudeln pasta": "nudeln",
+  "nüsse trockenfrüchte": "nüsse",
+  "rindfleisch": "rind"
  },
  "nonfood_cat": "mode|style|heim|haus|garten|haustier|tierbedarf|tiernahrung|pflanzen|angeln|elektro|medien|kinderzimmer|wäschepflege|schulstart|alles für die schule|kochen-und-grillen|drogerie|spielzeug|alltagshelfer|technik|spielwaren|baumarkt|multimedia|bekleidung|schuhe|camping|auto|buero|non.?food|onlineshop|e-bikes?|fahrrad|trolley|koffer|unterhemd|\\btops\\b|\\bteller\\b|sch[üu]sseln?|staubsauger|wischroboter|k[üu]chenmasch|n[äa]hmasch|batterien|\\bfarben\\b|kleber|zahngesundheit|glasartikel|aufbewahr|essgeschirr|reinigungsger|k[üu]chenger|k[üu]chengro|k[üu]chenzubeh|grillzubeh|backzubeh|damen|herren|w[äa]sche\\b|leuchten|m[öo]bel|werkzeug|haartrockner|rasierer|zahnpflege|fernseh|led ?& ?lcd|kapsel|padmasch|\\bk[üu]che\\b|blumen|strauß|kochen-und-backen|reinigen|waschmittel",
  "nonfood_terms": "lichterkette|lampion|wäschest|wäscheklammer|wäschekorb|kettensäge|akku|werkzeug|kinderbuch|spielzeug|\\blego\\b|rosen\\b|blumen|pflanze|socken|shorts|shirt|cap\\b|hose|schuhe|handtuch|bettwäsche|pfannen?\\b|topf\\b|löffel|messer|grill\\b|kohle|batterie|lampe|leuchte|katzen|hunde|tiernahrung|nassfutter|trockenfutter|snack für|rasenkanten|solar|deko|kissen|matratze|drucker|kopfhörer|wc-|reiniger|megaperls|oxi action|waschpulver|schreibwaren|mikrofon|duschregal|sonnensegel|wäscheparf|karaoke|trinkzubehör|wäschetrockner|weißer riese|sonnenspray|duftspüler|sonnencreme|feuchttücher|servietten|haushaltstücher|klumpstreu|geschirrtücher|platzset|schlafsack|fusselrolle|bügeleisen|glasschüssel|lautsprecher|geräusche-box|fliegengitter|kajak|husarenknöpfchen|lavendel|bilderbuch|wecker|hairstyler|bastelkoffer|kochgeschirr|grillplatte|boombox|fliegenfalle|mottenabwehr|badvorleger|schrubber|kosmetikspiegel|shorty|plaid|fototafel|komfort-bh|pantoletten|spannbetttuch|küchentücher|sneaker|hoodie|bodyspray|deospray|haarspray|rasierkling|sonnenschutz|dutch oven|gläsersortiment|sonnenschirm|tischdecke|fleece|wellnessbürste|maniküre|pediküre|teppich|taillenslip|haftcreme|wasserballon|doppelwandig|kollagenpulver|pokémon|pokemon|plüsch|spielfigur|sammelkarten|tiptoi|autorennbahn|gesellschaftsspiel|kreuzworträtsel|rätselbuch|pixi|bastel|schüleretui|sticker|puzzle|holzperlen|magnet-bausatz|wasserbahn|kinderbesteck|steckdose|usb|ladegerät|smart-tv|wasserkocher|toaster|standmixer|espressomaschine|kaffeemaschine|kaffeevollautomat|kapselmaschine|waffeleisen|reiskocher|luftkühler|ventilator|wetterstation|vakuumiergerät|hamburger-maker|hamburger maker|inspektionskamera|range extender|mini-led-tv|qled|e-bike|faltrad|mountainbike|fahrradträger|mähroboter|heckenschere|bohrhammer|abbruchhammer|bohrer|winkelschleifer|meißel|werkstatt|rohrzange|bolzenschneider|kabelbinder|elektrohobel|feinbohrschleifer|spannzwingen|zwingen-set|rasendünger|gartenspritze|gartenhocker|sanitär|montageschlüssel|sekundenkleber|buntlack|abdeckplane|duschtürdichtung|badewannenmatte|duschhocker|steppbett|spannbettlaken|tagesdecke|daunendecke|luftbett|matratze|kleiderschrank|drehtürenschrank|büroschrank|bürostuhl|beistelltisch|wohnzimmertisch|tischgruppe|schuhregal|metallregal|kunststoffregal|regalwürfel|polsterbank|schlafsessel|schminktisch|nischenwagen|akustikpaneel|bilderrahmen|sofa |brotkasten|kartoffelstampfer|schneebesen|kleid|tunika|slips|pyjama|leggings|unterhemden|retroboxer|sandalen|bademantel|freizeitanzug|loungewear|trikot-set|tops |ripptops|jersey|boardcase|reisetasche|rucksack|einkaufstrolley|packbänder|kuppelzelt|autodachzelt|zelt |trampolin|nestschaukel|rutsche|sandkasten|whirlpool|sup |sup-|campingstuhl|spieltipi|matschküche|super soaker|großfahrzeug|mini-fahrzeug|rennboot|inkontinenz|rollator|blutdruckmess|pulsoximeter|lesehilfe|spezialbrille|erste-hilfe|massagematte|haltungstrainer|beintrainer|rückenstütz|körperanalyse|waschhilfe|slipeinlagen|mighty patch|orchidee|phalaenopsis|chrysanthem|alpenveilchen|hortensie|glockenblume|dahlie|aster|eustoma|feigenkaktus|bogenhanf|celosia|zauberglöckchen|prärieenzian|rosenstrauß|bunter strauß|alufolie|frischhaltefolie|netflix|wertkarte|löschdecke|trinkflasche|zitronensäure|insektenschutz|corega|axe ",

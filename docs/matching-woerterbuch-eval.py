@@ -56,6 +56,30 @@ KAT_ROH = {
     "herzhafte Aufstriche": "soßen",
     "Dips": "soßen",
     "Windeln": "windeln/hygiene",
+    # Runde 2026-08-01, Op 2: zwölf weitere Kategorien aus dem 11-Regionen-
+    # Korpus. Aufnahmekriterium war nicht „hilft viel", sondern: JEDES Produkt,
+    # das im Korpus unter dieser Kategorie steht, gehört zu dem Begriff —
+    # nachgesehen, nicht geschätzt (Produkte gesamt / davon vorher ungetaggt).
+    "Bier": "bier",                       # 26/3  — alle 26 sind Bier, 23 tragen `bier` schon über den Titel
+    "Fisch": "fisch",                     # 6/2   — alle 6 sind Fisch (die 2: Flusskrebssalat, Norweg. Lachsfiletseite)
+    "Schnittkäse": "käse",                # 7/4   — die 4 sind „Plus Pack 156 g, Bärlauch/Cremig/Mild Nussig/Würzig"
+    "Kaffee": "kaffee",                   # 2/1   — „Crema e Aroma 1 kg"
+    "Schinken": "wurst",                  # 4/1   — „Bacon 150 g"; die anderen 3 tragen `wurst` schon
+    "Bäckerei": "backwaren",              # 7/3   — Dinkel-Bürli, Vollkorn-Saaten-Rusti, Speck-Käse-Twister
+    "Sportnahrung": "protein/fitness",    # 9/4   — Kreatinpulver, Magnesium-Sticks, Flavor Powder, Getränkesirup
+    "Chips & Knabbereien": "chips",       # 4/2   — Grissotti (Sesam, Sesam-Mohn-Leinsamen); `chips` führt Cracker und Salzstangen
+    "Lakritz & Fruchtgummi": "schokolade",# 4/2   — `schokolade` ist der Süßwaren-Topf des Wörterbuchs (Haribo, Katjes, Lakritz)
+    "Nudeln & Pasta": "nudeln",           # 1/1   — „Lasagneblätter 500 g"
+    "Nüsse & Trockenfrüchte": "nüsse",    # 1/1   — „Getrocknete Cranberries 200 g"
+    "Rindfleisch": "rind",                # 1/1   — „Rind Hamburger 400 g"
+    # Bewusst NICHT aufgenommen, obwohl sie ungetaggte Zeilen tragen: die
+    # Kategorie nennt zwei Familien oder eine ganze Abteilung, und ein Begriff
+    # daraus wäre für den Rest falsch. „Molkereiprodukte, Fette" (5 ungetaggt,
+    # aber Käse, Joghurt, Pudding, Margarine nebeneinander), „Alkoholfreie
+    # Getränke" (Wasser/Limo/Saft gemischt), „Obst und Gemüse", „Frühstück",
+    # „Grundnahrungsmittel", „Kochen und Backen", „Feinkost, Konserven",
+    # „Frische-Aktion: Fleisch & Fisch", „Wein und Spirituosen", „Kühlung"
+    # (14 ungetaggt, aber Wurst, Käse, Milch, Rote Grütze in einem Regal).
 }
 
 # Wörterbuch: begriff -> (exakte tokens, komposita-suffixe, blockliste)
@@ -238,6 +262,207 @@ _ADD = {
 for _t,(_ex,_sf) in _ADD.items():
     V[_t] = (V[_t][0]+_ex, V[_t][1]+_sf, V[_t][2])  # nur über Markenliste erreichbar (K-Purland etc.)
 
+# Erweiterungsrunde 2026-08-01, Op 3: Alltagswörter. Jedes Wort steht so im
+# 11-Regionen-Korpus und deckt eine Produktfamilie, die jede Woche wiederkommt
+# — keine Marken (das war die Warnung der ersten Runde), keine Wörter ohne
+# Beleg. Format wie `_ADD`: (exacts, suffixe).
+_ADD3 = {
+ # Fisch: „Makrele" fehlte schlicht; Prawns/Octopus stehen englisch im Prospekt.
+ "fisch":(["makrele","makrelen","prawns","octopus","oktopus"],[]),
+ # Käse: die Sorten, die als eigener Name auftreten und ohne das Wort „Käse"
+ # auskommen. „Harzer" ist der Harzer Roller (Harzer Minis 115 g).
+ "käse":(["burrata","mascarpone","pecorino","appenzeller","harzer"],[]),
+ "mozzarella":(["mozzarelline"],[]),
+ # Rahm: die Süddeutsch/Alpen-Schreibweise von Sahne. Das Wort `rahm` allein
+ # stand hier zwischendurch und war gemessen falsch — „Rahm-Spinat",
+ # „Rahm Soße", „Allgäuer Rahm-Torte" holten sich damit `sahne`. Deshalb nur
+ # die zusammengesetzten Formen und die Phrase „schlag rahm" (aus
+ # „Bio-Schlag-Rahm", das normalisiert auseinanderfällt).
+ "sahne":(["schlagrahm","schlag rahm","sauerrahm"],[]),
+ # Kefir gehört zu den gesäuerten Milchprodukten, nicht zur Trinkmilch.
+ "joghurt":(["kefir"],[]),
+ # Wurstsorten, die im Prospekt ohne das Wort „Wurst" stehen. „Fleischkäse"
+ # und „Leberkäs" sind bewusst hier und nicht bei `käse` — dort stehen sie
+ # seit dem Angebots-Audit vom 22.07. auf der Blockliste.
+ "wurst":(["bockwurst","bockwürste","frankfurter","weißwurst","weißwürste",
+           "leberpastete","pastete","krakauer","pfefferbeißer","bierbeißer",
+           "salametti","speck","salsiccia","krainer","käsekrainer",
+           "fleischkäse","leberkäs"],[]),
+ "schwein":(["krustenbraten","bauchrippe","wammerl","ribs"],[]),
+ # `rind` kannte bisher nur Komposita („Rinderfilet"), nicht das Wort selbst:
+ # „Rouladen vom Rind" fiel durch. „Jungbullen" ist die Theken-Schreibweise.
+ "rind":(["rind","jungbullen"],[]),
+ # `brokkoli` ist der Sammeltopf für Kohl- und Stangengemüse (Porree, Chinakohl,
+ # Rote Bete stehen schon drin) — Lauch und Sellerie gehören dorthin.
+ "brokkoli":(["lauch","sellerie","staudensellerie"],[]),
+ "möhren":(["möhrchen"],[]),
+ "obst":(["grapefruit","grapefruits","passionsfrucht"],[]),
+ "konserven":(["hülsenfrüchte","artischocke","artischocken","antipasti","buschbohnen"],[]),
+ "soßen":(["hummus","meerrettich"],[]),
+ # Apfel- und Pflaumenmus sind kein frisches Obst (`äpfel` blockt „apfelmus"
+ # seit der ersten Runde) — sie gehören zum Fruchtaufstrich.
+ "marmelade":(["apfelmus","pflaumenmus"],[]),
+ "pudding":(["grütze","rote grütze"],[]),
+ "eintopf":(["eintöpfe","fond"],[]),
+ # „Apfelringe" steht auf der Blockliste von `äpfel` (kein frisches Obst) und
+ # ist genau das, was `nüsse` unter „trockenfrüchte" schon führt.
+ "nüsse":(["walnusskerne","apfelringe"],[]),
+ "chips":(["popcorn"],[]),
+ "kekse":(["biskuit","biskuits"],[]),
+ "schokolade":(["fruchtgummi","fruchtkaramellen","karamellen"],[]),
+ "backwaren":(["baklava","mohnhappen","schweinsöhrchen","laugenstange"],[]),
+ "brot":(["buns","brioche"],[]),
+ # Biersorten ohne das Wort „Bier". „hell"/„Helles" ist die häufigste
+ # Sortenangabe im Korpus (Chiemseer Hell, Kosmonaut Hell, Münchner Hell).
+ "bier":(["kölsch","märzen","hefeweizen","bock","pilsner","hell"],[]),
+ "wein":(["sangria","lambrusco","burgunder","trollinger","portugieser",
+          "weißherbst","frizzante","spritz","sprizz"],[]),
+ "spirituosen":(["aquavit","weizenkorn"],[]),
+ "limonade":(["bionade","tonic","ginger ale","mate","softdrink","spezi"],[]),
+ # „Stieleis" endet auf „eis", und `eis` steht in SUFFIX_STOP („Preis") —
+ # das Suffix kann es nie fangen, das Wort selbst schon.
+ "eis":(["stieleis"],[]),
+ "pommes":(["fritte","fritten"],[]),
+ # Das Suffix `öl` ist wirkungslos (unter vier Zeichen, siehe `term_hits`),
+ # deshalb stehen die Öl-Komposita als Wort da.
+ "öl":(["keimöl","würzöl"],[]),
+ "tee":(["chai"],[]),
+ "kaffee":(["entkoffeiniert"],[]),
+ "fertiggericht":(["dumpling","dumplings"],[]),
+ "gewürze":(["petersilie"],[]),
+}
+for _t,(_ex,_sf) in _ADD3.items():
+    V[_t] = (V[_t][0]+_ex, V[_t][1]+_sf, V[_t][2])
+
+# Der Preis der neuen Wörter, gemessen und nicht geraten: Diese sechs Sperren
+# stellen die Fehltreffer ab, die die Wörter oben im Korpus erzeugt haben.
+# Jede einzelne stammt aus dem Vorher/Nachher-Lauf über die 3.474 Produkte.
+_BLOCK3 = {
+ # „Grapefruit" ist ein Obst — außer im Biermischgetränk. Beide Sperren sind
+ # Wörter aus dem Getränkeregal, keine Obstwörter: Schöfferhofer Grapefruit
+ # verlor sonst sein `bier`, der Lübzer Naturradler Grapefruit bekam `obst`.
+ "obst":["schöfferhofer","radler","naturradler"],
+ # „Antipasti Creme" ist ein Aufstrich (Lidls Kategorie *herzhafte Aufstriche*
+ # führt ihn zu `soßen`), keine eingelegte Konserve.
+ "konserven":["antipasti creme"],
+ # Mascarpone-Joghurt ist Joghurt, nicht Käse.
+ "käse":["mascarpone joghurt"],
+ # „hell" ist die häufigste Biersorten-Angabe im Korpus (Chiemseer, Kosmonaut,
+ # Kiliansbräu, Münchner Hell) — und steht daneben auf hellen Trauben und auf
+ # Brötchen. Die Trauben schützt `bier` schon länger (block „trauben"), das
+ # Brötchen ist der eine Fehltreffer, den die Messung neu fand. Als Phrase,
+ # damit auch „Vollkornbrötchen hell" darunter fällt.
+ "bier":["brötchen hell"],
+ # „Speck-Käse-Twister" ist Backwerk; `käse` sperrt „twister" aus demselben
+ # Grund schon seit dem Angebots-Audit.
+ "wurst":["twister"],
+}
+for _t,_bl in _BLOCK3.items():
+    V[_t] = (V[_t][0], V[_t][1], V[_t][2]+_bl)
+
+# Erweiterungsrunde 2026-08-01, Op 4: Komposita, in denen ein Wort steckt, das
+# das Wörterbuch längst kennt — „Steinofenbaguette", „Käsewiener",
+# „Kartoffeltaschen", „Lachsfiletseite", „Schinkenplatte". Das ist keine Zeile
+# je Produkt, sondern eine Sache am Kompositum-Mechanismus je Begriff.
+#
+# Der Suffix-Weg (bekanntes Wort am ENDE) gibt es seit der ersten Runde; neu
+# ist PRAEFIX (bekanntes Wort am ANFANG), denn das Deutsche schreibt das
+# Grundwort mal hinten und mal vorne. Beide laufen unter derselben Regel:
+# mindestens vier Zeichen, SUFFIX_STOP gilt, und die Blockliste des Begriffs
+# sticht — genau deshalb steht hier PRO BEGRIFF etwas und nicht pauschal.
+# Der Preis ist bekannt und dokumentiert: „Reis"/„Preis", „Wein"/„Schwein".
+_ADD4_SUFFIX = {
+ # Sieben Baguettes im Korpus, keines mit dem Wort „Brot": Laugen-, Mehrkorn-,
+ # Weizen-, Dinkel-, Steinofenbaguette.
+ "brot":["baguette"],
+ # Linzergebäck, Vitalgebäck. Bewusst bei `backwaren` und nicht bei `kekse` —
+ # „Laugengebäck" wäre dort falsch einsortiert.
+ "backwaren":["gebäck"],
+ # Apfelrotkohl (2x). „rotkohl" steht schon im exact von `konserven`.
+ "konserven":["rotkohl"],
+ # Herzwaffeln, Karamellwaffeln. „Reiswaffeln" sind Knäckebrot und stehen
+ # deshalb neu auf der Blockliste von `kekse`.
+ "kekse":["waffeln"],
+ "fisch":["hering","forelle"],
+ "brokkoli":["brokkoli"],   # Stangenbrokkoli
+ "butter":["butter"],       # Bio-Alpenbutter; Butterkäse/-milch/-keks blocken schon
+ "wurst":["wiener"],        # Käsewiener
+ "pudding":["dessert"],     # Puddingdessert
+ "wein":["burgunder"],      # Spätburgunder, Weißburgunder
+ "marmelade":["brotaufstrich"],  # Bio-Abendbrotaufstrich
+}
+for _t,_sf in _ADD4_SUFFIX.items():
+    V[_t] = (V[_t][0], V[_t][1]+_sf, V[_t][2])
+
+# Begriff → Komposita-PRÄFIXE. Gleiche Regeln wie die Suffixe.
+PRAEFIX = {
+ # Lachsfiletseite, Lachsfiletportionen, Lachsfleisch, Lachsartikel,
+ # Garnelenspieße. „Lachsschinken" ist Schwein und steht auf der Blockliste.
+ "fisch":["lachs","garnelen"],
+ # Kartoffeltaschen, Kartoffelpüree. Kartoffelsalat/-chips/-puffer/-ecken
+ # stehen seit jeher auf der Blockliste und bleiben draußen.
+ "kartoffeln":["kartoffel"],
+ "hähnchen":["hähnchen","chicken"],
+ "pute":["pute"],
+ # Wurstsalat, Wurstspezialität, Schinkenplatte, Schinkengulasch, Wienerle.
+ "wurst":["wurst","schinken","wiener"],
+ # „schweine", nicht „schwein": „Schweinsöhrchen" ist Backwerk und fängt mit
+ # „schwein" an.
+ "schwein":["schweine"],
+ "rind":["steak"],           # Steakhüfte
+ "hackfleisch":["hackfleisch"],  # NICHT „hack" — das fängt HACKER-PSCHORR
+ "beeren":["beeren"],        # Beerenmischung
+ "frischkäse":["frischkäse"],
+ "käse":["schmelzkäse"],
+ "mozzarella":["mozzarella"],
+ "nudeln":["teigwaren"],
+ "bratwurst":["bratwurst"],
+ "nüsse":["cashewkerne","walnusskerne"],
+ "joghurt":["joghurt"],
+ "essig":["essig"],          # Essigessenz; „Essiggurken" blockt schon
+ "lamm":["lammkeule"],
+ "obst":["obst"],            # Obstsortiment
+ "quark":["quark"],          # „Cremig und Quarkig"; Quarkbällchen blockt schon
+ "wein":["wein"],            # Weingenuss; Weintrauben/-essig/-sauerkraut blocken
+ "butter":["butter"],        # Butterschmalz
+ "salat":["salat"],          # Salatrio, Salatmischung; Dressings blocken schon
+ "tiefkühlgemüse":["gemüse"],  # Gemüsekonserven
+ "pudding":["pudding"],
+ # Bewusst NICHT als Präfix, gemessen und verworfen: „fisch" (fängt die
+ # Fischer-E-Bikes, siehe Feedback-Auswertung), „hell" (Hella Near Water),
+ # „wasser" (Wasserenthärter, Wasserfilterkartuschen), „gewürz" („fertig
+ # gewürzt"), „apfel" (Apfeltaschen sind Backwerk), „spezi" (Hemelinger
+ # Spezial ist Bier), „fritte" (Heißluft-Fritteuse), „kaffee" (Kaffeebecher),
+ # „hack" (HACKER-PSCHORR), „schwein" (Schweinsöhrchen).
+}
+
+# Der Preis des Kompositum-Wegs, gemessen im selben Lauf über 3.474 Produkte.
+# Neun Sperren; ohne sie erzeugt Op 4 genau diese neun Fehltreffer. Das ist die
+# Sperrliste, von der die Analyse spricht — pro Begriff, nie pauschal.
+_BLOCK4 = {
+ # „Lachsschinken" und „Lachsrolle vom Schweinerücken" sind Schwein. Der
+ # Präfix `lachs` holte beiden ein `fisch`.
+ "fisch":["lachsschinken","lachsrolle"],
+ # Gemüsebrühe ist Brühe. Der Treffer im Titel hätte den Marken-Fallback
+ # („gemüsebrühe" → `eintopf`) überstimmt, der es richtig hatte.
+ "tiefkühlgemüse":["gemüsebrühe"],
+ # Ehrmann Obstgarten ist Joghurt.
+ "obst":["obstgarten"],
+ # Pom-Bär Kartoffelsnacks sind Chips, McCains Kartoffelprodukt ist Pommes —
+ # beide standen über die Marke richtig da.
+ "kartoffeln":["kartoffelsnacks","kartoffelprodukt"],
+ # Quarktasche ist Backwerk (steht schon in der Markenliste).
+ "quark":["quarktasche"],
+ # Reis- und Maiswaffeln sind Knäckebrot, keine Kekse.
+ "kekse":["reiswaffeln","maiswaffeln"],
+ # „Steakhouse Pommes" sind Pommes.
+ "rind":["steakhouse"],
+ # Die Salatgurke ist eine Gurke.
+ "salat":["salatgurke","salatgurken"],
+}
+for _t,_bl in _BLOCK4.items():
+    V[_t] = (V[_t][0], V[_t][1], V[_t][2]+_bl)
+
 # Non-Food-Begriffe im Titel (fängt Non-Food in Food-Kategorien wie „Wochenangebote")
 NONFOOD_TERMS = re.compile(r"lichterkette|lampion|wäschest|wäscheklammer|wäschekorb|kettensäge|akku|werkzeug|kinderbuch|spielzeug|\blego\b|rosen\b|blumen|pflanze|socken|shorts|shirt|cap\b|hose|schuhe|handtuch|bettwäsche|pfannen?\b|topf\b|löffel|messer|grill\b|kohle|batterie|lampe|leuchte|katzen|hunde|tiernahrung|nassfutter|trockenfutter|snack für|rasenkanten|solar|deko|kissen|matratze|drucker|kopfhörer|wc-|reiniger|megaperls|oxi action|waschpulver|schreibwaren|mikrofon|duschregal|sonnensegel|wäscheparf|karaoke|trinkzubehör|wäschetrockner|weißer riese|sonnenspray|duftspüler|sonnencreme|feuchttücher|servietten|haushaltstücher|klumpstreu|geschirrtücher|platzset|schlafsack|fusselrolle|bügeleisen|glasschüssel|lautsprecher|geräusche-box|fliegengitter|kajak|husarenknöpfchen|lavendel|bilderbuch|wecker|hairstyler|bastelkoffer|kochgeschirr|grillplatte|boombox|fliegenfalle|mottenabwehr|badvorleger|schrubber|kosmetikspiegel|shorty|plaid|fototafel|komfort-bh|pantoletten|spannbetttuch|küchentücher|sneaker|hoodie|bodyspray|deospray|haarspray|rasierkling|sonnenschutz|dutch oven|gläsersortiment|sonnenschirm|tischdecke|fleece|wellnessbürste|maniküre|pediküre|teppich|taillenslip|haftcreme|wasserballon|doppelwandig|kollagenpulver|pokémon|pokemon|plüsch|spielfigur|sammelkarten|tiptoi|autorennbahn|gesellschaftsspiel|kreuzworträtsel|rätselbuch|pixi|bastel|schüleretui|sticker|puzzle|holzperlen|magnet-bausatz|wasserbahn|kinderbesteck|steckdose|usb|ladegerät|smart-tv|wasserkocher|toaster|standmixer|espressomaschine|kaffeemaschine|kaffeevollautomat|kapselmaschine|waffeleisen|reiskocher|luftkühler|ventilator|wetterstation|vakuumiergerät|hamburger-maker|hamburger maker|inspektionskamera|range extender|mini-led-tv|qled|e-bike|faltrad|mountainbike|fahrradträger|mähroboter|heckenschere|bohrhammer|abbruchhammer|bohrer|winkelschleifer|meißel|werkstatt|rohrzange|bolzenschneider|kabelbinder|elektrohobel|feinbohrschleifer|spannzwingen|zwingen-set|rasendünger|gartenspritze|gartenhocker|sanitär|montageschlüssel|sekundenkleber|buntlack|abdeckplane|duschtürdichtung|badewannenmatte|duschhocker|steppbett|spannbettlaken|tagesdecke|daunendecke|luftbett|matratze|kleiderschrank|drehtürenschrank|büroschrank|bürostuhl|beistelltisch|wohnzimmertisch|tischgruppe|schuhregal|metallregal|kunststoffregal|regalwürfel|polsterbank|schlafsessel|schminktisch|nischenwagen|akustikpaneel|bilderrahmen|sofa |brotkasten|kartoffelstampfer|schneebesen|kleid|tunika|slips|pyjama|leggings|unterhemden|retroboxer|sandalen|bademantel|freizeitanzug|loungewear|trikot-set|tops |ripptops|jersey|boardcase|reisetasche|rucksack|einkaufstrolley|packbänder|kuppelzelt|autodachzelt|zelt |trampolin|nestschaukel|rutsche|sandkasten|whirlpool|sup |sup-|campingstuhl|spieltipi|matschküche|super soaker|großfahrzeug|mini-fahrzeug|rennboot|inkontinenz|rollator|blutdruckmess|pulsoximeter|lesehilfe|spezialbrille|erste-hilfe|massagematte|haltungstrainer|beintrainer|rückenstütz|körperanalyse|waschhilfe|slipeinlagen|mighty patch|orchidee|phalaenopsis|chrysanthem|alpenveilchen|hortensie|glockenblume|dahlie|aster|eustoma|feigenkaktus|bogenhanf|celosia|zauberglöckchen|prärieenzian|rosenstrauß|bunter strauß|alufolie|frischhaltefolie|netflix|wertkarte|löschdecke|trinkflasche|zitronensäure|insektenschutz|corega|axe ", re.I)
 
@@ -295,10 +520,17 @@ def term_hits(text):
         nblock = [norm(b) for b in block]
         if any(b in ntext for b in nblock if " " in b) or any(b in toks for b in nblock):
             continue
+        # Präfix und Suffix laufen unter derselben Regel: mindestens vier
+        # Zeichen, echtes Kompositum (das Token ist LÄNGER als der Teil, sonst
+        # wäre es ein exact), SUFFIX_STOP gilt, Blockliste sticht.
         hit = any(e in toks or (" " in e and e in ntext) for e in map(norm, exact)) \
            or any(any(t.endswith(sfx) and t not in SUFFIX_STOP and t not in nblock
                       for t in toks)
-                  for sfx in map(norm, suffixes) if len(sfx) >= 4)
+                  for sfx in map(norm, suffixes) if len(sfx) >= 4) \
+           or any(any(t.startswith(pfx) and len(t) > len(pfx)
+                      and t not in SUFFIX_STOP and t not in nblock
+                      for t in toks)
+                  for pfx in map(norm, PRAEFIX.get(term, [])) if len(pfx) >= 4)
         if hit: hits.append(term)
     return hits
 
@@ -385,7 +617,7 @@ def main():
     for market, title, sub, cat in random.sample(untagged, min(120, len(untagged))):
         print(f"  [{market[:12]:12s}] {title[:55]:55s} | {sub[:25]:25s} | {cat[:25]}")
 
-    json.dump({"begriffe":{t:{"exact":e,"suffix":s,"block":b} for t,(e,s,b) in V.items()},"marken":MARKEN,"kategorien":KAT,"nonfood_cat":NONFOOD_CAT.pattern,"nonfood_terms":NONFOOD_TERMS.pattern,"food_cat":FOOD_CAT.pattern},
+    json.dump({"begriffe":{t:{"exact":e,"suffix":s,"prefix":PRAEFIX.get(t,[]),"block":b} for t,(e,s,b) in V.items()},"marken":MARKEN,"kategorien":KAT,"nonfood_cat":NONFOOD_CAT.pattern,"nonfood_terms":NONFOOD_TERMS.pattern,"food_cat":FOOD_CAT.pattern},
               open(os.path.join(os.path.dirname(__file__),"matching-woerterbuch.json"),"w"), ensure_ascii=False, indent=1)
 
 

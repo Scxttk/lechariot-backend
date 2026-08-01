@@ -38,6 +38,10 @@ struct Term {
     exact: Vec<String>,
     /// Komposita-Suffixe (nur ab 4 Zeichen wirksam).
     suffix: Vec<String>,
+    /// Komposita-Präfixe (nur ab 4 Zeichen wirksam, Token muss LÄNGER sein).
+    /// Fehlt die Sektion, bleibt die Liste leer und das Verhalten ist exakt
+    /// das vor dieser Regel.
+    prefix: Vec<String>,
     block_words: Vec<String>,
     block_phrases: Vec<String>,
 }
@@ -79,6 +83,7 @@ fn dict() -> &'static Dict {
                     key: key.clone(),
                     exact: list("exact"),
                     suffix: list("suffix").into_iter().filter(|s| s.chars().count() >= 4).collect(),
+                    prefix: list("prefix").into_iter().filter(|s| s.chars().count() >= 4).collect(),
                     block_words,
                     block_phrases,
                 }
@@ -205,7 +210,22 @@ pub fn match_keys(title: &str, subtitle: Option<&str>, category: Option<&str>) -
                 })
             })
         };
-        if exact_hit || suffix_hit() {
+        // Spiegelbild des Suffix-Wegs: das Deutsche schreibt das bekannte
+        // Grundwort mal hinten („Steinofen*baguette*") und mal vorne
+        // („*Kartoffel*taschen"). Dieselben Wächter — vier Zeichen,
+        // SUFFIX_STOP, Blockliste — und zusätzlich muss das Token länger sein
+        // als der Präfix, sonst wäre es ein exact und kein Kompositum.
+        let prefix_hit = || {
+            term.prefix.iter().any(|pfx| {
+                toks.iter().any(|t| {
+                    t.starts_with(pfx.as_str())
+                        && t.len() > pfx.len()
+                        && !SUFFIX_STOP.contains(&t.as_str())
+                        && !term.block_words.contains(t)
+                })
+            })
+        };
+        if exact_hit || suffix_hit() || prefix_hit() {
             hits.push(term.key.clone());
         }
     }
@@ -287,6 +307,222 @@ mod tests {
         assert_eq!(keys("Deutsche Markenbutter"), vec!["butter"]);
     }
 
+    /// Wörterbuch-Runde 2026-08-01, Op 2: zwölf weitere Kategorien. Jeder Fall
+    /// hier ist eine Zeile, die im 11-Regionen-Korpus vorher ungetaggt war —
+    /// keiner ist ausgedacht. Aufnahmekriterium war, dass JEDES Korpus-Produkt
+    /// unter der Kategorie zum Begriff gehört; die Zahlen stehen bei `KAT_ROH`.
+    #[test]
+    fn kategorie_runde_2026_08_01() {
+        assert_eq!(keys_cat("Haake-Beck", "Bier"), vec!["bier"]);
+        assert_eq!(keys_cat("Kosmonaut Hell", "Bier"), vec!["bier"]);
+        assert_eq!(keys_cat("Flusskrebssalat", "Fisch"), vec!["fisch"]);
+        assert_eq!(keys_cat("Plus Pack 156 g, Würzig", "Schnittkäse"), vec!["käse"]);
+        assert_eq!(keys_cat("Crema e Aroma 1 kg", "Kaffee"), vec!["kaffee"]);
+        assert_eq!(keys_cat("Bacon 150 g", "Schinken"), vec!["wurst"]);
+        assert_eq!(keys_cat("Dinkel-Bürli", "Bäckerei"), vec!["backwaren"]);
+        assert_eq!(keys_cat("Kreatinpulver", "Sportnahrung"), vec!["protein/fitness"]);
+        assert_eq!(keys_cat("Grissotti 200 g, Sesam", "Chips & Knabbereien"), vec!["chips"]);
+        assert_eq!(keys_cat("Fruchtgummi 175 g, Quaxi", "Lakritz & Fruchtgummi"), vec!["schokolade"]);
+        assert_eq!(keys_cat("Lasagneblätter 500 g", "Nudeln & Pasta"), vec!["nudeln"]);
+        assert_eq!(keys_cat("Getrocknete Cranberries 200 g", "Nüsse & Trockenfrüchte"), vec!["nüsse"]);
+        assert_eq!(keys_cat("Rind Hamburger 400 g", "Rindfleisch"), vec!["rind"]);
+
+        // Gegenprobe 1: die Kategorie bleibt der LETZTE Ausweg. „Plus Pack
+        // 156 g, Chili Paprika" steht auch unter *Schnittkäse* und behält
+        // seinen Titel-Treffer — die Kategorie überstimmt ihn nicht.
+        assert_eq!(keys_cat("Plus Pack 156 g, Chili Paprika", "Schnittkäse"), vec!["paprika"]);
+        // Gegenprobe 2: Substring reicht nicht, verglichen wird auf Gleichheit
+        // der normalisierten Kategorie. Sonst zöge „Bier" auch „Bier & Wein"
+        // und „Alkoholfreies Bier und mehr" an sich.
+        assert!(keys_cat("Irgendwas", "Bier & Wein").is_empty());
+        assert!(keys_cat("Irgendwas", "Fischers Fritz").is_empty());
+        // Gegenprobe 3: die Blockliste des Begriffs gilt auch auf diesem Weg —
+        // „Käsekuchen" ist gesperrt und darf `käse` nicht über *Schnittkäse*
+        // zurückbekommen.
+        assert!(keys_cat("Käsekuchen nach Omas Art", "Schnittkäse")
+            .iter()
+            .all(|k| k != "käse"));
+        // Gegenprobe 4: bewusst NICHT zugeordnet, weil die Kategorie zwei
+        // Familien nennt — ein Begriff daraus wäre für den Rest falsch.
+        assert!(keys_cat("PUSTERIA", "Molkereiprodukte, Fette").is_empty());
+        assert!(keys_cat("Hella Near Water", "Alkoholfreie Getränke").is_empty());
+        // Neutraler Titel, damit der Fall die Kategorie prüft und nicht das
+        // Wort: „Fleisch & Fisch" nennt zwei Familien und bleibt unzugeordnet.
+        assert!(keys_cat("Der Beste", "Frische-Aktion: Fleisch & Fisch").is_empty());
+    }
+
+    /// Wörterbuch-Runde 2026-08-01, Op 3: die neuen Alltagswörter. Jede Zeile
+    /// hier war im 11-Regionen-Korpus ungetaggt; die zweite Hälfte des Tests
+    /// ist der Preis dafür, gemessen im selben Lauf.
+    #[test]
+    fn alltagswoerter_2026_08_01() {
+        let hat = |titel: &str, tag: &str| {
+            let k = keys(titel);
+            assert!(k.contains(&tag.to_string()), "{titel:?} -> {k:?}, erwartet {tag}");
+        };
+        hat("Makrele", "fisch");
+        hat("Costa Pacific Prawns", "fisch");
+        hat("Brimi Burrata", "käse");
+        hat("Brimi Mascarpone", "käse");
+        hat("EDEKA Herzstücke Pecorino Romano", "käse");
+        hat("Harzer Minis", "käse");
+        hat("Brimi Mozzarelline", "mozzarella");
+        hat("Berchtesgadener Land Schlagrahm", "sahne");
+        hat("Berchtesgadener Land frischer Sauerrahm", "sahne");
+        hat("demeter Berchtesgadener Land Feinster Bio-Schlag-Rahm", "sahne");
+        hat("MILBONA Fettarmer Kefir", "joghurt");
+        hat("Halberstädter 5 Bockwürste", "wurst");
+        hat("Gmyrek Oberschlesische Frankfurter", "wurst");
+        hat("Weißwürste", "wurst");
+        hat("Leberpastete", "wurst");
+        hat("Hofglück Pfefferbeißer", "wurst");
+        hat("Recla - Südtiroler Speck", "wurst");
+        hat("Fleischkäse", "wurst");
+        hat("Krustenbraten", "schwein");
+        hat("Bauchrippe", "schwein");
+        hat("BBQ Ribs", "schwein");
+        hat("Rouladen vom Rind", "rind");
+        hat("Wade vom Jungbullen", "rind");
+        hat("Lauch", "brokkoli");
+        hat("Bio Staudensellerie", "brokkoli");
+        hat("Grapefruit", "obst");
+        hat("Passionsfrucht", "obst");
+        hat("Petersilie", "gewürze");
+        hat("KRINI Hülsenfrüchte", "konserven");
+        hat("Hummus XXL", "soßen");
+        hat("SCHAMEL Meerrettich", "soßen");
+        hat("Apfelmus ohne Zuckerzusatz", "marmelade");
+        hat("Rote Grütze XXL", "pudding");
+        hat("Sonnen Bassermann Eintöpfe", "eintopf");
+        hat("SEEBERGER Apfelringe", "nüsse");
+        hat("Sweet Popcorn XXL", "chips");
+        hat("DELUXE Baklava Pistazie", "backwaren");
+        hat("Schweinsöhrchen", "backwaren");
+        hat("Brioche Burger Buns", "brot");
+        hat("Früh Kölsch", "bier");
+        hat("SCHWABENBRÄU Das echte Märzen", "bier");
+        hat("Kosmonaut Hell", "bier");
+        hat("Don Simon Sangria Premium", "wein");
+        hat("Riunite Lambrusco Emilia Frizzante", "wein");
+        hat("Grauer Burgunder trocken", "wein");
+        hat("MALTESERKREUZ Aquavit", "spirituosen");
+        hat("Bionade", "limonade");
+        hat("Mio Mio Mate", "limonade");
+        hat("Stieleis", "eis");
+        hat("Dicke Fritte", "pommes");
+        hat("Mazola Keimöl", "öl");
+        hat("EDEKA Bio Chai Classic", "tee");
+        hat("Rainbow Mystery Dumpling", "fertiggericht");
+
+        // Der Preis, gemessen im selben Lauf über 3.474 Korpus-Produkte. Ohne
+        // diese fünf Sperren kosten die Wörter oben je einen Fehltreffer.
+        let ohne = |titel: &str, tag: &str| {
+            let k = keys(titel);
+            assert!(!k.contains(&tag.to_string()), "{titel:?} -> {k:?}, {tag} unerwünscht");
+        };
+        // `rahm` allein stand zwischendurch im Wörterbuch und war dreimal falsch.
+        ohne("Iglo Rahm-Spinat", "sahne");
+        ohne("KNORR Rahm Soße", "sahne");
+        ohne("Allgäuer Rahm-Torte", "sahne");
+        // Schöfferhofer Grapefruit ist Bier, der Naturradler Grapefruit auch.
+        ohne("SCHÖFFERHOFER Grapefruit", "obst");
+        assert_eq!(keys("SCHÖFFERHOFER Grapefruit"), vec!["bier"]);
+        ohne("Lübzer Premium Pils oder Naturradler Grapefruit", "obst");
+        // „Antipasti Creme" ist ein Aufstrich, keine Konserve.
+        ohne("ERGÜLLÜ Antipasti Creme", "konserven");
+        // Mascarpone-Joghurt ist Joghurt.
+        ohne("Mascarpone-Joghurt", "käse");
+        // „hell" ist Biersorte — auf Brötchen und auf Trauben aber nicht.
+        ohne("Rosenbrötchen hell", "bier");
+        ohne("Tafeltrauben hell", "bier");
+        // „Speck" ist Wurst, der Speck-Käse-Twister bleibt Backwerk.
+        ohne("Speck-Käse-Twister", "wurst");
+    }
+
+    /// Wörterbuch-Runde 2026-08-01, Op 4: Komposita, in denen ein längst
+    /// bekanntes Wort steckt. Neu ist der Präfix-Weg neben dem Suffix-Weg;
+    /// beide sind pro Begriff gepflegt und nie pauschal.
+    #[test]
+    fn komposita_2026_08_01() {
+        let hat = |titel: &str, tag: &str| {
+            let k = keys(titel);
+            assert!(k.contains(&tag.to_string()), "{titel:?} -> {k:?}, erwartet {tag}");
+        };
+        // Suffix: das bekannte Wort steht hinten.
+        hat("Steinofenbaguette", "brot");
+        hat("Laugenbaguette", "brot");
+        hat("Mehrkornbaguette", "brot");
+        hat("Linzergebäck", "backwaren");
+        hat("Apfelrotkohl", "konserven");
+        hat("Karamellwaffeln XXL", "kekse");
+        hat("Bratheringe", "fisch");
+        hat("Lachsforelle", "fisch");
+        hat("Stangenbrokkoli", "brokkoli");
+        hat("Berchtesgadener Land Bio-Alpenbutter", "butter");
+        hat("Delikat Käsewiener", "wurst");
+        hat("Grau-, Weiß- oder Spätburgunder", "wein");
+        // Präfix: das bekannte Wort steht vorne.
+        hat("Lachsfiletseite", "fisch");
+        hat("Garnelenspieße", "fisch");
+        hat("Kartoffeltaschen", "kartoffeln");
+        hat("PFANNI Kartoffelpüree", "kartoffeln");
+        hat("Frische Hähnchenunterkeulen", "hähnchen");
+        hat("Frische Putenoberkeulen", "pute");
+        hat("Ponnath Gourmet Schinkenplatte", "wurst");
+        hat("Wurstspezialität", "wurst");
+        hat("Bio-Wienerle", "wurst");
+        hat("Frisches Schweinegeschnetzeltes", "schwein");
+        hat("Steakhüfte aus eigener Herstellung", "rind");
+        hat("Hackfleischspieße Döner Art", "hackfleisch");
+        hat("Gut & Günstig Beerenmischung", "beeren");
+        hat("Frischkäsecreme", "frischkäse");
+        hat("Schmelzkäsezubereitung", "käse");
+        hat("CHEF SELECT MozzarellaSticks", "mozzarella");
+        hat("SETTELE Teigwarenspezialität", "nudeln");
+        hat("Bratwurstschnecke", "bratwurst");
+        hat("ALESTO CashewkerneXXL", "nüsse");
+        hat("YOPRO Joghurtdrink", "joghurt");
+        hat("Surig Essigessenz", "essig");
+        hat("Lammkeulenscheibe", "lamm");
+        hat("Bio-Obstsortiment", "obst");
+        hat("Cremig und Quarkig", "quark");
+        hat("Deutschland - Weingenuss", "wein");
+        hat("Butaris feines Butterschmalz", "butter");
+        hat("REWE Regional, GQB, Salatmischung", "salat");
+        hat("CAMPO VERDE Demeter Gemüsekonserven", "tiefkühlgemüse");
+        hat("KIDSWORLD Puddingdessert", "pudding");
+
+        // Der Preis, gemessen im selben Lauf: neun Sperren. Ohne sie erzeugt
+        // der Kompositum-Weg genau diese neun Fehltreffer — das ist die
+        // Sperrliste, von der „Reis"/„Preis" und „Wein"/„Schwein" handeln.
+        let ohne = |titel: &str, tag: &str| {
+            let k = keys(titel);
+            assert!(!k.contains(&tag.to_string()), "{titel:?} -> {k:?}, {tag} unerwünscht");
+        };
+        ohne("Radeberger Premium-Lachsschinken", "fisch");
+        ohne("Lachsrolle vom Schweinerücken", "fisch");
+        ohne("NATURGUT Bio Gemüsebrühe", "tiefkühlgemüse");
+        ohne("EHRMANN Obstgarten", "obst");
+        ohne("POM-BÄR Kartoffelsnacks", "kartoffeln");
+        ohne("MCCAIN Kartoffelprodukt", "kartoffeln");
+        ohne("Quarktasche", "quark");
+        ohne("EDEKA Herzstücke Reiswaffeln", "kekse");
+        ohne("K-BIO Bio-Mini-Maiswaffeln", "kekse");
+        ohne("Steakhouse Pommes 750 g, Rustikal", "rind");
+        ohne("Salatgurke", "salat");
+        // Und die Wächter, die es schon gab, gelten auch für den neuen Weg:
+        // „Schweinsöhrchen" ist Backwerk (deshalb Präfix „schweine", nicht
+        // „schwein"), HACKER-PSCHORR ist Bier (deshalb „hackfleisch", nicht
+        // „hack"), und die Fischer-E-Bikes sind der Grund, warum „fisch"
+        // gar nicht erst als Präfix dasteht.
+        ohne("Schweinsöhrchen", "schwein");
+        ohne("HACKER-PSCHORR Münchner Hell", "hackfleisch");
+        ohne("Fischer E-Bike Trekking", "fisch");
+        // Gegenprobe: der Präfix greift nur bei echten Komposita — ein Token,
+        // das dem Präfix gleicht, kommt weiter über das exact.
+        assert!(keys("Lachs").contains(&"fisch".to_string()));
+    }
+
     /// Die drei Beobachtungen aus dem Backlog, abgearbeitet am 2026-07-26.
     /// Alle drei kamen aus echten Fehltreffern, nicht aus dem Kopf.
     #[test]
@@ -295,7 +531,12 @@ mod tests {
         // stand wörtlich im Titel. Eine Blockliste half hier zunächst nicht,
         // weil sie am Begriff hängt und nicht am Produkt; jetzt hängt das
         // Backwerk selbst darin.
-        assert!(keys("Laugenstange mit Käse").is_empty(), "{:?}", keys("Laugenstange mit Käse"));
+        // Seit der Runde 2026-08-01 kennt `backwaren` das Wort „Laugenstange"
+        // (es stand als Angebot im Korpus). Der Punkt des Falls bleibt
+        // unberührt: `käse` darf es nicht sein.
+        let laugen = keys("Laugenstange mit Käse");
+        assert!(!laugen.contains(&"käse".to_string()), "{laugen:?}");
+        assert_eq!(laugen, vec!["backwaren"]);
         assert_eq!(keys("Gouda am Stück"), vec!["käse"], "echter Käse bleibt");
 
         // `arla → milch` war mehrdeutig: Arla macht Milch UND Käse UND Butter.
@@ -637,8 +878,9 @@ spec = importlib.util.spec_from_file_location("ev", r"{root}/docs/matching-woert
 ev = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ev)
 faelle = [("db",) + r for r in sqlite3.connect(sys.argv[1]).execute("""{QUERY}""")]
-for exact, suffix, block in ev.V.values():
-    faelle += [("dict", e, "", "") for e in list(exact) + list(suffix) + list(block)]
+for begriff, (exact, suffix, block) in ev.V.items():
+    eintraege = list(exact) + list(suffix) + list(block) + list(ev.PRAEFIX.get(begriff, []))
+    faelle += [("dict", e, "", "") for e in eintraege]
 for quelle, title, sub, cat in faelle:
     title, sub, cat = (f.replace("\t", " ") for f in (title, sub, cat))
     tags = ",".join(sorted(ev.match_keys(title, sub, cat)[0]))
