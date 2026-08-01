@@ -262,6 +262,104 @@ _ADD = {
 for _t,(_ex,_sf) in _ADD.items():
     V[_t] = (V[_t][0]+_ex, V[_t][1]+_sf, V[_t][2])  # nur über Markenliste erreichbar (K-Purland etc.)
 
+# Erweiterungsrunde 2026-08-01, Op 3: Alltagswörter. Jedes Wort steht so im
+# 11-Regionen-Korpus und deckt eine Produktfamilie, die jede Woche wiederkommt
+# — keine Marken (das war die Warnung der ersten Runde), keine Wörter ohne
+# Beleg. Format wie `_ADD`: (exacts, suffixe).
+_ADD3 = {
+ # Fisch: „Makrele" fehlte schlicht; Prawns/Octopus stehen englisch im Prospekt.
+ "fisch":(["makrele","makrelen","prawns","octopus","oktopus"],[]),
+ # Käse: die Sorten, die als eigener Name auftreten und ohne das Wort „Käse"
+ # auskommen. „Harzer" ist der Harzer Roller (Harzer Minis 115 g).
+ "käse":(["burrata","mascarpone","pecorino","appenzeller","harzer"],[]),
+ "mozzarella":(["mozzarelline"],[]),
+ # Rahm: die Süddeutsch/Alpen-Schreibweise von Sahne. Das Wort `rahm` allein
+ # stand hier zwischendurch und war gemessen falsch — „Rahm-Spinat",
+ # „Rahm Soße", „Allgäuer Rahm-Torte" holten sich damit `sahne`. Deshalb nur
+ # die zusammengesetzten Formen und die Phrase „schlag rahm" (aus
+ # „Bio-Schlag-Rahm", das normalisiert auseinanderfällt).
+ "sahne":(["schlagrahm","schlag rahm","sauerrahm"],[]),
+ # Kefir gehört zu den gesäuerten Milchprodukten, nicht zur Trinkmilch.
+ "joghurt":(["kefir"],[]),
+ # Wurstsorten, die im Prospekt ohne das Wort „Wurst" stehen. „Fleischkäse"
+ # und „Leberkäs" sind bewusst hier und nicht bei `käse` — dort stehen sie
+ # seit dem Angebots-Audit vom 22.07. auf der Blockliste.
+ "wurst":(["bockwurst","bockwürste","frankfurter","weißwurst","weißwürste",
+           "leberpastete","pastete","krakauer","pfefferbeißer","bierbeißer",
+           "salametti","speck","salsiccia","krainer","käsekrainer",
+           "fleischkäse","leberkäs"],[]),
+ "schwein":(["krustenbraten","bauchrippe","wammerl","ribs"],[]),
+ # `rind` kannte bisher nur Komposita („Rinderfilet"), nicht das Wort selbst:
+ # „Rouladen vom Rind" fiel durch. „Jungbullen" ist die Theken-Schreibweise.
+ "rind":(["rind","jungbullen"],[]),
+ # `brokkoli` ist der Sammeltopf für Kohl- und Stangengemüse (Porree, Chinakohl,
+ # Rote Bete stehen schon drin) — Lauch und Sellerie gehören dorthin.
+ "brokkoli":(["lauch","sellerie","staudensellerie"],[]),
+ "möhren":(["möhrchen"],[]),
+ "obst":(["grapefruit","grapefruits","passionsfrucht"],[]),
+ "konserven":(["hülsenfrüchte","artischocke","artischocken","antipasti","buschbohnen"],[]),
+ "soßen":(["hummus","meerrettich"],[]),
+ # Apfel- und Pflaumenmus sind kein frisches Obst (`äpfel` blockt „apfelmus"
+ # seit der ersten Runde) — sie gehören zum Fruchtaufstrich.
+ "marmelade":(["apfelmus","pflaumenmus"],[]),
+ "pudding":(["grütze","rote grütze"],[]),
+ "eintopf":(["eintöpfe","fond"],[]),
+ # „Apfelringe" steht auf der Blockliste von `äpfel` (kein frisches Obst) und
+ # ist genau das, was `nüsse` unter „trockenfrüchte" schon führt.
+ "nüsse":(["walnusskerne","apfelringe"],[]),
+ "chips":(["popcorn"],[]),
+ "kekse":(["biskuit","biskuits"],[]),
+ "schokolade":(["fruchtgummi","fruchtkaramellen","karamellen"],[]),
+ "backwaren":(["baklava","mohnhappen","schweinsöhrchen","laugenstange"],[]),
+ "brot":(["buns","brioche"],[]),
+ # Biersorten ohne das Wort „Bier". „hell"/„Helles" ist die häufigste
+ # Sortenangabe im Korpus (Chiemseer Hell, Kosmonaut Hell, Münchner Hell).
+ "bier":(["kölsch","märzen","hefeweizen","bock","pilsner","hell"],[]),
+ "wein":(["sangria","lambrusco","burgunder","trollinger","portugieser",
+          "weißherbst","frizzante","spritz","sprizz"],[]),
+ "spirituosen":(["aquavit","weizenkorn"],[]),
+ "limonade":(["bionade","tonic","ginger ale","mate","softdrink","spezi"],[]),
+ # „Stieleis" endet auf „eis", und `eis` steht in SUFFIX_STOP („Preis") —
+ # das Suffix kann es nie fangen, das Wort selbst schon.
+ "eis":(["stieleis"],[]),
+ "pommes":(["fritte","fritten"],[]),
+ # Das Suffix `öl` ist wirkungslos (unter vier Zeichen, siehe `term_hits`),
+ # deshalb stehen die Öl-Komposita als Wort da.
+ "öl":(["keimöl","würzöl"],[]),
+ "tee":(["chai"],[]),
+ "kaffee":(["entkoffeiniert"],[]),
+ "fertiggericht":(["dumpling","dumplings"],[]),
+ "gewürze":(["petersilie"],[]),
+}
+for _t,(_ex,_sf) in _ADD3.items():
+    V[_t] = (V[_t][0]+_ex, V[_t][1]+_sf, V[_t][2])
+
+# Der Preis der neuen Wörter, gemessen und nicht geraten: Diese sechs Sperren
+# stellen die Fehltreffer ab, die die Wörter oben im Korpus erzeugt haben.
+# Jede einzelne stammt aus dem Vorher/Nachher-Lauf über die 3.474 Produkte.
+_BLOCK3 = {
+ # „Grapefruit" ist ein Obst — außer im Biermischgetränk. Beide Sperren sind
+ # Wörter aus dem Getränkeregal, keine Obstwörter: Schöfferhofer Grapefruit
+ # verlor sonst sein `bier`, der Lübzer Naturradler Grapefruit bekam `obst`.
+ "obst":["schöfferhofer","radler","naturradler"],
+ # „Antipasti Creme" ist ein Aufstrich (Lidls Kategorie *herzhafte Aufstriche*
+ # führt ihn zu `soßen`), keine eingelegte Konserve.
+ "konserven":["antipasti creme"],
+ # Mascarpone-Joghurt ist Joghurt, nicht Käse.
+ "käse":["mascarpone joghurt"],
+ # „hell" ist die häufigste Biersorten-Angabe im Korpus (Chiemseer, Kosmonaut,
+ # Kiliansbräu, Münchner Hell) — und steht daneben auf hellen Trauben und auf
+ # Brötchen. Die Trauben schützt `bier` schon länger (block „trauben"), das
+ # Brötchen ist der eine Fehltreffer, den die Messung neu fand. Als Phrase,
+ # damit auch „Vollkornbrötchen hell" darunter fällt.
+ "bier":["brötchen hell"],
+ # „Speck-Käse-Twister" ist Backwerk; `käse` sperrt „twister" aus demselben
+ # Grund schon seit dem Angebots-Audit.
+ "wurst":["twister"],
+}
+for _t,_bl in _BLOCK3.items():
+    V[_t] = (V[_t][0], V[_t][1], V[_t][2]+_bl)
+
 # Non-Food-Begriffe im Titel (fängt Non-Food in Food-Kategorien wie „Wochenangebote")
 NONFOOD_TERMS = re.compile(r"lichterkette|lampion|wäschest|wäscheklammer|wäschekorb|kettensäge|akku|werkzeug|kinderbuch|spielzeug|\blego\b|rosen\b|blumen|pflanze|socken|shorts|shirt|cap\b|hose|schuhe|handtuch|bettwäsche|pfannen?\b|topf\b|löffel|messer|grill\b|kohle|batterie|lampe|leuchte|katzen|hunde|tiernahrung|nassfutter|trockenfutter|snack für|rasenkanten|solar|deko|kissen|matratze|drucker|kopfhörer|wc-|reiniger|megaperls|oxi action|waschpulver|schreibwaren|mikrofon|duschregal|sonnensegel|wäscheparf|karaoke|trinkzubehör|wäschetrockner|weißer riese|sonnenspray|duftspüler|sonnencreme|feuchttücher|servietten|haushaltstücher|klumpstreu|geschirrtücher|platzset|schlafsack|fusselrolle|bügeleisen|glasschüssel|lautsprecher|geräusche-box|fliegengitter|kajak|husarenknöpfchen|lavendel|bilderbuch|wecker|hairstyler|bastelkoffer|kochgeschirr|grillplatte|boombox|fliegenfalle|mottenabwehr|badvorleger|schrubber|kosmetikspiegel|shorty|plaid|fototafel|komfort-bh|pantoletten|spannbetttuch|küchentücher|sneaker|hoodie|bodyspray|deospray|haarspray|rasierkling|sonnenschutz|dutch oven|gläsersortiment|sonnenschirm|tischdecke|fleece|wellnessbürste|maniküre|pediküre|teppich|taillenslip|haftcreme|wasserballon|doppelwandig|kollagenpulver|pokémon|pokemon|plüsch|spielfigur|sammelkarten|tiptoi|autorennbahn|gesellschaftsspiel|kreuzworträtsel|rätselbuch|pixi|bastel|schüleretui|sticker|puzzle|holzperlen|magnet-bausatz|wasserbahn|kinderbesteck|steckdose|usb|ladegerät|smart-tv|wasserkocher|toaster|standmixer|espressomaschine|kaffeemaschine|kaffeevollautomat|kapselmaschine|waffeleisen|reiskocher|luftkühler|ventilator|wetterstation|vakuumiergerät|hamburger-maker|hamburger maker|inspektionskamera|range extender|mini-led-tv|qled|e-bike|faltrad|mountainbike|fahrradträger|mähroboter|heckenschere|bohrhammer|abbruchhammer|bohrer|winkelschleifer|meißel|werkstatt|rohrzange|bolzenschneider|kabelbinder|elektrohobel|feinbohrschleifer|spannzwingen|zwingen-set|rasendünger|gartenspritze|gartenhocker|sanitär|montageschlüssel|sekundenkleber|buntlack|abdeckplane|duschtürdichtung|badewannenmatte|duschhocker|steppbett|spannbettlaken|tagesdecke|daunendecke|luftbett|matratze|kleiderschrank|drehtürenschrank|büroschrank|bürostuhl|beistelltisch|wohnzimmertisch|tischgruppe|schuhregal|metallregal|kunststoffregal|regalwürfel|polsterbank|schlafsessel|schminktisch|nischenwagen|akustikpaneel|bilderrahmen|sofa |brotkasten|kartoffelstampfer|schneebesen|kleid|tunika|slips|pyjama|leggings|unterhemden|retroboxer|sandalen|bademantel|freizeitanzug|loungewear|trikot-set|tops |ripptops|jersey|boardcase|reisetasche|rucksack|einkaufstrolley|packbänder|kuppelzelt|autodachzelt|zelt |trampolin|nestschaukel|rutsche|sandkasten|whirlpool|sup |sup-|campingstuhl|spieltipi|matschküche|super soaker|großfahrzeug|mini-fahrzeug|rennboot|inkontinenz|rollator|blutdruckmess|pulsoximeter|lesehilfe|spezialbrille|erste-hilfe|massagematte|haltungstrainer|beintrainer|rückenstütz|körperanalyse|waschhilfe|slipeinlagen|mighty patch|orchidee|phalaenopsis|chrysanthem|alpenveilchen|hortensie|glockenblume|dahlie|aster|eustoma|feigenkaktus|bogenhanf|celosia|zauberglöckchen|prärieenzian|rosenstrauß|bunter strauß|alufolie|frischhaltefolie|netflix|wertkarte|löschdecke|trinkflasche|zitronensäure|insektenschutz|corega|axe ", re.I)
 

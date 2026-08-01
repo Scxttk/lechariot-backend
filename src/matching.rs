@@ -329,6 +329,94 @@ mod tests {
         assert!(keys_cat("Lachsfiletseite", "Frische-Aktion: Fleisch & Fisch").is_empty());
     }
 
+    /// Wörterbuch-Runde 2026-08-01, Op 3: die neuen Alltagswörter. Jede Zeile
+    /// hier war im 11-Regionen-Korpus ungetaggt; die zweite Hälfte des Tests
+    /// ist der Preis dafür, gemessen im selben Lauf.
+    #[test]
+    fn alltagswoerter_2026_08_01() {
+        let hat = |titel: &str, tag: &str| {
+            let k = keys(titel);
+            assert!(k.contains(&tag.to_string()), "{titel:?} -> {k:?}, erwartet {tag}");
+        };
+        hat("Makrele", "fisch");
+        hat("Costa Pacific Prawns", "fisch");
+        hat("Brimi Burrata", "käse");
+        hat("Brimi Mascarpone", "käse");
+        hat("EDEKA Herzstücke Pecorino Romano", "käse");
+        hat("Harzer Minis", "käse");
+        hat("Brimi Mozzarelline", "mozzarella");
+        hat("Berchtesgadener Land Schlagrahm", "sahne");
+        hat("Berchtesgadener Land frischer Sauerrahm", "sahne");
+        hat("demeter Berchtesgadener Land Feinster Bio-Schlag-Rahm", "sahne");
+        hat("MILBONA Fettarmer Kefir", "joghurt");
+        hat("Halberstädter 5 Bockwürste", "wurst");
+        hat("Gmyrek Oberschlesische Frankfurter", "wurst");
+        hat("Weißwürste", "wurst");
+        hat("Leberpastete", "wurst");
+        hat("Hofglück Pfefferbeißer", "wurst");
+        hat("Recla - Südtiroler Speck", "wurst");
+        hat("Fleischkäse", "wurst");
+        hat("Krustenbraten", "schwein");
+        hat("Bauchrippe", "schwein");
+        hat("BBQ Ribs", "schwein");
+        hat("Rouladen vom Rind", "rind");
+        hat("Wade vom Jungbullen", "rind");
+        hat("Lauch", "brokkoli");
+        hat("Bio Staudensellerie", "brokkoli");
+        hat("Grapefruit", "obst");
+        hat("Passionsfrucht", "obst");
+        hat("Petersilie", "gewürze");
+        hat("KRINI Hülsenfrüchte", "konserven");
+        hat("Hummus XXL", "soßen");
+        hat("SCHAMEL Meerrettich", "soßen");
+        hat("Apfelmus ohne Zuckerzusatz", "marmelade");
+        hat("Rote Grütze XXL", "pudding");
+        hat("Sonnen Bassermann Eintöpfe", "eintopf");
+        hat("SEEBERGER Apfelringe", "nüsse");
+        hat("Sweet Popcorn XXL", "chips");
+        hat("DELUXE Baklava Pistazie", "backwaren");
+        hat("Schweinsöhrchen", "backwaren");
+        hat("Brioche Burger Buns", "brot");
+        hat("Früh Kölsch", "bier");
+        hat("SCHWABENBRÄU Das echte Märzen", "bier");
+        hat("Kosmonaut Hell", "bier");
+        hat("Don Simon Sangria Premium", "wein");
+        hat("Riunite Lambrusco Emilia Frizzante", "wein");
+        hat("Grauer Burgunder trocken", "wein");
+        hat("MALTESERKREUZ Aquavit", "spirituosen");
+        hat("Bionade", "limonade");
+        hat("Mio Mio Mate", "limonade");
+        hat("Stieleis", "eis");
+        hat("Dicke Fritte", "pommes");
+        hat("Mazola Keimöl", "öl");
+        hat("EDEKA Bio Chai Classic", "tee");
+        hat("Rainbow Mystery Dumpling", "fertiggericht");
+
+        // Der Preis, gemessen im selben Lauf über 3.474 Korpus-Produkte. Ohne
+        // diese fünf Sperren kosten die Wörter oben je einen Fehltreffer.
+        let ohne = |titel: &str, tag: &str| {
+            let k = keys(titel);
+            assert!(!k.contains(&tag.to_string()), "{titel:?} -> {k:?}, {tag} unerwünscht");
+        };
+        // `rahm` allein stand zwischendurch im Wörterbuch und war dreimal falsch.
+        ohne("Iglo Rahm-Spinat", "sahne");
+        ohne("KNORR Rahm Soße", "sahne");
+        ohne("Allgäuer Rahm-Torte", "sahne");
+        // Schöfferhofer Grapefruit ist Bier, der Naturradler Grapefruit auch.
+        ohne("SCHÖFFERHOFER Grapefruit", "obst");
+        assert_eq!(keys("SCHÖFFERHOFER Grapefruit"), vec!["bier"]);
+        ohne("Lübzer Premium Pils oder Naturradler Grapefruit", "obst");
+        // „Antipasti Creme" ist ein Aufstrich, keine Konserve.
+        ohne("ERGÜLLÜ Antipasti Creme", "konserven");
+        // Mascarpone-Joghurt ist Joghurt.
+        ohne("Mascarpone-Joghurt", "käse");
+        // „hell" ist Biersorte — auf Brötchen und auf Trauben aber nicht.
+        ohne("Rosenbrötchen hell", "bier");
+        ohne("Tafeltrauben hell", "bier");
+        // „Speck" ist Wurst, der Speck-Käse-Twister bleibt Backwerk.
+        ohne("Speck-Käse-Twister", "wurst");
+    }
+
     /// Die drei Beobachtungen aus dem Backlog, abgearbeitet am 2026-07-26.
     /// Alle drei kamen aus echten Fehltreffern, nicht aus dem Kopf.
     #[test]
@@ -337,7 +425,12 @@ mod tests {
         // stand wörtlich im Titel. Eine Blockliste half hier zunächst nicht,
         // weil sie am Begriff hängt und nicht am Produkt; jetzt hängt das
         // Backwerk selbst darin.
-        assert!(keys("Laugenstange mit Käse").is_empty(), "{:?}", keys("Laugenstange mit Käse"));
+        // Seit der Runde 2026-08-01 kennt `backwaren` das Wort „Laugenstange"
+        // (es stand als Angebot im Korpus). Der Punkt des Falls bleibt
+        // unberührt: `käse` darf es nicht sein.
+        let laugen = keys("Laugenstange mit Käse");
+        assert!(!laugen.contains(&"käse".to_string()), "{laugen:?}");
+        assert_eq!(laugen, vec!["backwaren"]);
         assert_eq!(keys("Gouda am Stück"), vec!["käse"], "echter Käse bleibt");
 
         // `arla → milch` war mehrdeutig: Arla macht Milch UND Käse UND Butter.
