@@ -1,0 +1,145 @@
+name: Vorschau-Probe (nur lesen)
+
+# Messgeschirr für Schritt 4 der Vorschau — **nur GET, kein Schreibzugriff**,
+# keine Supabase-Secrets, kein Push.
+#
+# Warum überhaupt in CI: Zwei der drei offenen Ketten sind von einem
+# Entwicklungsrechner aus gar nicht messbar. netto-online.de antwortet dieser
+# IP mit 403 auf **jede** HTML-Seite (die Wurzel eingeschlossen), und das
+# REWE-Clientzertifikat liegt ausschließlich als GitHub-Secret vor. Der
+# Runner ist die Umgebung, in der der Scraper wirklich läuft — hier zu messen
+# ist also nicht der Umweg, sondern der direkte Weg.
+#
+# Der Lauf lädt seine Ausgabe als Artefakt hoch. Daraus werden die Fixtures für
+# die Offline-Tests; behauptet wird nichts, was hier nicht geantwortet hat.
+
+on:
+  workflow_dispatch:
+    inputs:
+      market:
+        description: "REWE-Markt-ID für den -raw-Abruf"
+        required: false
+        default: "565005"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REWE_SECRETS_SET: ${{ secrets.REWE_CERT_PEM != '' && secrets.REWE_KEY_PEM != '' }}
+      OUT: ${{ github.workspace }}/probe
+    steps:
+      - uses: actions/checkout@v7
+      - run: mkdir -p "$OUT"
+
+      # ---------------------------------------------------------- REWE
+      - name: Setup Go (für rewerse)
+        if: ${{ env.REWE_SECRETS_SET == 'true' }}
+        uses: actions/setup-go@v7
+        with:
+          go-version: stable
+
+      - name: Setup rewerse + Rewe-Zertifikat
+        id: rewe
+        if: ${{ env.REWE_SECRETS_SET == 'true' }}
+        env:
+          REWE_CERT_PEM: ${{ secrets.REWE_CERT_PEM }}
+          REWE_KEY_PEM: ${{ secrets.REWE_KEY_PEM }}
+        run: |
+          set -euo pipefail
+          go install github.com/ByteSizedMarius/rewerse-engineering/cmd@latest
+          ln -sf "$(go env GOPATH)/bin/cmd" "$(go env GOPATH)/bin/rewerse"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          CERT="$RUNNER_TEMP/rewe-cert.pem"
+          KEY="$RUNNER_TEMP/rewe-private.key"
+          printf '%s' "$REWE_CERT_PEM" | base64 -d > "$CERT"
+          printf '%s' "$REWE_KEY_PEM"  | base64 -d > "$KEY"
+          chmod 600 "$CERT" "$KEY"
+          echo "cert=$CERT" >> "$GITHUB_OUTPUT"
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+
+      # Die eine Frage: Trägt `data.offers.next` wirklich Kategorien mit
+      # Preisen — oder sagt der Go-Client das nur, weil das Feld existiert?
+      - name: REWE -raw abrufen und zaehlen
+        if: ${{ env.REWE_SECRETS_SET == 'true' }}
+        env:
+          CERT: ${{ steps.rewe.outputs.cert }}
+          KEY: ${{ steps.rewe.outputs.key }}
+          MARKET: ${{ inputs.market }}
+        run: |
+          set -o pipefail
+          rewerse -cert "$CERT" -key "$KEY" -json discounts -market "$MARKET" -raw \
+            > "$OUT/rewe_raw.json" || echo "::warning::rewerse -raw fehlgeschlagen"
+          python3 - <<'PY'
+          import json, os
+          p = os.path.join(os.environ["OUT"], "rewe_raw.json")
+          d = json.load(open(p))
+          off = d.get("data", {}).get("offers", {})
+          print("defaultWeek:", off.get("defaultWeek"))
+          print("nextWeekAvailableFrom:", off.get("nextWeekAvailableFrom"))
+          for name in ("current", "next"):
+              w = off.get(name) or {}
+              cats = w.get("categories") or []
+              n = sum(len(c.get("offers") or []) for c in cats)
+              print(f"{name}: available={w.get('available')} "
+                    f"{w.get('fromDate')}..{w.get('untilDate')} "
+                    f"kategorien={len(cats)} angebote={n}")
+          PY
+
+      # ---------------------------------------------------------- Netto
+      # Welche /filialangebote/<id> gibt es, und welches Datum trägt jede? Wenn
+      # eine eigene ID die Folgewoche führt, ist Nettos Vorschau ein
+      # Listeneintrag; wenn nicht, ist sie ein Prospekt und damit anderes Holz.
+      - name: Netto-Seiten mit Filial-Cookie abrufen
+        run: |
+          set -o pipefail
+          UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+          SF='https://www.netto-online.de/INTERSHOP/web/WFS/Plus-NettoDE-Site/de_DE/-/EUR/ViewMMPStoreFinder-GetStoreByPostcode?postalcode=01219&searchradius=25'
+          curl -s --compressed -H "User-Agent: $UA" \
+            -H 'Accept: application/json, text/javascript, */*; q=0.01' \
+            -H 'X-Requested-With: XMLHttpRequest' \
+            -H 'Referer: https://www.netto-online.de/filialangebote/' \
+            -H 'Sec-Fetch-Site: same-origin' -H 'Sec-Fetch-Mode: cors' -H 'Sec-Fetch-Dest: empty' \
+            "$SF" -o "$OUT/netto_stores.json" || true
+          STORE=$(python3 -c "import json;print(json.load(open('$OUT/netto_stores.json'))[0]['store_id'])" 2>/dev/null || echo "")
+          echo "store_id=$STORE"
+          [ -z "$STORE" ] && { echo "::warning::keine Netto-Filiale"; exit 0; }
+          for p in 1 2 3 4 5 6 7 8 9 10; do
+            code=$(curl -s -o "$OUT/netto_$p.html" -w '%{http_code}' -L --compressed --max-time 30 \
+              -H "User-Agent: $UA" -H 'Accept-Language: de-DE,de;q=0.9' \
+              -H "Cookie: netto_user_stores_id=$STORE" \
+              "https://www.netto-online.de/filialangebote/$p")
+            size=$(wc -c < "$OUT/netto_$p.html")
+            dates=$(grep -oE '[0-9]{2}\.[0-9]{2}\.[0-9]{2,4}' "$OUT/netto_$p.html" | sort -u | head -6 | tr '\n' ' ')
+            tiles=$(grep -o 'js-store-product-tile' "$OUT/netto_$p.html" | wc -l)
+            echo "  /filialangebote/$p  HTTP $code  ${size}B  kacheln=$tiles  daten: $dates"
+          done
+          for u in prospekte filialangebote/; do
+            code=$(curl -s -o "$OUT/netto_ov_${u//\//}.html" -w '%{http_code}' -L --compressed --max-time 30 \
+              -H "User-Agent: $UA" -H 'Accept-Language: de-DE,de;q=0.9' \
+              -H "Cookie: netto_user_stores_id=$STORE" \
+              "https://www.netto-online.de/$u")
+            echo "  /$u  HTTP $code"
+            grep -oE '(ab Montag[^<]{0,30}|[0-9]{2}\.[0-9]{2}\.[0-9]{2})' "$OUT/netto_ov_${u//\//}.html" | sort -u | head -10 || true
+          done
+
+      # ---------------------------------------------------------- ALDI SÜD
+      # Gegenprobe zur lokalen Messung: Antworten die datierten Seiten dem
+      # Runner, obwohl sie diesem Mac mit 403 antworten?
+      - name: ALDI SUED datierte Seiten
+        run: |
+          UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+          for d in 2026-08-03 2026-08-06; do
+            for u in "https://www.aldi-sued.de/de/angebote/$d.html" "https://www.aldi-sued.de/de/angebote/$d"; do
+              code=$(curl -s -o "$OUT/aldi_$d.html" -w '%{http_code}' -L --compressed --max-time 30 \
+                -H "User-Agent: $UA" -H 'Accept-Language: de-DE,de;q=0.9' "$u")
+              echo "  HTTP $code  $(wc -c < "$OUT/aldi_$d.html")B  $u"
+            done
+          done
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: vorschau-probe
+          path: probe/
+          retention-days: 3
