@@ -1,0 +1,102 @@
+# Einkaufszettel-Probe — der Prüfstand, den ein Mensch pflegt
+#
+# Drei Zeilenarten, jeweils mit Tabulatoren getrennt. Zeilen mit # sind
+# Kommentare, leere Zeilen egal.
+#
+#   REGAL   <Titel>   <Untertitel>   <Kategorie>
+#       Ein erfundenes Angebot. Erfunden mit Absicht: Ein Regal aus echten
+#       Prospektzeilen veraltet jede Woche, und dann prüft der Test die
+#       Angebotslage statt das Wörterbuch.
+#
+#   ZETTEL  <Listenwort>   <erwartete Titel, mit | getrennt>
+#       Was jemand auf den Zettel schreibt, und was dabei herauskommen MUSS.
+#       Fehlt einer, fällt der Test. Zusätzliche Treffer sind erlaubt: Die App
+#       zeigt Tag-Treffer bewusst als „Passt vielleicht" unter den genauen an,
+#       und das ist kein Fehler, sondern der Zweck des Wörterbuchs.
+#
+#   NICHT   <Listenwort>   <verbotene Titel, mit | getrennt>
+#       Die Gegenrichtung, und dort sitzen die eigentlichen Fehler. Jede
+#       dieser Zeilen war einmal eine echte Fehlmeldung.
+#
+#   WUNSCH  <Listenwort>   <erwartete Titel, mit | getrennt>
+#       Dasselbe, aber noch nicht erreicht. Fällt NICHT durch — der Test
+#       zählt die offenen Wünsche und schreibt sie hin. So sieht man, ob das
+#       Wörterbuch besser wird, ohne dass die Latte bei jedem Vorsatz reißt.
+#       Wird ein Wunsch erfüllt, meldet der Test das und will, dass die Zeile
+#       auf ZETTEL umgestellt wird.
+
+# ---------------------------------------------------------------- das Regal
+REGAL	MILBONA Frische Weidemilch	1 l, 3,5 % Fett	Molkereiprodukte
+REGAL	Bio-Hafergetränk Barista	1 l	Molkereiprodukte
+REGAL	HARRY Vollkornbrot	500 g	Brot
+REGAL	GOLDEN TOAST Buttertoast	500 g	Brot
+REGAL	Bauernkäse am Stück	400 g	Käse
+REGAL	MILBONA Käsescheiben Gouda	200 g	Käse
+REGAL	Speck-Käse-Twister	je 100 g	Backwaren
+REGAL	Deutsche Speisefrühkartoffeln	2 kg	Obst und Gemüse
+REGAL	Rispentomaten	500 g	Obst und Gemüse
+REGAL	Tomatenmark dreifach konzentriert	200 g	Konserven
+REGAL	Bio-Hähnchenbrustfilet	400 g	Geflügel
+REGAL	Rügenwalder Veganes Mühlen-Schnitzel	180 g	Fleischersatz
+REGAL	Frische Makrele	je Stück	Fisch
+REGAL	Petersilie im Topf	1 Stück	Obst und Gemüse
+REGAL	KORO Bio-Nut-Butter-Cups	120 g	Süßwaren
+REGAL	BAHLSEN ABC Russisch Brot	100 g	Kekse
+REGAL	L'Oréal Paris Elvital Shampoo	250 ml	Drogerie
+REGAL	Wilkinson Hydro 5 Rasierklingen	4 Stück	Drogerie
+REGAL	Waschpulver Color	18 WL	Drogerie
+REGAL	JACOBS Krönung Filterkaffee	500 g	Kaffee
+
+# ------------------------------------------------------------ der Zettel
+# Das Selbstverständliche: das Wort steht im Titel.
+ZETTEL	Milch	MILBONA Frische Weidemilch
+ZETTEL	Vollkornbrot	HARRY Vollkornbrot
+ZETTEL	Kartoffeln	Deutsche Speisefrühkartoffeln
+ZETTEL	Makrele	Frische Makrele
+ZETTEL	Petersilie	Petersilie im Topf
+ZETTEL	Kaffee	JACOBS Krönung Filterkaffee
+
+# Das Wort steht NICHT im Titel — dafür ist das Wörterbuch da.
+ZETTEL	Brot	GOLDEN TOAST Buttertoast|HARRY Vollkornbrot
+ZETTEL	Käse	Bauernkäse am Stück|MILBONA Käsescheiben Gouda
+ZETTEL	Hähnchen	Bio-Hähnchenbrustfilet
+
+ZETTEL	Tomaten	Rispentomaten
+
+# ---------------------------------------------------- was nicht kommen darf
+# „Tomaten" holt das Mark nicht — Token-Gleichheit statt Substring, die
+# älteste Regel des Wörterbuchs.
+NICHT	Tomaten	Tomatenmark dreifach konzentriert
+# Diese drei stehen bewusst als NICHT-WUNSCH und nicht als NICHT — sie sind
+# NICHT erledigt, und dieser Prüfstand hat das am 2026-08-01 aufgedeckt:
+#
+# Eine Sperrliste nimmt dem Angebot nur seinen TAG. Der Titel bleibt, und die
+# Suche findet ein Wort, das wörtlich im Titel steht, immer — als „Genau das".
+# „KORO Bio-Nut-Butter-Cups" enthält nun einmal das Wort Butter. Die Meldung
+# des Testers vom 31.07. ist damit halb behoben: über die Kategorie kommt das
+# Produkt nicht mehr, über seinen eigenen Namen weiter.
+#
+# Ob das überhaupt ein Fehler ist, ist eine Produktfrage und keine
+# Wörterbuchfrage: Ein Produkt, das „Butter" heißt, bei „Butter" zu zeigen,
+# ist verteidigbar. Der Tester sieht es anders. Solange das nicht entschieden
+# ist, zählt der Test es als offen, statt grün oder rot zu behaupten.
+NICHT-WUNSCH	Butter	KORO Bio-Nut-Butter-Cups
+NICHT-WUNSCH	Brot	BAHLSEN ABC Russisch Brot
+NICHT-WUNSCH	Käse	Speck-Käse-Twister
+# Non-Food hat im Essen nichts verloren (PR #48). Beide trugen vorher `kaffee`
+# — wer Kaffee suchte, bekam Haarspray und Waschpulver angeboten.
+NICHT	Kaffee	Waschpulver Color|L'Oréal Paris Elvital Shampoo
+NICHT	Milch	Waschpulver Color
+
+# ------------------------------------------------------------- die Wünsche
+# Noch nicht erreicht, aber gewollt. Der Test zählt sie, ohne rot zu werden.
+#
+# „vegan Schnitzel" war seit dem Capture vom 21.07.2026 (Samira) offen und ist
+# es nicht mehr: Seit der Suffix `nuggets` aus `schwein` heraus ist (PR #34),
+# findet der Zettel das Mühlen-Schnitzel. Vom Wunsch zur Pflicht.
+ZETTEL	vegan Schnitzel	Rügenwalder Veganes Mühlen-Schnitzel
+# Der Tester wollte am 31.07. einen Laib und bekam Toast: `brot` ist zu grob.
+# Ein feinerer Begriff wäre die Antwort, kein Sperreintrag.
+WUNSCH	Laib Brot	HARRY Vollkornbrot
+# Hafergetränk ist Milchersatz — heute trägt es keinen Begriff, den jemand tippt.
+WUNSCH	Hafermilch	Bio-Hafergetränk Barista
