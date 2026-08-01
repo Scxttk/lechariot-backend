@@ -10,15 +10,17 @@ on:
         description: "Nur diese Filiale syncen (ID aus public.branches); leer = Voll-Sync"
         required: false
         default: ""
-      # AUS, und der Zeitplan setzt ihn nie: Ein geplanter Lauf lädt und
-      # schreibt weiter genau das, was er vorher geschrieben hat. Anschalten ist
-      # eine Handlung, keine Voreinstellung — die Vorschau verdoppelt grob die
-      # Zeilen in `offers`. Messung im [[Le Chariot Backlog]], „Phase 0".
+      # AN seit 2026-08-01 (Scotts Freigabe): Der Zeitplan lädt die Folgewoche
+      # mit. Vorher war der Schalter AUS, weil die Entscheidung „verdoppeln wir
+      # die Zeilen in `offers`?" offen war — sie ist entschieden, die Messung
+      # steht im [[Le Chariot Backlog]] unter „Phase 0" (+3,3 MB Heap bei
+      # 500 MB Grenze). Das Häkchen bleibt, damit ein Lauf sie *ausschalten*
+      # kann; das ist jetzt die Handlung, nicht mehr das Anschalten.
       preview:
         description: "Angebote der Folgewoche mitladen (Kaufland, Lidl, ALDI Nord)"
         type: boolean
         required: false
-        default: false
+        default: true
 
 concurrency:
   # On-Demand-Läufe für einzelne Filialen dürfen parallel zum Voll-Sync laufen.
@@ -46,9 +48,13 @@ jobs:
       # daran hing der Fehler: `branches.yml` setzt sie nicht und holte
       # deshalb aus einer anderen Quelle als dieser Lauf.
       LIDL_SOURCE: prospekt
-      # Leer bei jedem geplanten Lauf — `inputs.preview` gibt es nur bei
-      # workflow_dispatch. `preview::enabled()` liest genau diese Variable.
-      LECHARIOT_PREVIEW: ${{ inputs.preview && '1' || '' }}
+      # `preview::enabled()` liest genau diese Variable.
+      #
+      # `github.event_name` steht hier ausdrücklich statt eines Vergleichs mit
+      # `inputs.preview`: Bei einem geplanten Lauf gibt es `inputs` gar nicht,
+      # und GitHub rechnet `null == false` zu **wahr** — ein `inputs.preview ==
+      # false && '' || '1'` hätte den Zeitplan also still wieder ausgeschaltet.
+      LECHARIOT_PREVIEW: ${{ (github.event_name == 'schedule' || inputs.preview) && '1' || '' }}
     steps:
       - uses: actions/checkout@v7
 
