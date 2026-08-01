@@ -60,9 +60,9 @@ KAT_ROH = {
 
 # Wörterbuch: begriff -> (exakte tokens, komposita-suffixe, blockliste)
 V = {
- "brot":(["brot","broetchen","brötchen","toast","baguette","ciabatta"],["brot","broetchen","brötchen","toast"],["brotaufstrich","aufbackbrötchen?"]),
+ "brot":(["brot","broetchen","brötchen","toast","baguette","ciabatta"],["brot","broetchen","brötchen","toast"],["brotaufstrich","aufbackbrötchen?","russisch brot"]),
  "milch":(["milch","frischmilch","vollmilch","buttermilch","mandeldrink","haferdrink","sojadrink"],["milch"],["milchreis","milchschnitte","milchbrötchen","kokosmilch","milcheis","milchschokolade","kondensmilch","sonnenmilch","kokosnussmilch","milka","knoppers","milch schnitte","bergkäse","käsescheiben"]),
- "butter":(["butter","süßrahmbutter","weidebutter","markenbutter","kærgården","kaergarden"],[],["butterkäse","buttergemüse","erdnussbutter","buttermilch","butterkeks"]),
+ "butter":(["butter","süßrahmbutter","weidebutter","markenbutter","kærgården","kaergarden"],[],["butterkäse","buttergemüse","erdnussbutter","buttermilch","butterkeks","nut butter"]),
  "käse":(["käse","kaese","käsescheiben","käsesnack","cheestrings","cottage","gouda","emmentaler","edamer","maasdamer","bergkäse","butterkäse","cheddar","parmesan","grana","halloumi","finello","obazda"],["käse","kaese"],["käsekuchen","frischkäse","croissant","leberkäse","laugenstange","laugengebäck","brezel","käsebrötchen","käsestange","käsegebäck","fleischkäse","twister"]),
  "frischkäse":(["frischkäse","frischkaese"],[],[]),
  "mozzarella":(["mozzarella"],["mozzarella"],[]),
@@ -247,7 +247,12 @@ SUFFIX_STOP = {"reis","preis","schwein","schweine","kreis","eis","wein",
 
 def norm(s):
     s = s.lower()
-    s = re.sub(r"[®*™]", "", s)
+    # Der Apostroph FÄLLT WEG, er wird nicht zum Leerzeichen. Sonst wird aus
+    # dem Markenschlüssel „l'oréal" ein „l oreal", das im Prospekt niemals
+    # steht — der schreibt „Loreal Men Expert". Dasselbe bei „beck's" und
+    # „ben's original". Typografische Varianten (’ ‘ ´) zählen mit, die
+    # Prospekte mischen sie („Tesori d‘Oriente").
+    s = re.sub(r"[®*™'’‘´`]", "", s)
     s = s.replace("-", " ")
     s = s.translate(str.maketrans("éèêáàâíìóòúù", "eeeaaaiioouu"))
     s = re.sub(r"[^a-zäöüß\- ]", " ", s)
