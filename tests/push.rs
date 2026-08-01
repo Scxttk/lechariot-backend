@@ -1297,9 +1297,12 @@ fn a_leaflet_crop_is_uploaded_to_the_bucket() {
         .unwrap();
 
     let source = format!("file://{}", file.display());
-    let public = storage::mirror(&client, &cfg, &source).expect("Kachelbild nicht gespiegelt");
+    let (public, uploaded) =
+        storage::mirror(&client, &cfg, &source).expect("Kachelbild nicht gespiegelt");
     let _ = std::fs::remove_file(&file);
 
+    // Leerer Bucket: Das Bild muss wirklich hochgeladen worden sein.
+    assert!(uploaded, "Kachelbild als unverändert abgetan, obwohl es fehlte");
     // Die zurückgegebene URL zeigt in den öffentlichen Bucket, nicht auf die
     // lokale Datei — sonst stünde ein `file://`-Pfad in der Datenbank.
     assert!(public.starts_with(&base_url), "keine Bucket-URL: {public}");

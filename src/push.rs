@@ -561,16 +561,21 @@ fn scope_of(url: &str) -> MirrorScope {
 /// Bild-URLs in den Storage-Bucket hochladen und die Zeilen auf die
 /// Bucket-URL umschreiben. Bekannte Bilder liefert der lokale Cache ohne
 /// Netzwerkzugriff; Fehler eines einzelnen Bildes brechen den Push nicht ab.
-/// Liefert (neu hochgeladen, aus Cache, fehlgeschlagen).
+/// Liefert (neu hochgeladen, unverändert, aus Cache, fehlgeschlagen).
+///
+/// „unverändert" ist der Fall, den der Runner jede Nacht produziert: Er startet
+/// mit leerer Cache-Datenbank, lädt also jedes Bild erneut — im Bucket liegt es
+/// aber schon byte-gleich. Ohne den ETag-Vergleich in `storage::upload` wurde
+/// daraus jede Nacht eine neue Objektfassung.
 fn mirror_images(
     groups: &mut BTreeMap<&'static str, ChainRows>,
     cfg: &PushConfig,
     db_path: &str,
     client: &reqwest::blocking::Client,
     scope: MirrorScope,
-) -> Result<(usize, usize, usize)> {
+) -> Result<(usize, usize, usize, usize)> {
     let conn = db::open(db_path)?;
-    let (mut fresh, mut cached, mut failed) = (0usize, 0usize, 0usize);
+    let (mut fresh, mut unchanged, mut cached, mut failed) = (0usize, 0usize, 0usize, 0usize);
 
     for (_chain, g) in groups.iter_mut() {
         for row in g.rows.iter_mut() {
@@ -588,10 +593,14 @@ fn mirror_images(
                 continue;
             }
             match storage::mirror(client, cfg, &src) {
-                Ok(public) => {
+                Ok((public, uploaded)) => {
                     db::cache_image_url(&conn, &src, &public)?;
                     row.image_url = Some(public);
-                    fresh += 1;
+                    if uploaded {
+                        fresh += 1;
+                    } else {
+                        unchanged += 1;
+                    }
                 }
                 Err(e) => {
                     eprintln!("  Bild übersprungen ({src}): {e}");
@@ -610,7 +619,7 @@ fn mirror_images(
             }
         }
     }
-    Ok((fresh, cached, failed))
+    Ok((fresh, unchanged, cached, failed))
 }
 
 /// Alle gepushten Zeilen zusätzlich in `public.price_history` upserten
@@ -751,19 +760,23 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
     // nie. Deshalb auch nicht `defer_mirror`: Eine Zeile, die zwischendurch
     // eine Lüge trägt, wollen wir gar nicht erst schreiben. Der Upload ist
     // billig — die Datei liegt lokal, es entfällt der Download.
-    let (fresh, cached, failed) =
+    let (fresh, unchanged, cached, failed) =
         mirror_images(&mut groups, cfg, &opts.db_path, &mirror_client, MirrorScope::LocalCrops)?;
-    if fresh + cached + failed > 0 {
-        println!("Kachelbilder: {fresh} neu hochgeladen, {cached} aus Cache, {failed} fehlgeschlagen.");
+    if fresh + unchanged + cached + failed > 0 {
+        println!(
+            "Kachelbilder: {fresh} neu hochgeladen, {unchanged} unverändert, {cached} aus Cache, {failed} fehlgeschlagen."
+        );
     }
 
     // Produktbilder in den Storage-Bucket spiegeln, bevor die Zeilen hochgeladen
     // werden — so trägt image_url die stabile Bucket-URL statt der Händler-URL.
     // Im defer_mirror-Modus passiert das erst NACH dem Upsert (Phase 2 unten).
     if opts.mirror_images && !opts.defer_mirror {
-        let (fresh, cached, failed) =
+        let (fresh, unchanged, cached, failed) =
             mirror_images(&mut groups, cfg, &opts.db_path, &mirror_client, MirrorScope::RemoteImages)?;
-        println!("Bilder: {fresh} neu gespiegelt, {cached} aus Cache, {failed} fehlgeschlagen.");
+        println!(
+            "Bilder: {fresh} neu gespiegelt, {unchanged} unverändert, {cached} aus Cache, {failed} fehlgeschlagen."
+        );
     }
     let offers_url = format!("{}/rest/v1/offers", cfg.base_url);
     let auth = |req: reqwest::blocking::RequestBuilder| {
@@ -878,10 +891,12 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
         phase2.push((MirrorScope::RemoteImages, "Bilder (Phase 2)"));
     }
     for (scope, label) in phase2 {
-        let (fresh, cached, failed) =
+        let (fresh, unchanged, cached, failed) =
             mirror_images(&mut groups, cfg, &opts.db_path, &mirror_client, scope)?;
-        if fresh + cached + failed > 0 {
-            println!("{label}: {fresh} neu gespiegelt, {cached} aus Cache, {failed} fehlgeschlagen.");
+        if fresh + unchanged + cached + failed > 0 {
+            println!(
+                "{label}: {fresh} neu gespiegelt, {unchanged} unverändert, {cached} aus Cache, {failed} fehlgeschlagen."
+            );
         }
     }
     let mirrored: Vec<SupabaseRow> = groups

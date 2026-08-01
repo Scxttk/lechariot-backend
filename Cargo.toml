@@ -28,3 +28,6 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png"]
 # Transparenz werden lossy zu WebP re-encodet — ~90 % kleiner als PNG, ohne die
 # Freisteller-Transparenz zu plätten (JPEG könnte das nicht).
 webp = "0.3"
+# Nur für den ETag-Vergleich vor dem Bucket-Upload: Supabase liefert als ETag
+# den MD5-Hex des Objektinhalts (gemessen 2026-08-01). Keine Sicherheitsfunktion.
+md-5 = "0.10"

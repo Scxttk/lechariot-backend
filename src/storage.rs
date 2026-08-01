@@ -280,13 +280,13 @@ fn downscale(bytes: &[u8], content_type: &str) -> Option<(Vec<u8>, &'static str)
 }
 
 /// Bild vom Händler laden und in den Bucket hochladen; liefert die öffentliche
-/// Bucket-URL. Idempotent dank content-adressiertem Pfad + `x-upsert` — ein
-/// erneuter Aufruf für dasselbe Bild überschreibt dasselbe Objekt.
+/// Bucket-URL und ob dafür wirklich hochgeladen wurde (`false` = im Bucket lag
+/// byte-gleich dasselbe Bild). Idempotent dank content-adressiertem Pfad.
 pub fn mirror(
     client: &reqwest::blocking::Client,
     cfg: &PushConfig,
     source_url: &str,
-) -> Result<String> {
+) -> Result<(String, bool)> {
     // Kachelbilder aus dem Lidl-Prospekt liegen als Datei vor, nicht hinter
     // einer URL — sie werden lokal aus dem PDF geschnitten. Der Weg dahin ist
     // derselbe wie für jedes Händlerbild (downscale -> WebP -> Bucket), nur die
@@ -434,14 +434,55 @@ fn local_crop_path(source_url: &str) -> Result<Option<std::path::PathBuf>> {
     Ok(Some(path.to_path_buf()))
 }
 
-/// In den Bucket hochladen (idempotent via x-upsert).
+/// MD5-Hex des Körpers — genau das Format, das Supabase als ETag führt
+/// (gemessen 2026-08-01 gegen ein Bucket-Objekt: `etag` == `md5` der Bytes).
+fn content_etag(body: &[u8]) -> String {
+    let digest = md5::Md5::digest(body);
+    digest.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// ETag des Objekts im Bucket, falls es dort liegt. Fehler, 404 oder ein ETag
+/// mit `-` (mehrteiliger Upload, dann kein reiner MD5) liefern `None` — der
+/// Aufrufer lädt dann hoch, statt zu raten.
+fn stored_etag(client: &reqwest::blocking::Client, cfg: &PushConfig, path: &str) -> Option<String> {
+    let url = format!("{}/storage/v1/object/{BUCKET}/{path}", cfg.base_url);
+    let resp = client
+        .head(&url)
+        .header("apikey", &cfg.api_key)
+        .header("Authorization", format!("Bearer {}", cfg.api_key))
+        .send()
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let tag = resp
+        .headers()
+        .get(reqwest::header::ETAG)?
+        .to_str()
+        .ok()?
+        .trim_matches('"')
+        .to_ascii_lowercase();
+    (!tag.is_empty() && !tag.contains('-')).then_some(tag)
+}
+
+/// In den Bucket hochladen (idempotent via x-upsert). Liefert (öffentliche URL,
+/// hochgeladen?).
+///
+/// Liegt byte-gleich dasselbe Objekt schon dort, unterbleibt der Upload: Jedes
+/// Upsert legt serverseitig eine weitere Fassung an, die niemand mehr sieht und
+/// die das Storage-Kontingent frisst (Messung 2026-08-01: 34,7 MB sichtbar,
+/// 514 MB berechnet). Herleitung im [[Le Chariot Backlog]], „Phase 0".
 fn upload(
     client: &reqwest::blocking::Client,
     cfg: &PushConfig,
     path: &str,
     body: Vec<u8>,
     content_type: &str,
-) -> Result<String> {
+) -> Result<(String, bool)> {
+    if stored_etag(client, cfg, path).is_some_and(|tag| tag == content_etag(&body)) {
+        return Ok((public_url(&cfg.base_url, path), false));
+    }
+
     let upload_url = format!("{}/storage/v1/object/{BUCKET}/{path}", cfg.base_url);
     let resp = client
         .post(&upload_url)
@@ -459,7 +500,7 @@ fn upload(
         bail!("Bild-Upload {path}: HTTP {status}: {excerpt}");
     }
 
-    Ok(public_url(&cfg.base_url, path))
+    Ok((public_url(&cfg.base_url, path), true))
 }
 
 #[cfg(test)]
@@ -520,6 +561,142 @@ mod tests {
         assert!(!is_client_blocked_url("https://netto-online.de.attacker.tld/x.jpg"));
         assert!(!is_client_blocked_url("file:///tmp/x.png"));
         assert!(!is_client_blocked_url("kaputt"));
+    }
+
+    // ------------------------------------------- Upload nur bei Änderung
+
+    /// Bucket-Attrappe: HEAD beantwortet sie mit `etag` (ohne einen: 404),
+    /// POST nimmt sie an. Sie protokolliert jede Methode — nur so lässt sich
+    /// beweisen, dass gar **nicht** hochgeladen wurde.
+    fn spawn_bucket(etag: Option<String>) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = std::sync::Arc::clone(&log);
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { break };
+                // Kopf UND angekündigten Körper lesen; wer nur den Kopf liest,
+                // lässt den Client beim Schreiben auf einen geschlossenen
+                // Socket laufen.
+                let mut buf = Vec::new();
+                let mut chunk = [0u8; 4096];
+                loop {
+                    if let Some(end) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                        let head = String::from_utf8_lossy(&buf[..end]).to_ascii_lowercase();
+                        let want: usize = head
+                            .lines()
+                            .find_map(|l| l.strip_prefix("content-length:"))
+                            .and_then(|v| v.trim().parse().ok())
+                            .unwrap_or(0);
+                        if buf.len() >= end + 4 + want {
+                            break;
+                        }
+                    }
+                    match stream.read(&mut chunk) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                    }
+                }
+                let method = String::from_utf8_lossy(&buf)
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("?")
+                    .to_string();
+                let resp = match (method.as_str(), etag.as_deref()) {
+                    ("HEAD", Some(tag)) => format!(
+                        "HTTP/1.1 200 OK\r\netag: \"{tag}\"\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+                    ),
+                    ("HEAD", None) => {
+                        "HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+                            .to_string()
+                    }
+                    _ => "HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\n{}"
+                        .to_string(),
+                };
+                sink.lock().unwrap().push(method);
+                let _ = stream.write_all(resp.as_bytes());
+            }
+        });
+        (format!("http://{addr}"), log)
+    }
+
+    fn test_cfg(base_url: String) -> PushConfig {
+        PushConfig { base_url, api_key: "test-key".to_string() }
+    }
+
+    // Supabase führt als ETag den MD5-Hex des Objektinhalts (gemessen
+    // 2026-08-01 gegen ein Bucket-Objekt). Hält das nicht mehr, greift der
+    // Vergleich nie und der Waisenberg wächst still weiter — deshalb fest.
+    #[test]
+    fn content_etag_is_the_md5_hex_supabase_reports() {
+        assert_eq!(content_etag(b""), "d41d8cd98f00b204e9800998ecf8427e");
+        assert_eq!(content_etag(b"abc"), "900150983cd24fb0d6963f7d28e17f72");
+    }
+
+    // Der Kern: Liegt das Bild byte-gleich schon im Bucket, darf **kein**
+    // Upload stattfinden. Jedes Upsert legt serverseitig eine weitere Fassung
+    // an, die niemand mehr sieht — ~36 MB je Nacht (Messung 2026-08-01:
+    // 34,7 MB sichtbar, 514 MB berechnet).
+    #[test]
+    fn unchanged_image_is_not_uploaded_again() {
+        let body = b"RIFF....WEBPVP8 unveraendert".to_vec();
+        let (base, log) = spawn_bucket(Some(content_etag(&body)));
+        let cfg = test_cfg(base);
+        let client = reqwest::blocking::Client::new();
+
+        let (url, uploaded) = upload(&client, &cfg, "abc.webp", body, "image/webp").unwrap();
+
+        assert!(!uploaded, "unverändertes Bild wurde erneut hochgeladen");
+        assert_eq!(url, public_url(&cfg.base_url, "abc.webp"));
+        assert_eq!(
+            log.lock().unwrap().as_slice(),
+            ["HEAD"],
+            "nur der ETag-Abgleich darf laufen, kein POST"
+        );
+    }
+
+    // Die Gegenrichtung, und sie ist die eigentliche Gefahr des Fixes: Hat der
+    // Händler das Bild ausgetauscht, MUSS hochgeladen werden — sonst friert
+    // der Bucket auf dem alten Stand ein.
+    #[test]
+    fn changed_image_is_uploaded() {
+        let (base, log) = spawn_bucket(Some(content_etag(b"das alte bild")));
+        let cfg = test_cfg(base);
+        let client = reqwest::blocking::Client::new();
+
+        let (_, uploaded) =
+            upload(&client, &cfg, "abc.webp", b"das neue bild".to_vec(), "image/webp").unwrap();
+
+        assert!(uploaded, "geändertes Bild wurde nicht hochgeladen");
+        assert_eq!(log.lock().unwrap().as_slice(), ["HEAD", "POST"]);
+    }
+
+    // Noch gar nicht im Bucket (404): hochladen, nicht rätseln.
+    #[test]
+    fn missing_image_is_uploaded() {
+        let (base, log) = spawn_bucket(None);
+        let cfg = test_cfg(base);
+        let client = reqwest::blocking::Client::new();
+
+        let (_, uploaded) =
+            upload(&client, &cfg, "neu.webp", b"erstes bild".to_vec(), "image/webp").unwrap();
+
+        assert!(uploaded);
+        assert_eq!(log.lock().unwrap().as_slice(), ["HEAD", "POST"]);
+    }
+
+    // Ein mehrteiliger Upload trägt einen ETag mit Bindestrich — dann ist er
+    // kein reiner MD5 und taugt nicht zum Vergleich. Lieber hochladen als
+    // still das Falsche behalten.
+    #[test]
+    fn multipart_etag_is_not_trusted() {
+        let (base, _log) = spawn_bucket(Some("d41d8cd98f00b204e9800998ecf8427e-3".to_string()));
+        let cfg = test_cfg(base);
+        let client = reqwest::blocking::Client::new();
+
+        assert!(stored_etag(&client, &cfg, "abc.webp").is_none());
     }
 
     /// Lokaler HTTP-Server mit einer festen Antwort, für die curl-Downloads.
