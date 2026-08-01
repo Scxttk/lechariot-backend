@@ -360,6 +360,109 @@ _BLOCK3 = {
 for _t,_bl in _BLOCK3.items():
     V[_t] = (V[_t][0], V[_t][1], V[_t][2]+_bl)
 
+# Erweiterungsrunde 2026-08-01, Op 4: Komposita, in denen ein Wort steckt, das
+# das Wörterbuch längst kennt — „Steinofenbaguette", „Käsewiener",
+# „Kartoffeltaschen", „Lachsfiletseite", „Schinkenplatte". Das ist keine Zeile
+# je Produkt, sondern eine Sache am Kompositum-Mechanismus je Begriff.
+#
+# Der Suffix-Weg (bekanntes Wort am ENDE) gibt es seit der ersten Runde; neu
+# ist PRAEFIX (bekanntes Wort am ANFANG), denn das Deutsche schreibt das
+# Grundwort mal hinten und mal vorne. Beide laufen unter derselben Regel:
+# mindestens vier Zeichen, SUFFIX_STOP gilt, und die Blockliste des Begriffs
+# sticht — genau deshalb steht hier PRO BEGRIFF etwas und nicht pauschal.
+# Der Preis ist bekannt und dokumentiert: „Reis"/„Preis", „Wein"/„Schwein".
+_ADD4_SUFFIX = {
+ # Sieben Baguettes im Korpus, keines mit dem Wort „Brot": Laugen-, Mehrkorn-,
+ # Weizen-, Dinkel-, Steinofenbaguette.
+ "brot":["baguette"],
+ # Linzergebäck, Vitalgebäck. Bewusst bei `backwaren` und nicht bei `kekse` —
+ # „Laugengebäck" wäre dort falsch einsortiert.
+ "backwaren":["gebäck"],
+ # Apfelrotkohl (2x). „rotkohl" steht schon im exact von `konserven`.
+ "konserven":["rotkohl"],
+ # Herzwaffeln, Karamellwaffeln. „Reiswaffeln" sind Knäckebrot und stehen
+ # deshalb neu auf der Blockliste von `kekse`.
+ "kekse":["waffeln"],
+ "fisch":["hering","forelle"],
+ "brokkoli":["brokkoli"],   # Stangenbrokkoli
+ "butter":["butter"],       # Bio-Alpenbutter; Butterkäse/-milch/-keks blocken schon
+ "wurst":["wiener"],        # Käsewiener
+ "pudding":["dessert"],     # Puddingdessert
+ "wein":["burgunder"],      # Spätburgunder, Weißburgunder
+ "marmelade":["brotaufstrich"],  # Bio-Abendbrotaufstrich
+}
+for _t,_sf in _ADD4_SUFFIX.items():
+    V[_t] = (V[_t][0], V[_t][1]+_sf, V[_t][2])
+
+# Begriff → Komposita-PRÄFIXE. Gleiche Regeln wie die Suffixe.
+PRAEFIX = {
+ # Lachsfiletseite, Lachsfiletportionen, Lachsfleisch, Lachsartikel,
+ # Garnelenspieße. „Lachsschinken" ist Schwein und steht auf der Blockliste.
+ "fisch":["lachs","garnelen"],
+ # Kartoffeltaschen, Kartoffelpüree. Kartoffelsalat/-chips/-puffer/-ecken
+ # stehen seit jeher auf der Blockliste und bleiben draußen.
+ "kartoffeln":["kartoffel"],
+ "hähnchen":["hähnchen","chicken"],
+ "pute":["pute"],
+ # Wurstsalat, Wurstspezialität, Schinkenplatte, Schinkengulasch, Wienerle.
+ "wurst":["wurst","schinken","wiener"],
+ # „schweine", nicht „schwein": „Schweinsöhrchen" ist Backwerk und fängt mit
+ # „schwein" an.
+ "schwein":["schweine"],
+ "rind":["steak"],           # Steakhüfte
+ "hackfleisch":["hackfleisch"],  # NICHT „hack" — das fängt HACKER-PSCHORR
+ "beeren":["beeren"],        # Beerenmischung
+ "frischkäse":["frischkäse"],
+ "käse":["schmelzkäse"],
+ "mozzarella":["mozzarella"],
+ "nudeln":["teigwaren"],
+ "bratwurst":["bratwurst"],
+ "nüsse":["cashewkerne","walnusskerne"],
+ "joghurt":["joghurt"],
+ "essig":["essig"],          # Essigessenz; „Essiggurken" blockt schon
+ "lamm":["lammkeule"],
+ "obst":["obst"],            # Obstsortiment
+ "quark":["quark"],          # „Cremig und Quarkig"; Quarkbällchen blockt schon
+ "wein":["wein"],            # Weingenuss; Weintrauben/-essig/-sauerkraut blocken
+ "butter":["butter"],        # Butterschmalz
+ "salat":["salat"],          # Salatrio, Salatmischung; Dressings blocken schon
+ "tiefkühlgemüse":["gemüse"],  # Gemüsekonserven
+ "pudding":["pudding"],
+ # Bewusst NICHT als Präfix, gemessen und verworfen: „fisch" (fängt die
+ # Fischer-E-Bikes, siehe Feedback-Auswertung), „hell" (Hella Near Water),
+ # „wasser" (Wasserenthärter, Wasserfilterkartuschen), „gewürz" („fertig
+ # gewürzt"), „apfel" (Apfeltaschen sind Backwerk), „spezi" (Hemelinger
+ # Spezial ist Bier), „fritte" (Heißluft-Fritteuse), „kaffee" (Kaffeebecher),
+ # „hack" (HACKER-PSCHORR), „schwein" (Schweinsöhrchen).
+}
+
+# Der Preis des Kompositum-Wegs, gemessen im selben Lauf über 3.474 Produkte.
+# Neun Sperren; ohne sie erzeugt Op 4 genau diese neun Fehltreffer. Das ist die
+# Sperrliste, von der die Analyse spricht — pro Begriff, nie pauschal.
+_BLOCK4 = {
+ # „Lachsschinken" und „Lachsrolle vom Schweinerücken" sind Schwein. Der
+ # Präfix `lachs` holte beiden ein `fisch`.
+ "fisch":["lachsschinken","lachsrolle"],
+ # Gemüsebrühe ist Brühe. Der Treffer im Titel hätte den Marken-Fallback
+ # („gemüsebrühe" → `eintopf`) überstimmt, der es richtig hatte.
+ "tiefkühlgemüse":["gemüsebrühe"],
+ # Ehrmann Obstgarten ist Joghurt.
+ "obst":["obstgarten"],
+ # Pom-Bär Kartoffelsnacks sind Chips, McCains Kartoffelprodukt ist Pommes —
+ # beide standen über die Marke richtig da.
+ "kartoffeln":["kartoffelsnacks","kartoffelprodukt"],
+ # Quarktasche ist Backwerk (steht schon in der Markenliste).
+ "quark":["quarktasche"],
+ # Reis- und Maiswaffeln sind Knäckebrot, keine Kekse.
+ "kekse":["reiswaffeln","maiswaffeln"],
+ # „Steakhouse Pommes" sind Pommes.
+ "rind":["steakhouse"],
+ # Die Salatgurke ist eine Gurke.
+ "salat":["salatgurke","salatgurken"],
+}
+for _t,_bl in _BLOCK4.items():
+    V[_t] = (V[_t][0], V[_t][1], V[_t][2]+_bl)
+
 # Non-Food-Begriffe im Titel (fängt Non-Food in Food-Kategorien wie „Wochenangebote")
 NONFOOD_TERMS = re.compile(r"lichterkette|lampion|wäschest|wäscheklammer|wäschekorb|kettensäge|akku|werkzeug|kinderbuch|spielzeug|\blego\b|rosen\b|blumen|pflanze|socken|shorts|shirt|cap\b|hose|schuhe|handtuch|bettwäsche|pfannen?\b|topf\b|löffel|messer|grill\b|kohle|batterie|lampe|leuchte|katzen|hunde|tiernahrung|nassfutter|trockenfutter|snack für|rasenkanten|solar|deko|kissen|matratze|drucker|kopfhörer|wc-|reiniger|megaperls|oxi action|waschpulver|schreibwaren|mikrofon|duschregal|sonnensegel|wäscheparf|karaoke|trinkzubehör|wäschetrockner|weißer riese|sonnenspray|duftspüler|sonnencreme|feuchttücher|servietten|haushaltstücher|klumpstreu|geschirrtücher|platzset|schlafsack|fusselrolle|bügeleisen|glasschüssel|lautsprecher|geräusche-box|fliegengitter|kajak|husarenknöpfchen|lavendel|bilderbuch|wecker|hairstyler|bastelkoffer|kochgeschirr|grillplatte|boombox|fliegenfalle|mottenabwehr|badvorleger|schrubber|kosmetikspiegel|shorty|plaid|fototafel|komfort-bh|pantoletten|spannbetttuch|küchentücher|sneaker|hoodie|bodyspray|deospray|haarspray|rasierkling|sonnenschutz|dutch oven|gläsersortiment|sonnenschirm|tischdecke|fleece|wellnessbürste|maniküre|pediküre|teppich|taillenslip|haftcreme|wasserballon|doppelwandig|kollagenpulver|pokémon|pokemon|plüsch|spielfigur|sammelkarten|tiptoi|autorennbahn|gesellschaftsspiel|kreuzworträtsel|rätselbuch|pixi|bastel|schüleretui|sticker|puzzle|holzperlen|magnet-bausatz|wasserbahn|kinderbesteck|steckdose|usb|ladegerät|smart-tv|wasserkocher|toaster|standmixer|espressomaschine|kaffeemaschine|kaffeevollautomat|kapselmaschine|waffeleisen|reiskocher|luftkühler|ventilator|wetterstation|vakuumiergerät|hamburger-maker|hamburger maker|inspektionskamera|range extender|mini-led-tv|qled|e-bike|faltrad|mountainbike|fahrradträger|mähroboter|heckenschere|bohrhammer|abbruchhammer|bohrer|winkelschleifer|meißel|werkstatt|rohrzange|bolzenschneider|kabelbinder|elektrohobel|feinbohrschleifer|spannzwingen|zwingen-set|rasendünger|gartenspritze|gartenhocker|sanitär|montageschlüssel|sekundenkleber|buntlack|abdeckplane|duschtürdichtung|badewannenmatte|duschhocker|steppbett|spannbettlaken|tagesdecke|daunendecke|luftbett|matratze|kleiderschrank|drehtürenschrank|büroschrank|bürostuhl|beistelltisch|wohnzimmertisch|tischgruppe|schuhregal|metallregal|kunststoffregal|regalwürfel|polsterbank|schlafsessel|schminktisch|nischenwagen|akustikpaneel|bilderrahmen|sofa |brotkasten|kartoffelstampfer|schneebesen|kleid|tunika|slips|pyjama|leggings|unterhemden|retroboxer|sandalen|bademantel|freizeitanzug|loungewear|trikot-set|tops |ripptops|jersey|boardcase|reisetasche|rucksack|einkaufstrolley|packbänder|kuppelzelt|autodachzelt|zelt |trampolin|nestschaukel|rutsche|sandkasten|whirlpool|sup |sup-|campingstuhl|spieltipi|matschküche|super soaker|großfahrzeug|mini-fahrzeug|rennboot|inkontinenz|rollator|blutdruckmess|pulsoximeter|lesehilfe|spezialbrille|erste-hilfe|massagematte|haltungstrainer|beintrainer|rückenstütz|körperanalyse|waschhilfe|slipeinlagen|mighty patch|orchidee|phalaenopsis|chrysanthem|alpenveilchen|hortensie|glockenblume|dahlie|aster|eustoma|feigenkaktus|bogenhanf|celosia|zauberglöckchen|prärieenzian|rosenstrauß|bunter strauß|alufolie|frischhaltefolie|netflix|wertkarte|löschdecke|trinkflasche|zitronensäure|insektenschutz|corega|axe ", re.I)
 
@@ -417,10 +520,17 @@ def term_hits(text):
         nblock = [norm(b) for b in block]
         if any(b in ntext for b in nblock if " " in b) or any(b in toks for b in nblock):
             continue
+        # Präfix und Suffix laufen unter derselben Regel: mindestens vier
+        # Zeichen, echtes Kompositum (das Token ist LÄNGER als der Teil, sonst
+        # wäre es ein exact), SUFFIX_STOP gilt, Blockliste sticht.
         hit = any(e in toks or (" " in e and e in ntext) for e in map(norm, exact)) \
            or any(any(t.endswith(sfx) and t not in SUFFIX_STOP and t not in nblock
                       for t in toks)
-                  for sfx in map(norm, suffixes) if len(sfx) >= 4)
+                  for sfx in map(norm, suffixes) if len(sfx) >= 4) \
+           or any(any(t.startswith(pfx) and len(t) > len(pfx)
+                      and t not in SUFFIX_STOP and t not in nblock
+                      for t in toks)
+                  for pfx in map(norm, PRAEFIX.get(term, [])) if len(pfx) >= 4)
         if hit: hits.append(term)
     return hits
 
@@ -507,7 +617,7 @@ def main():
     for market, title, sub, cat in random.sample(untagged, min(120, len(untagged))):
         print(f"  [{market[:12]:12s}] {title[:55]:55s} | {sub[:25]:25s} | {cat[:25]}")
 
-    json.dump({"begriffe":{t:{"exact":e,"suffix":s,"block":b} for t,(e,s,b) in V.items()},"marken":MARKEN,"kategorien":KAT,"nonfood_cat":NONFOOD_CAT.pattern,"nonfood_terms":NONFOOD_TERMS.pattern,"food_cat":FOOD_CAT.pattern},
+    json.dump({"begriffe":{t:{"exact":e,"suffix":s,"prefix":PRAEFIX.get(t,[]),"block":b} for t,(e,s,b) in V.items()},"marken":MARKEN,"kategorien":KAT,"nonfood_cat":NONFOOD_CAT.pattern,"nonfood_terms":NONFOOD_TERMS.pattern,"food_cat":FOOD_CAT.pattern},
               open(os.path.join(os.path.dirname(__file__),"matching-woerterbuch.json"),"w"), ensure_ascii=False, indent=1)
 
 
