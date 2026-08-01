@@ -96,7 +96,7 @@ pub fn run_branch(
     // die Angebote unter jeder Filiale dieser Kette.
     if let Some(store) = Store::from_chain(&branch.chain).filter(|s| s.stores_nationally()) {
         println!(
-            "Filial-Sync: {} {} (ID {market_id}) — Angebote liegen bundesweit, frische ich auf.",
+            "Filial-Sync: [{}] {} (ID {market_id}) — Angebote liegen bundesweit, frische ich auf.",
             branch.chain, branch.name,
         );
         return sync_national(opts, cfg, national, &[store], Some(market_id));
@@ -113,8 +113,14 @@ pub fn run_branch(
             branch.name
         )
     })?;
+    // Die Kette steht in eckigen Klammern, wie überall sonst im Log
+    // (`[Netto] N Angebote hochgeladen`, `WARNUNG [Lidl] …`). Erst dadurch ist
+    // sie eindeutig auszulesen: „ALDI Nord ALDI Nord Crimmitschau" liest sich
+    // ohne Klammern nicht in Kette und Name auseinander. **Der
+    // Ketten-Wächter in `nightly.yml` hängt an dieser Klammer** — er zählt,
+    // welche Kette versucht wurde und welche etwas hochgeladen hat.
     println!(
-        "Filial-Sync: {} {} (ID {market_id}, PLZ {plz})",
+        "Filial-Sync: [{}] {} (ID {market_id}, PLZ {plz})",
         branch.chain, branch.name,
     );
 
@@ -207,6 +213,11 @@ pub fn sync_national(
         let Some(market) = store.national_market() else {
             bail!("{} speichert nicht bundesweit — sync_national ist hier falsch.", store.chain());
         };
+        // Der Versuch, nicht erst sein Ergebnis: Eine Kette, die hier
+        // scheitert, taucht sonst in keiner Zeile auf, die der Ketten-Wächter
+        // in `nightly.yml` lesen kann — und ein Ausfall, den niemand zählen
+        // kann, ist genau der Fall, für den der Wächter gebaut ist.
+        println!("Bundesweit-Sync: [{}]", store.chain());
         match scraper(*store, &market) {
             Ok(offers) if offers.is_empty() => {
                 eprintln!("WARNUNG [{}]: Scraper lieferte 0 Angebote.", store.chain());

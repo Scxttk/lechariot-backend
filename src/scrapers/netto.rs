@@ -114,6 +114,7 @@ pub fn fetch_offers(market: &Market) -> Result<Vec<Offer>> {
 
     let mut offers = Vec::new();
     let mut seen = HashSet::new();
+    let mut abgewiesen: Vec<String> = Vec::new();
 
     for page in OFFER_PAGES {
         let url = format!("{BASE}/filialangebote/{page}");
@@ -129,15 +130,33 @@ pub fn fetch_offers(market: &Market) -> Result<Vec<Offer>> {
             ],
         ) {
             Ok(h) => h,
-            // Einzelne Kategorieseite nicht erreichbar -> überspringen statt abbrechen.
-            Err(_) => continue,
+            // Einzelne Kategorieseite nicht erreichbar -> überspringen statt
+            // abbrechen. Der Grund wird aber mitgenommen: Bis 2026-08-01 fiel
+            // er hier weg (`Err(_)`), und übrig blieb unten die Meldung über
+            // die Seitenstruktur — eine Diagnose, die mit dem Ausfall vom
+            // 01.08. (alle vier Seiten abgewiesen, Seiten völlig unverändert)
+            // nichts zu tun hatte und die Suche in die falsche Richtung schickte.
+            Err(e) => {
+                abgewiesen.push(format!("Seite {page}: {e:#}"));
+                continue;
+            }
         };
         parse_page(&html, &market.id, &mut offers, &mut seen);
     }
 
     if offers.is_empty() {
-        bail!(
-            "[Netto] Keine Angebote gefunden ({BASE}/filialangebote/…) — Seitenstruktur hat sich möglicherweise geändert"
+        bail!("{}", kein_angebot_grund(&abgewiesen));
+    }
+
+    // Teilausfall: Angebote sind da, aber nicht von allen Seiten. Das ist
+    // stiller Verlust — die Zahl stimmt dann nur scheinbar.
+    if !abgewiesen.is_empty() {
+        eprintln!(
+            "WARNUNG [Netto] {} von {} Angebotsseiten abgewiesen, {} Angebote aus dem Rest — {}",
+            abgewiesen.len(),
+            OFFER_PAGES.len(),
+            offers.len(),
+            abgewiesen.join("; ")
         );
     }
     Ok(offers)
@@ -213,6 +232,30 @@ pub fn parse_page(html: &str, market_id: &str, offers: &mut Vec<Offer>, seen: &m
     }
 }
 
+/// Warum kein einziges Angebot herauskam — als reine Funktion, damit ein Test
+/// sie ohne Netz fassen kann (dieselbe Bauart wie `util::redirect_outcome`).
+///
+/// Die Unterscheidung ist der ganze Punkt: „ich kam nicht ran" ist ein Ausfall
+/// der Verbindung, „ich kam ran und fand nichts" einer der Seitenstruktur. Bis
+/// 2026-08-01 sahen beide gleich aus, weil die abgewiesenen Seiten oben still
+/// übersprungen wurden — die Meldung sprach immer von der Struktur. Im Ausfall
+/// vom 01.08. (Lauf 30713329472: alle vier Seiten wiesen alle drei Versuche
+/// ab, die Seiten selbst völlig unverändert) hat genau das die Suche einen
+/// Abend lang in die falsche Richtung geschickt.
+fn kein_angebot_grund(abgewiesen: &[String]) -> String {
+    match abgewiesen.len() {
+        0 => format!(
+            "[Netto] Keine Angebote gefunden ({BASE}/filialangebote/…) — \
+             Seitenstruktur hat sich möglicherweise geändert"
+        ),
+        n => format!(
+            "[Netto] Keine Angebote gefunden — {n} von {} Seiten abgewiesen: {}",
+            OFFER_PAGES.len(),
+            abgewiesen.join("; ")
+        ),
+    }
+}
+
 fn sel(css: &str) -> Selector {
     Selector::parse(css).expect("statischer CSS-Selektor")
 }
@@ -266,6 +309,27 @@ mod tests {
             Some(("2026-07-13".to_string(), "2026-07-18".to_string()))
         );
         assert_eq!(parse_period_dates("Wochenangebote"), None);
+    }
+
+    /// Der Ausfall vom 01.08.2026 in einem Test: Sieben Filialen meldeten
+    /// „Seitenstruktur hat sich möglicherweise geändert", während die
+    /// Seitenstruktur unverändert war und schlicht jede Anfrage abgewiesen
+    /// wurde. Die Meldung muss sagen, welcher der beiden Fälle vorliegt.
+    #[test]
+    fn grund_unterscheidet_abweisung_von_seitenstruktur() {
+        // Alle Seiten kamen an, nur ohne Kacheln — das ist die Struktur.
+        let struktur = kein_angebot_grund(&[]);
+        assert!(struktur.contains("Seitenstruktur"), "{struktur}");
+
+        // Abgewiesene Seiten: Der HTTP-Status gehört in die Meldung, und der
+        // Verdacht gegen den Parser hat dort nichts verloren.
+        let abgewiesen = kein_angebot_grund(&[
+            "Seite 1: https://…/1 in 3 Versuchen abgewiesen (HTTP 403/403/403)".to_string(),
+            "Seite 2: https://…/2 in 3 Versuchen abgewiesen (HTTP 403/403/403)".to_string(),
+        ]);
+        assert!(abgewiesen.contains("403"), "{abgewiesen}");
+        assert!(abgewiesen.contains("2 von 4"), "{abgewiesen}");
+        assert!(!abgewiesen.contains("Seitenstruktur"), "{abgewiesen}");
     }
 
     #[test]
