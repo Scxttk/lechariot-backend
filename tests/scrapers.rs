@@ -680,17 +680,120 @@ fn a_caption_on_the_photo_is_not_a_product() {
     // **Die Gegenprobe ist hier die eigentliche Prüfung.** Zu streng gefiltert
     // kostet echte Angebote, und diese Seite trägt genau die Namen, an denen
     // eine zu breite Regel scheitern würde: einer beginnt mit „Mit" mitten im
-    // Namen, einer ist eine reine Inhaltsangabe ohne Marke.
+    // Namen, einer trägt seine Typenbezeichnung statt einer Gattung.
+    //
+    // **„3 Kochtöpfe mit Deckel (ca. Ø 16/20/24 …)" stand bis 2026-08-01 in
+    // dieser Liste und steht jetzt bewusst nicht mehr darin.** Die Zeile ist
+    // die Inhaltsangabe des GSW-Kochtopf-Sets, gesetzt in 8,4 pt — und der
+    // Preis, den sie trug, war nie ihrer: 2.99 € gehört der SILVERCREST
+    // Schubladenmatte, die daneben steht und ihn seit der Schriftgrad-Schranke
+    // (`MIN_NAME_PT`) selbst bekommt. Das Set selbst bleibt mit seinem eigenen
+    // Preis in der Liste, eine Zeile darüber.
     for erwartet in [
         "GSW Edelstahl-Kochtopf-Set",
         "SILVERCREST Tritan-Trinkflasche Mit einsetzbarem Frucht",
-        "3 Kochtöpfe mit Deckel",
+        "SILVERCREST Schubladenmatte",
     ] {
         assert!(
             titles.iter().any(|t| t.starts_with(erwartet)),
             "{erwartet:?} verschluckt, übrig: {titles:?}"
         );
     }
+}
+
+/// Der Schriftgrad entscheidet, wer den Preis bekommt — nicht der Wortlaut.
+///
+/// Fixture ist die ungekürzte Seite 47 des Prospekts vom 27.07.2026, die
+/// PARKSIDE-Sanitärseite. Sie ist der Fall, an dem jede Wortliste scheitert:
+/// „Rohrschneider" ist die Beschriftung eines Fotos, „PARKSIDE Rohr-Werkzeug"
+/// und „PARKSIDE Bolzenschneider" sind Artikel, und alle drei sehen im Text
+/// gleich aus. Im Druck nicht: Die Beschriftung steht in 8,01 pt, die Namen in
+/// 11,96 pt.
+///
+/// Bis 2026-08-01 nahm „Rohrschneider" dem Bolzenschneider seine 9.99 € weg —
+/// der Artikel fiel ersatzlos aus der Liste, die Beschriftung stand drin.
+#[test]
+fn the_type_size_says_which_line_is_a_product_name() {
+    let offers = scrapers::lidl_prospekt::extract_offers(
+        include_str!("fixtures/lidl/prospekt_schriftgrad_s47.xml"),
+        "LIDL_1988",
+        Some("2026-07-27"),
+        Some("2026-08-01"),
+    );
+    let paare: Vec<(&str, Option<f64>)> =
+        offers.iter().map(|o| (o.title.as_str(), o.price)).collect();
+
+    for beschriftung in ["Rohrschneider", "Farbdisplay Auflösung Speicher"] {
+        assert!(
+            !paare.iter().any(|(t, _)| *t == beschriftung),
+            "Fotobeschriftung als Artikel: {paare:?}"
+        );
+    }
+    // Der Preis ist nicht weg, er hängt jetzt am richtigen Namen.
+    assert!(
+        paare.contains(&("PARKSIDE Bolzenschneider", Some(9.99))),
+        "der freigewordene Preis fand seinen Artikel nicht: {paare:?}"
+    );
+
+    // **Gegenprobe, und sie ist der eigentliche Zweck des Tests.** Auf
+    // derselben Seite stehen zwei Artikel, deren Namen genauso kurz und
+    // genauso werkzeughaft klingen wie die Beschriftungen oben. Sie stehen im
+    // Namensgrad und müssen bleiben — sonst hat die Regel nur die Richtung
+    // gewechselt, in die sie irrt.
+    for artikel in [
+        "PARKSIDE RohrWerkzeug",
+        "PARKSIDE Santiär-Universal-Montageschlüssel",
+        "PARKSIDE Rohrreinigungsspirale Zur Beseitigung von Rückständen",
+    ] {
+        assert!(
+            paare.iter().any(|(t, _)| *t == artikel),
+            "{artikel:?} verschluckt: {paare:?}"
+        );
+    }
+}
+
+/// Eine Preiskachel, die eine andere Kachel umschließt, ist noch kein Beleg,
+/// dass ihr Preis dorthin gehört.
+///
+/// Fixture ist die ungekürzte Seite 60 des Prospekts vom 27.07.2026. Dort
+/// umschließt die breite Kachel „CHEF SELECT Burger Scheiben" (11.49*) das
+/// Rechteck von „EXQUISA Frischkäse" vollständig; dessen eigener Preis (1.11*)
+/// steht 17 pt daneben. `Island::gap` ist bei Überschneidung 0, nach reinem
+/// Abstand gewänne also die falsche Kachel — und der Frischkäse kostete
+/// 11.49 €.
+///
+/// Entschieden wird über die Rechnung im **eigenen** Text: „Je 200/175 g,
+/// 1 kg = 5.55/6.34" ergibt 1.11 €.
+#[test]
+fn an_enclosing_price_tile_does_not_outrank_the_products_own_price() {
+    let offers = scrapers::lidl_prospekt::extract_offers(
+        include_str!("fixtures/lidl/prospekt_umschlossen_s60.xml"),
+        "LIDL_1988",
+        Some("2026-07-27"),
+        Some("2026-08-01"),
+    );
+    let paare: Vec<(&str, Option<f64>)> =
+        offers.iter().map(|o| (o.title.as_str(), o.price)).collect();
+
+    assert!(
+        paare.contains(&("EXQUISA Frischkäse", Some(1.11))),
+        "der Frischkäse hat nicht seinen eigenen Preis: {paare:?}"
+    );
+    assert!(
+        paare.contains(&("CHEF SELECT Burger Scheiben", Some(11.49))),
+        "die umschließende Kachel bekam ihren Preis nicht unter eigenem Namen: {paare:?}"
+    );
+
+    // Gegenprobe: Auf derselben Seite steht eine Kachel, die zwei Sternpreise
+    // trägt und deren Rechnung aufgeht — sie darf die Regel nicht anfassen.
+    assert_eq!(
+        paare
+            .iter()
+            .filter(|(t, _)| t.starts_with("PAMPERS"))
+            .count(),
+        2,
+        "eine richtig zusammengesetzte Mehrpreis-Kachel wurde mitgerissen: {paare:?}"
+    );
 }
 
 #[test]
