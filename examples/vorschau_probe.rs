@@ -9,6 +9,7 @@
 
 use anyhow::Result;
 use lechariot::scrapers::{netto, util};
+use sha2::Digest;
 
 fn main() -> Result<()> {
     match std::env::args().nth(1).unwrap_or_default().as_str() {
@@ -42,18 +43,37 @@ fn netto_probe() -> Result<()> {
         ("Sec-Fetch-User", "?1"),
     ];
 
-    // Die Seiten-IDs, die der Scraper heute holt, plus die Nachbarn: Wenn eine
-    // eigene ID die Folgewoche trägt, ist die Vorschau ein Listeneintrag.
+    // **Die entscheidende Frage**, und sie wird mit dem Parser des Scrapers
+    // gestellt, nicht mit einer Datumssuche über das rohe HTML: Erzeugt
+    // `netto::parse_page` aus diesen Seiten Zeilen der Folgewoche? Rohe Daten
+    // im Quelltext beweisen gar nichts — sie können aus einem Prospekt-Teaser
+    // stammen, den kein Angebot trägt.
+    let mut nach_start: std::collections::BTreeMap<String, usize> = Default::default();
     for page in [1u32, 2, 3, 4, 5, 6, 7, 8, 9, 10] {
         let url = format!("https://www.netto-online.de/filialangebote/{page}");
         match util::curl_get(&url, headers) {
-            Ok(html) => println!(
-                "  /filialangebote/{page:<2} {:>7} B  {}",
-                html.len(),
-                datumszeilen(&html)
-            ),
+            Ok(html) => {
+                let mut offers = Vec::new();
+                let mut seen = std::collections::HashSet::new();
+                netto::parse_page(&html, &market.id, &mut offers, &mut seen);
+                println!(
+                    "  /filialangebote/{page:<2} {:>7} B  angebote={:<4} {}",
+                    html.len(),
+                    offers.len(),
+                    datumszeilen(&html)
+                );
+                for o in &offers {
+                    *nach_start
+                        .entry(o.valid_from.clone().unwrap_or_else(|| "ohne".into()))
+                        .or_default() += 1;
+                }
+            }
             Err(e) => println!("  /filialangebote/{page:<2} FEHLER: {e}"),
         }
+    }
+    println!("\n  Angebote je valid_from (Parser des Scrapers, alle Seiten):");
+    for (from, n) in &nach_start {
+        println!("    {from}  {n}");
     }
 
     // Und die Prospektübersicht, auf der am 01.08. „ab Montag, 03.08.26" stand.
@@ -89,22 +109,42 @@ fn aldi_sued_probe() -> Result<()> {
         ("Sec-Fetch-Dest", "document"),
         ("Sec-Fetch-User", "?1"),
     ];
+    // Alle datierten Seiten kamen im ersten Lauf mit **exakt gleicher Größe**
+    // zurück. Das ist der Verdacht: Der Server ignoriert das Datum und liefert
+    // immer dieselbe Seite. Ein Hash entscheidet das, eine Byte-Zahl nicht.
+    let mut hashes: Vec<(String, String)> = Vec::new();
     for tag in ["2026-08-03", "2026-08-06", "2026-08-07"] {
-        for url in [
-            format!("https://www.aldi-sued.de/de/angebote/{tag}.html"),
-            format!("https://www.aldi-sued.de/de/angebote/{tag}"),
-        ] {
-            match util::curl_get(&url, headers) {
-                Ok(html) => println!(
-                    "{url}\n   {} B, Preis-Treffer: {}, __NEXT_DATA__: {}",
+        let url = format!("https://www.aldi-sued.de/de/angebote/{tag}.html");
+        match util::curl_get(&url, headers) {
+            Ok(html) => {
+                let h: String = sha2::Sha256::digest(html.as_bytes())
+                    .iter()
+                    .take(6)
+                    .map(|b| format!("{b:02x}"))
+                    .collect();
+                println!(
+                    "{url}\n   {} B  sha={h}  €={}  __NEXT_DATA__={}  nennt das Datum: {}",
                     html.len(),
-                    html.matches("€").count(),
-                    html.contains("__NEXT_DATA__")
-                ),
-                Err(e) => println!("{url}\n   FEHLER: {e}"),
+                    html.matches('€').count(),
+                    html.contains("__NEXT_DATA__"),
+                    html.contains(tag)
+                );
+                hashes.push((tag.to_string(), h));
             }
+            Err(e) => println!("{url}\n   FEHLER: {e}"),
         }
     }
+    let verschieden = hashes.iter().map(|(_, h)| h).collect::<std::collections::HashSet<_>>().len();
+    println!(
+        "\n  {} verschiedene Seiten bei {} Datumsangaben — {}",
+        verschieden,
+        hashes.len(),
+        if verschieden <= 1 {
+            "der Datumsteil im Pfad ist Dekoration, die Seite ist immer dieselbe"
+        } else {
+            "das Datum wirkt sich aus"
+        }
+    );
     Ok(())
 }
 
