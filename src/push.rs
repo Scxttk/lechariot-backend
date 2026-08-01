@@ -205,16 +205,37 @@ pub fn map_offer(offer: &Offer, chain: &str, nationwide: bool) -> Option<Supabas
         valid_until: offer.valid_until.clone(),
         base_price: unit_price.map(|up| (up.eur * 100.0).round() / 100.0),
         base_unit: unit_price.map(|up| up.unit.label().to_string()),
-        brand: None,
+        brand: brand_of(offer, chain).map(str::to_string),
         ean: None,
         source: "lechariot-rust".to_string(),
         nationwide,
-        match_key: crate::matching::match_keys(
+        match_key: crate::matching::match_keys_with_brand(
             &offer.title,
             offer.subtitle.as_deref(),
             offer.category.as_deref(),
+            brand_of(offer, chain),
         ),
     })
+}
+
+/// Die Marke — aber nur da, wo die Überzeile wirklich eine ist.
+///
+/// **`overline` heißt je Kette etwas anderes**, und das ist der Grund, warum
+/// der naive Weg („Überzeile an den Untertitel hängen") am 01.08. durchfiel:
+/// 24 Zeilen neu getaggt, aber **48 änderten ihr Tag**, mehrere verloren das
+/// richtige („Martini Bianco" `spirituosen` → `eier`). Ursache war Nettos
+/// Grundpreis-Prosa in derselben Spalte — `reis` steckt als Teilzeichenkette
+/// in „P**reis**".
+///
+/// ALDI Nord legt dort `brandName` ab und sonst nichts (`aldi_nord.rs:176`).
+/// Kaufland schreibt „je 1 kg (1 kg = 18.60)", Netto Beschreibung plus
+/// Grundpreis. Deshalb genau eine Kette und nicht „alle, bei denen es
+/// meistens passt".
+fn brand_of<'a>(offer: &'a Offer, chain: &str) -> Option<&'a str> {
+    if chain != "ALDI Nord" {
+        return None;
+    }
+    offer.overline.as_deref().map(str::trim).filter(|s| !s.is_empty())
 }
 
 /// Zeilen auf den Angebots-Schlüssel eindampfen, in zwei Stufen:

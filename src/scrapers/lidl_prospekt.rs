@@ -601,6 +601,36 @@ pub fn week_slugs(slugs: &[String], today: NaiveDate) -> Vec<String> {
         .collect()
 }
 
+/// Die künftigen Wochen, **je Zeitraum eine Gruppe** und nach Startdatum
+/// geordnet.
+///
+/// Die Übersicht führt mehrere Wochen gleichzeitig; am 2026-08-01 waren das
+/// `27.07.–01.08.` (laufend), `03.08.–08.08.` und `10.08.–15.08.`. Beide
+/// künftigen kommen zurück, jede als eigene Gruppe — **verschmolzen würden aus
+/// zwei Wochen eine**, und genau das ist der Fehler, den Stufe 2 des Dedupe
+/// (#32) für disjunkte Fenster ausdrücklich nicht macht.
+///
+/// Ohne den Zeitraum, der heute läuft: Der steht schon in `week_slugs`.
+pub fn next_week_slugs(slugs: &[String], today: NaiveDate) -> Vec<Vec<String>> {
+    let mut ranges: Vec<(NaiveDate, NaiveDate)> = slugs
+        .iter()
+        .filter_map(|s| slug_range(s))
+        .filter(|(f, _)| *f > today)
+        .collect();
+    ranges.sort();
+    ranges.dedup();
+    ranges
+        .into_iter()
+        .map(|range| {
+            slugs
+                .iter()
+                .filter(|s| slug_range(s) == Some(range))
+                .cloned()
+                .collect()
+        })
+        .collect()
+}
+
 /// Variante zur Absatzregion wählen.
 ///
 /// Trifft keine Variante die AR, wird die erste ohne reinen `"0"`-Platzhalter
@@ -2120,10 +2150,10 @@ fn fetch_flyer(slug: &str) -> Result<Flyer> {
 }
 
 /// Prospekt der Woche für die Absatzregion der PLZ.
-fn resolve_flyer(zip: &str) -> Result<Flyer> {
-    // Absatzregion zuerst — schlägt sie fehl, geht es ohne sie weiter und
-    // wir nehmen eine überregionale Variante.
-    let ar = match store_finder::lidl_region_code(zip) {
+/// Absatzregion der PLZ — schlägt sie fehl, geht es ohne sie weiter und wir
+/// nehmen eine überregionale Variante.
+fn absatzregion(zip: &str) -> Option<String> {
+    match store_finder::lidl_region_code(zip) {
         Ok(code) => code,
         Err(e) => {
             eprintln!(
@@ -2131,8 +2161,12 @@ fn resolve_flyer(zip: &str) -> Result<Flyer> {
             );
             None
         }
-    };
+    }
+}
 
+/// Der Prospekt, der heute läuft — der Weg, den `lidl_llm` und die
+/// Kachelbild-Pipeline gehen. Holt Übersicht und Absatzregion selbst.
+fn resolve_flyer(zip: &str) -> Result<Flyer> {
     let slugs = parse_overview_slugs(&fetch_text(OVERVIEW_URL, "Prospekt-Übersicht")?);
     if slugs.is_empty() {
         bail!("Keine Prospektvarianten in der Übersicht gefunden — Struktur geändert?");
@@ -2141,8 +2175,16 @@ fn resolve_flyer(zip: &str) -> Result<Flyer> {
         .with_timezone(&chrono_tz::Europe::Berlin)
         .date_naive();
     let week = week_slugs(&slugs, today);
+    pick_flyer(absatzregion(zip).as_deref(), week)
+}
+
+fn pick_flyer(ar: Option<&str>, week: Vec<String>) -> Result<Flyer> {
+    let ar = ar.map(str::to_string);
+    if week.is_empty() {
+        bail!("Keine Prospektvariante für diesen Zeitraum");
+    }
     println!(
-        "  {} Prospektvarianten diese Woche, Absatzregion {}",
+        "  {} Prospektvarianten, Absatzregion {}",
         week.len(),
         ar.as_deref().unwrap_or("unbekannt")
     );
@@ -2854,7 +2896,43 @@ pub fn fetch_layout_pages(zip: &str) -> Result<(Flyer, Vec<String>)> {
 }
 
 pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
-    let flyer = resolve_flyer(zip)?;
+    let slugs = parse_overview_slugs(&fetch_text(OVERVIEW_URL, "Prospekt-Übersicht")?);
+    if slugs.is_empty() {
+        bail!("Keine Prospektvarianten in der Übersicht gefunden — Struktur geändert?");
+    }
+    let ar = absatzregion(zip);
+    let today = chrono::Utc::now()
+        .with_timezone(&chrono_tz::Europe::Berlin)
+        .date_naive();
+
+    let flyer = pick_flyer(ar.as_deref(), week_slugs(&slugs, today))?;
+    let mut offers = read_flyer(&flyer, &market.id, true)?;
+
+    // Die künftigen Prospekte, **ohne Bilder**: Ein Bildschnitt landet im
+    // Storage-Bucket, und die Phase-0-Messung hat den Bild-Egress als einzigen
+    // knappen Posten ausgewiesen (0,96 → 1,9 GB/Monat, wenn beide Wochen
+    // spiegeln). Text und Preis kosten nichts. Siehe [[Le Chariot Backlog]].
+    if crate::preview::enabled() {
+        for slug_set in next_week_slugs(&slugs, today) {
+            match pick_flyer(ar.as_deref(), slug_set)
+                .and_then(|f| read_flyer(&f, &market.id, false))
+            {
+                Ok(next) => {
+                    println!("  Vorschau: {} Angebote der Folgewoche", next.len());
+                    offers.extend(next);
+                }
+                Err(e) => eprintln!("WARNUNG [Lidl] Vorschau-Prospekt übersprungen: {e:#}"),
+            }
+        }
+    }
+    Ok(offers)
+}
+
+/// Einen aufgelösten Prospekt lesen.
+///
+/// `with_images` schneidet die Kachelbilder und lädt sie hoch. Für die
+/// Vorschau steht er auf `false` — sie soll nichts in den Bucket schreiben.
+fn read_flyer(flyer: &Flyer, market_id: &str, with_images: bool) -> Result<Vec<Offer>> {
     let pdf_url = flyer.pdf_url.as_deref().context("Prospekt ohne pdfUrl")?;
     println!(
         "  Gültig {} bis {}",
@@ -2870,7 +2948,7 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
 
     let (mut offers, shots, open) = extract_offers_shots_and_open(
         xml,
-        &market.id,
+        market_id,
         flyer.offer_start_date.as_deref(),
         flyer.offer_end_date.as_deref(),
     );
@@ -2878,17 +2956,20 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
         bail!("Prospekt gelesen, aber keine Angebote extrahiert — Layout geändert?");
     }
 
-    let crops = render_shots(&pdf_path, &shots);
-    // Zweiter Weg für die Kacheln, die der Schnitt abgelehnt hat. Scheitert er,
-    // ist das kein Fehler des Laufs — die Angebote stehen, nur einige tragen
-    // weiter ihr Emoji.
-    let embedded = embedded_photos(pdf_url, &pdf_path, xml, &open);
-    for offer in &mut offers {
-        if let Some(url) = crops.get(&offer.id).or_else(|| embedded.get(&offer.id)) {
-            offer.images = vec![url.clone()];
+    if with_images {
+        let crops = render_shots(&pdf_path, &shots);
+        // Zweiter Weg für die Kacheln, die der Schnitt abgelehnt hat. Scheitert
+        // er, ist das kein Fehler des Laufs — die Angebote stehen, nur einige
+        // tragen weiter ihr Emoji.
+        let embedded = embedded_photos(pdf_url, &pdf_path, xml, &open);
+        for offer in &mut offers {
+            if let Some(url) = crops.get(&offer.id).or_else(|| embedded.get(&offer.id)) {
+                offer.images = vec![url.clone()];
+            }
         }
     }
-    offers.extend(merge_products(&flyer, &market.id, &offers));
+    let extra = merge_products(flyer, market_id, &offers);
+    offers.extend(extra);
     Ok(offers)
 }
 

@@ -67,7 +67,7 @@ jobs:
     env:
       REWE_SECRETS_SET: ${{ secrets.REWE_CERT_PEM != '' && secrets.REWE_KEY_PEM != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Preflight (curl)
         run: |
@@ -90,7 +90,7 @@ jobs:
       # REWE durch (Warnung, kein Fehler) — dieselbe Regel wie in nightly.yml.
       - name: Setup Go (für rewerse)
         if: ${{ env.REWE_SECRETS_SET == 'true' }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: stable
 
@@ -200,7 +200,7 @@ jobs:
 
       - name: Log hochladen
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: branches-log
           path: branches.log

@@ -10,6 +10,15 @@ on:
         description: "Nur diese Filiale syncen (ID aus public.branches); leer = Voll-Sync"
         required: false
         default: ""
+      # AUS, und der Zeitplan setzt ihn nie: Ein geplanter Lauf lädt und
+      # schreibt weiter genau das, was er vorher geschrieben hat. Anschalten ist
+      # eine Handlung, keine Voreinstellung — die Vorschau verdoppelt grob die
+      # Zeilen in `offers`. Messung im [[Le Chariot Backlog]], „Phase 0".
+      preview:
+        description: "Angebote der Folgewoche mitladen (Kaufland, Lidl, ALDI Nord)"
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   # On-Demand-Läufe für einzelne Filialen dürfen parallel zum Voll-Sync laufen.
@@ -37,8 +46,11 @@ jobs:
       # daran hing der Fehler: `branches.yml` setzt sie nicht und holte
       # deshalb aus einer anderen Quelle als dieser Lauf.
       LIDL_SOURCE: prospekt
+      # Leer bei jedem geplanten Lauf — `inputs.preview` gibt es nur bei
+      # workflow_dispatch. `preview::enabled()` liest genau diese Variable.
+      LECHARIOT_PREVIEW: ${{ inputs.preview && '1' || '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Preflight (ZIP variable, curl, sqlite3)
         run: |
@@ -118,7 +130,7 @@ jobs:
       # Ergebnis — bei Plain-PEM setze base64-kodierte Secrets via `gh secret set`).
       - name: Setup Go (für rewerse)
         if: ${{ env.REWE_SECRETS_SET == 'true' }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: stable
 
@@ -271,8 +283,26 @@ jobs:
 
           COUNT=0
           [ -f "$DB" ] && COUNT=$(sqlite3 "$DB" 'SELECT COUNT(*) FROM offers')
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Angebote in der lokalen DB (letzte Region): $COUNT**" >> "$GITHUB_STEP_SUMMARY"
+          # Der Ertrag des LAUFS, nicht der Reststand einer Datei.
+          #
+          # `sync.rs` leert `offers` vor **jedem** Filial- und National-Sync
+          # (Zeilen 123 und 201). Am Ende steht in der lokalen DB deshalb nur
+          # noch, was der letzte Sync geholt hat — am 01.08. waren das 221
+          # Zeilen, während 45 Filial-Syncs über acht Ketten hochgeladen hatten.
+          # Wer die Zahl als Tagesertrag las, las sie falsch, und sie stand
+          # fett unter der Zusammenfassung.
+          #
+          # Die echte Summe steht im Log: `push.rs` schreibt je Push
+          # „Fertig: N Angebote nach Supabase gepusht (…)". Die werden addiert.
+          HOCHGELADEN=$(awk '/^Fertig: [0-9]+ Angebote nach Supabase gepusht/ {s+=$2} END {print s+0}' "$LOG" 2>/dev/null || echo 0)
+          PUSHES=$(grep -c "^Fertig: .* nach Supabase gepusht" "$LOG" 2>/dev/null || echo 0)
+          {
+            echo ""
+            echo "**$HOCHGELADEN Angebote hochgeladen** (Summe aus $PUSHES Push-Läufen)."
+            echo ""
+            echo "<sub>In der lokalen DB stehen am Ende $COUNT Zeilen — das ist der"
+            echo "letzte Sync, nicht der Lauf: \`sync.rs\` leert die Tabelle vor jedem.</sub>"
+          } >> "$GITHUB_STEP_SUMMARY"
           # Null Angebote heißt nicht immer dasselbe. Beim vollen Lauf ist es
           # der Alarm, für den diese Prüfung gebaut wurde: acht Ketten
           # gleichzeitig stumm, dann blockt sehr wahrscheinlich Akamai die
@@ -328,7 +358,7 @@ jobs:
 
       - name: Upload run log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-log
           path: nightly.log

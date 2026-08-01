@@ -4,6 +4,7 @@ pub mod db;
 pub mod enrich;
 pub mod matching;
 pub mod models;
+pub mod preview;
 pub mod prune;
 pub mod push;
 pub mod scrapers;

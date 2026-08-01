@@ -238,6 +238,34 @@ fn disjoint_weeks_stay_two_rows() {
     assert_eq!(rows, vec![this_week, next_week]);
 }
 
+/// **Und zwei künftige Wochen bleiben ebenfalls getrennt.** Der Fall, den erst
+/// die Vorschau erzeugt: Lidls Übersicht führte am 01.08. *zwei* künftige
+/// Prospekte (03.–08.08. und 10.–15.08.), und ein Produkt kann in beiden zum
+/// selben Preis stehen. Verschmölzen sie, verlöre die Vorschau eine ganze
+/// Woche — dieselbe Regel wie oben, nur ohne laufende Zeile als Anker.
+///
+/// Drei disjunkte Fenster desselben Produkts zum selben Preis müssen **drei**
+/// Zeilen bleiben.
+#[test]
+fn two_future_weeks_stay_separate_rows() {
+    let laufend = windowed("MILBONA Butter", 1.99, "2026-07-27", "2026-08-01");
+    let naechste = windowed("MILBONA Butter", 1.99, "2026-08-03", "2026-08-08");
+    let uebernaechste = windowed("MILBONA Butter", 1.99, "2026-08-10", "2026-08-15");
+
+    let rows = dedupe_rows(vec![laufend.clone(), naechste.clone(), uebernaechste.clone()]);
+
+    assert_eq!(rows, vec![laufend, naechste, uebernaechste]);
+
+    // Die Gegenprobe im selben Test: Berühren sich zwei Zukunftsfenster, sind
+    // sie **ein** Angebot — sonst hätte die Regel gar keine Kante.
+    let a = windowed("MILBONA Butter", 1.99, "2026-08-03", "2026-08-08");
+    let b = windowed("MILBONA Butter", 1.99, "2026-08-06", "2026-08-12");
+    let merged = dedupe_rows(vec![a, b]);
+    assert_eq!(merged.len(), 1);
+    assert_eq!(merged[0].valid_from.as_deref(), Some("2026-08-03"));
+    assert_eq!(merged[0].valid_until.as_deref(), Some("2026-08-12"));
+}
+
 /// **Überlappende Fenster mit verschiedenem Preis bleiben zwei Zeilen** —
 /// das sind echte verschiedene Angebote: Aktionstage mit eigenem Preis und
 /// Lidl-Sammeltitel wie „Bio-Käse", hinter denen verschiedene Artikel
