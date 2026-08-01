@@ -28,10 +28,18 @@ fn netto_probe() -> Result<()> {
     let market = netto::find_market("01219")?;
     println!("Filiale: {} ({})", market.name, market.id);
     let cookie = format!("netto_user_stores_id={}", market.id);
+    // **Wörtlich der Header-Satz aus `netto::fetch_offers`.** Der erste Anlauf
+    // dieser Probe ließ das Sec-Fetch-Quartett weg und setzte stattdessen einen
+    // Referer — und bekam von Akamai für jede Seite 403. Das war kein Befund
+    // über Netto, sondern einer über die Probe: Der Backlog hält seit dem
+    // 31.07. fest, dass jeder dieser Header trägt und einer allein nicht reicht.
     let headers: &[(&str, &str)] = &[
-        ("Accept", "text/html,application/xhtml+xml"),
+        ("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
         ("Cookie", &cookie),
-        ("Referer", "https://www.netto-online.de/"),
+        ("Sec-Fetch-Site", "none"),
+        ("Sec-Fetch-Mode", "navigate"),
+        ("Sec-Fetch-Dest", "document"),
+        ("Sec-Fetch-User", "?1"),
     ];
 
     // Die Seiten-IDs, die der Scraper heute holt, plus die Nachbarn: Wenn eine
@@ -70,9 +78,16 @@ fn netto_probe() -> Result<()> {
 /// ALDI SÜD: Antworten die datierten Seiten auf dem vorhandenen Weg? Am 01.08.
 /// standen sie im Browser live, der nackte API-Abruf bekam „Access Denied".
 fn aldi_sued_probe() -> Result<()> {
+    // Derselbe Satz wie in `aldi_sued::fetch_offers`, nur `Accept` auf HTML —
+    // dort geht es gegen die JSON-API, hier gegen die datierte Seite.
     let headers: &[(&str, &str)] = &[
-        ("Accept", "text/html,application/xhtml+xml"),
-        ("Referer", "https://www.aldi-sued.de/de/angebote.html"),
+        ("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
+        ("Origin", "https://www.aldi-sued.de"),
+        ("Referer", "https://www.aldi-sued.de/"),
+        ("Sec-Fetch-Site", "same-origin"),
+        ("Sec-Fetch-Mode", "navigate"),
+        ("Sec-Fetch-Dest", "document"),
+        ("Sec-Fetch-User", "?1"),
     ];
     for tag in ["2026-08-03", "2026-08-06", "2026-08-07"] {
         for url in [
