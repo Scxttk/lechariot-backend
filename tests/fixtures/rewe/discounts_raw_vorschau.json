@@ -1,0 +1,1039 @@
+{
+ "_comment": "Woertlicher Auszug der Live-Antwort von `rewerse discounts -market 565005 -raw` (v1.2.0), gemessen am 2026-08-01 auf dem GitHub-Runner — von diesem Mac aus ist REWE ohne Clientzertifikat nicht erreichbar. Im Original: current 18 Kategorien / 352 Angebote (27.07.-01.08.), next 19 Kategorien / 333 Angebote (03.08.-08.08.). Hier auf 3 next- und 1 current-Kategorie gekuerzt; Kacheln wurden ENTFERNT, nie veraendert. HERO- und MOOD-Zellen sind absichtlich drin: sie sind der Filtertest.",
+ "data": {
+  "offers": {
+   "defaultWeek": "current",
+   "nextWeekAvailableFrom": "saturday",
+   "current": {
+    "available": true,
+    "fromDate": "2026-07-27",
+    "untilDate": "2026-08-01",
+    "hasOnlineOffers": true,
+    "handout": {
+     "images": [
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56974020-3_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56974020-3_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56147640-12_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56147640-12_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56147643-22_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56147643-22_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56147659-17_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56147659-17_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56147724-13_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56147724-13_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56927216-7_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56927216-7_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56929739-9_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56929739-9_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56147829-15_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56147829-15_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56147912-16_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56147912-16_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56147985-18_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56147985-18_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148035-22_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148035-22_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148138-15_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148138-15_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148149-12_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148149-12_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148202-13_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148202-13_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148222-8_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148222-8_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148825-16_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148825-16_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148871-15_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148871-15_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148905-14_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148905-14_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148945-12_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148945-12_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148260-16_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148260-16_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148333-16_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148333-16_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148386-12_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148386-12_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56639527-6_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56639527-6_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148398-15_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148398-15_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148417-19_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148417-19_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148429-11_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148429-11_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148449-15_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148449-15_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148501-11_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148501-11_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148599-12_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148599-12_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148731-20_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148731-20_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148754-20_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148754-20_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148773-20_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148773-20_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148780-22_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148780-22_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/REWE31_2026/catalog/56148785-16_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/REWE31_2026/catalog/56148785-16_preview.jpg"
+      }
+     ]
+    },
+    "categories": [
+     {
+      "id": "markt-topangebote",
+      "title": "Top-Angebote in deinem Markt",
+      "moodUrl": null,
+      "order": 3,
+      "backgroundColor": "#EDF9FA",
+      "foregroundColor": "#2E7B85",
+      "offers": [
+       {
+        "cellType": "DEFAULT",
+        "overline": "",
+        "title": "Herta Finesse",
+        "subtitle": "versch. Sorten, je 100-g-Pckg. (1 kg = 14,90 €)",
+        "images": [
+         "https://img.rewe-static.de/REWE31_2026/2327557/23459227-59_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "1,49 €",
+         "regularPrice": "Knaller"
+        },
+        "loyaltyBonus": {
+         "bonusType": "cent",
+         "bonusValue": 10
+        },
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 2327557",
+            "Hersteller: FINESSE"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": ""
+        },
+        "rawValues": {
+         "categoryTitle": "kuehlung",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "2327557"
+        }
+       },
+       {
+        "cellType": "DEFAULT",
+        "overline": "",
+        "title": "Grünländer Scheiben mild & nussig",
+        "subtitle": "je 140-g-Pckg. (1 kg = 12,07 €)",
+        "images": [
+         "https://img.rewe-static.de/REWE_TZ31_2026/7835341/44115323-18_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "1,69 €",
+         "regularPrice": "Aktion"
+        },
+        "loyaltyBonus": {
+         "bonusType": "cent",
+         "bonusValue": 10
+        },
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 7835341",
+            "Hersteller: GRUENLAENDER"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": ""
+        },
+        "rawValues": {
+         "categoryTitle": "kuehlung",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "7835341"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "next": {
+    "available": true,
+    "fromDate": "2026-08-03",
+    "untilDate": "2026-08-08",
+    "hasOnlineOffers": true,
+    "handout": {
+     "images": [
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/57081051-2_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/57081051-2_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56477237-11_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56477237-11_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56239825-10_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56239825-10_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56239834-19_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56239834-19_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56239849-13_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56239849-13_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/57023744-10_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/57023744-10_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/57026819-8_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/57026819-8_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56239904-11_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56239904-11_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56239990-16_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56239990-16_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240039-11_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240039-11_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240097-14_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240097-14_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240210-15_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240210-15_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240227-12_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240227-12_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240251-16_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240251-16_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240279-15_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240279-15_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240558-19_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240558-19_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240636-14_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240636-14_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240754-15_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240754-15_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240841-15_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240841-15_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240333-13_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240333-13_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56950823-7_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56950823-7_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240406-17_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240406-17_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240441-21_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240441-21_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240467-15_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240467-15_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240488-10_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240488-10_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240507-20_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240507-20_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240512-24_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240512-24_preview.jpg"
+      },
+      {
+       "original": "https://img.rewe-static.de/Rewe32_2026/catalog/56240516-12_preview.jpg",
+       "thumbnail": "https://img.rewe-static.de/Rewe32_2026/catalog/56240516-12_preview.jpg"
+      }
+     ]
+    },
+    "categories": [
+     {
+      "id": "markt-topangebote",
+      "title": "Top-Angebote in deinem Markt",
+      "moodUrl": null,
+      "order": 3,
+      "backgroundColor": "#EDF9FA",
+      "foregroundColor": "#2E7B85",
+      "offers": [
+       {
+        "cellType": "DEFAULT",
+        "overline": "Mo. 3.8. bis Sa. 8.8.",
+        "title": "Weihenstephan Butter oder Die Streichzarte",
+        "subtitle": "versch. Sorten, je 250-g-Becher (1 kg = 5,16 €)",
+        "images": [
+         "https://img.rewe-static.de/Rewe32_2026/3195835/37869466-10_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "1,29 €",
+         "regularPrice": "Knaller"
+        },
+        "loyaltyBonus": {
+         "bonusType": "cent",
+         "bonusValue": 20
+        },
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 3195835",
+            "Hersteller: WEIHENSTEPHAN"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": ""
+        },
+        "rawValues": {
+         "categoryTitle": "kuehlung",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "3195835"
+        }
+       },
+       {
+        "cellType": "DEFAULT",
+        "overline": "Mo. 3.8. bis Sa. 8.8.",
+        "title": "Red Bull Energy Drink",
+        "subtitle": "versch. Sorten, koffeinhaltig, je 0,25-l-Dose (1 l = 3,96 €), zzgl. 0,25 € Pfand",
+        "images": [
+         "https://img.rewe-static.de/Rewe32_2026/2201429/3209700-67_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "0,99 €",
+         "regularPrice": "Aktion"
+        },
+        "loyaltyBonus": null,
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 2201429",
+            "Hersteller: DS L RED BULL"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": ""
+        },
+        "rawValues": {
+         "categoryTitle": "alkoholfreie-getraenke",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "2201429"
+        }
+       },
+       {
+        "cellType": "DEFAULT",
+        "overline": "Mo. 3.8. bis Sa. 8.8.",
+        "title": "Ur-Krostitzer Pils",
+        "subtitle": "je 20 x 0,5-l-Fl.-Kasten (1 l = 1,00 €), zzgl. 3,10 € Pfand",
+        "images": [
+         "https://img.rewe-static.de/Rewe32_2026/6575552/3032580-48_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "9,99 €",
+         "regularPrice": "Knaller"
+        },
+        "loyaltyBonus": null,
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "auch alkoholfrei",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 6575552",
+            "Hersteller: MW URKROSTITZ"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": ""
+        },
+        "rawValues": {
+         "categoryTitle": "bier",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "6575552"
+        }
+       },
+       {
+        "cellType": "DEFAULT",
+        "overline": "Mo. 3.8. bis Sa. 8.8.",
+        "title": "Jacobs Lungo Kaffeekapseln Intenso",
+        "subtitle": "je 104-g-Pckg. (1 kg = 42,69 €)",
+        "images": [
+         "https://img.rewe-static.de/Rewe32_2026/7046954/26842383-24_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "4,44 €",
+         "regularPrice": "Knaller"
+        },
+        "loyaltyBonus": {
+         "bonusType": "cent",
+         "bonusValue": 20
+        },
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 7046954",
+            "Hersteller: JACOBS"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": ""
+        },
+        "rawValues": {
+         "categoryTitle": "fruehstueck",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "7046954"
+        }
+       }
+      ]
+     },
+     {
+      "id": "rewe-bonus-produkte",
+      "title": "Bonus-Aktionen",
+      "moodUrl": "https://shop.rewe-static.de/stationary-offers/306a9100c0fafbd08887a740c59d0afae6356250/img/App_Header_REWE_Bonus_Produkte.jpg?fit=inside%7C1170.0px:1170.0px&output-quality=70&output-format=jpeg",
+      "order": 4,
+      "backgroundColor": "#E6F2F1",
+      "foregroundColor": "#22786E",
+      "offers": [
+       {
+        "cellType": "HERO",
+        "overline": "Mo. 3.8. bis Sa. 8.8.",
+        "title": "Weihenstephan Butter oder Die Streichzarte",
+        "subtitle": "versch. Sorten, je 250-g-Becher (1 kg = 5,16 €)",
+        "images": [
+         "https://img.rewe-static.de/Rewe32_2026/3195835/37869466-10_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "1,29 €",
+         "regularPrice": "Knaller"
+        },
+        "loyaltyBonus": {
+         "bonusType": "cent",
+         "bonusValue": 20
+        },
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 3195835",
+            "Hersteller: WEIHENSTEPHAN"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": ""
+        },
+        "rawValues": {
+         "categoryTitle": "kuehlung",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "3195835"
+        }
+       },
+       {
+        "cellType": "DEFAULT",
+        "overline": "Mo. 3.8. bis Sa. 8.8.",
+        "title": "Jacobs Lungo Kaffeekapseln Intenso",
+        "subtitle": "je 104-g-Pckg. (1 kg = 42,69 €)",
+        "images": [
+         "https://img.rewe-static.de/Rewe32_2026/7046954/26842383-24_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "4,44 €",
+         "regularPrice": "Knaller"
+        },
+        "loyaltyBonus": {
+         "bonusType": "cent",
+         "bonusValue": 20
+        },
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 7046954",
+            "Hersteller: JACOBS"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": ""
+        },
+        "rawValues": {
+         "categoryTitle": "fruehstueck",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "7046954"
+        }
+       },
+       {
+        "cellType": "DEFAULT",
+        "overline": "Mo. 3.8. bis Sa. 8.8.",
+        "title": "Kölln Müsli Knusper Honig-Nuss",
+        "subtitle": "je 500-g-Pckg. (1 kg = 4,98 €)",
+        "images": [
+         "https://img.rewe-static.de/Rewe32_2026/2537823/24231344-20_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "2,49 €",
+         "regularPrice": "Aktion"
+        },
+        "loyaltyBonus": {
+         "bonusType": "cent",
+         "bonusValue": 20
+        },
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 2537823",
+            "Hersteller: KOELLN"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": ""
+        },
+        "rawValues": {
+         "categoryTitle": "fruehstueck",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "2537823"
+        }
+       },
+       {
+        "cellType": "DEFAULT",
+        "overline": "Mo. 3.8. bis Sa. 8.8.",
+        "title": "Storck Knoppers",
+        "subtitle": "je 8 x 25-g-Pckg. (1 kg = 8,45 €)",
+        "images": [
+         "https://img.rewe-static.de/Rewe32_2026/8633070/3875200-76_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "1,69 €",
+         "regularPrice": "Aktion"
+        },
+        "loyaltyBonus": {
+         "bonusType": "cent",
+         "bonusValue": 10
+        },
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 8633070",
+            "Hersteller: STORCK"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": "E"
+        },
+        "rawValues": {
+         "categoryTitle": "suesses-und-salziges",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "8633070"
+        }
+       },
+       {
+        "cellType": "DEFAULT",
+        "overline": "Mo. 3.8. bis Sa. 8.8.",
+        "title": "Rockstar Energy Drink",
+        "subtitle": "versch. Sorten, koffeinhaltig, je 0,5-l-Dose (1 l = 1,98 €), zzgl. 0,25 € Pfand",
+        "images": [
+         "https://img.rewe-static.de/Rewe32_2026/7861466/33881992-63_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "0,99 €",
+         "regularPrice": "Aktion"
+        },
+        "loyaltyBonus": {
+         "bonusType": "cent",
+         "bonusValue": 10
+        },
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 7861466",
+            "Hersteller: DS L ROCKSTAR"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": "E"
+        },
+        "rawValues": {
+         "categoryTitle": "alkoholfreie-getraenke",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "7861466"
+        }
+       }
+      ]
+     },
+     {
+      "id": "thema-der-woche",
+      "title": "Näher dran an deiner Region",
+      "moodUrl": "https://c.rewe-static.de/56890187/1/56890187.png?fit=inside%7C1170.0px:1170.0px&output-quality=70&output-format=jpeg",
+      "order": 5,
+      "backgroundColor": "#F7F1E6",
+      "foregroundColor": "#996007",
+      "offers": [
+       {
+        "cellType": "MOOD",
+        "overline": "",
+        "title": "",
+        "subtitle": "",
+        "images": [],
+        "biozid": false,
+        "priceData": {
+         "price": "",
+         "regularPrice": ""
+        },
+        "loyaltyBonus": null,
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [],
+         "biocide": false,
+         "nutriScore": ""
+        },
+        "rawValues": {
+         "categoryTitle": "",
+         "priceAverage": 1.7976931348623157e+308,
+         "flyerPage": 0,
+         "nan": ""
+        }
+       },
+       {
+        "cellType": "DEFAULT",
+        "overline": "Mo. 3.8. bis Sa. 8.8.",
+        "title": "Budweiser Premium Czech Lager",
+        "subtitle": "je 20 x 0,5-l-Fl.-Kasten (1 l = 1,40 €), zzgl. 3,10 € Pfand",
+        "images": [
+         "https://img.rewe-static.de/Rewe32_2026/7921063/22382253-12_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "13,99 €",
+         "regularPrice": "Aktion"
+        },
+        "loyaltyBonus": null,
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 7921063",
+            "Hersteller: MW BUDWEISER"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": ""
+        },
+        "rawValues": {
+         "categoryTitle": "bier",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "7921063"
+        }
+       },
+       {
+        "cellType": "DEFAULT",
+        "overline": "Mo. 3.8. bis Sa. 8.8.",
+        "title": "Heinz Tomato Ketchup oder Mayonnaise",
+        "subtitle": "je 400-ml-Fl. (1 l = 4,48 €)",
+        "images": [
+         "https://img.rewe-static.de/Rewe32_2026/2411634/23868581-21_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "1,79 €",
+         "regularPrice": "Aktion"
+        },
+        "loyaltyBonus": {
+         "bonusType": "cent",
+         "bonusValue": 10
+        },
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 2411634",
+            "Hersteller: HEINZ"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": ""
+        },
+        "rawValues": {
+         "categoryTitle": "kochen-und-backen",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "2411634"
+        }
+       },
+       {
+        "cellType": "DEFAULT",
+        "overline": "Mo. 3.8. bis Sa. 8.8.",
+        "title": "Zott Zottarella",
+        "subtitle": "je 330-g-Btl. 200 g Abtropfgewicht (1 kg = 9,95 €)",
+        "images": [
+         "https://img.rewe-static.de/Rewe32_2026/9876354/48329343-18_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "1,99 €",
+         "regularPrice": "Aktion"
+        },
+        "loyaltyBonus": null,
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 9876354",
+            "Hersteller: ZOTTARELLA"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": ""
+        },
+        "rawValues": {
+         "categoryTitle": "kuehlung",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "9876354"
+        }
+       },
+       {
+        "cellType": "DEFAULT",
+        "overline": "Mo. 3.8. bis Sa. 8.8.",
+        "title": "Meggle Kräuter-Butter",
+        "subtitle": "je 125-g-Rolle (1 kg = 11,92 €)",
+        "images": [
+         "https://img.rewe-static.de/Rewe32_2026/4529464/25707403-11_digital-image.png"
+        ],
+        "biozid": false,
+        "priceData": {
+         "price": "1,49 €",
+         "regularPrice": "Aktion"
+        },
+        "loyaltyBonus": null,
+        "stock": null,
+        "detail": {
+         "sensational": null,
+         "pitchIn": "",
+         "tags": [],
+         "contents": [
+          {
+           "header": "Produktdetails",
+           "titles": [
+            "Art.-Nr.: 4529464",
+            "Hersteller: MEGGLE"
+           ]
+          },
+          {
+           "header": "Hinweise",
+           "titles": [
+            "Darstellungsfehler vorbehalten. Abgabe nur in handelsüblichen Mengen. Verkauf nur solange der Vorrat reicht. Aktionspreise sind zeitlich begrenzt und unter Umständen nicht in allen Märkten verfügbar. Nur in teilnehmenden Märkten. Alle Artikel ohne Dekoration. Alle Preise in Euro (€) inkl. gesetzlicher Mehrwertsteuer, zuzüglich Pfand."
+           ]
+          }
+         ],
+         "biocide": false,
+         "nutriScore": ""
+        },
+        "rawValues": {
+         "categoryTitle": "kuehlung",
+         "priceAverage": 0,
+         "flyerPage": 0,
+         "nan": "4529464"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  }
+ }
+}

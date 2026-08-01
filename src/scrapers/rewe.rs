@@ -121,7 +121,141 @@ pub fn fetch_offers(market: &Market, cert: &str, key: &str) -> Result<Vec<Offer>
     let raw: serde_json::Value = serde_json::from_slice(&output.stdout)
         .context("[REWE] Angebote JSON parsen fehlgeschlagen (rewerse discounts)")?;
 
-    parse_offers(raw, &market.id)
+    let mut offers = parse_offers(raw, &market.id)?;
+    if crate::preview::enabled() {
+        offers.extend(fetch_next_week(market, cert, key));
+    }
+    Ok(offers)
+}
+
+/// Die Angebote der Folgewoche — aus **derselben** Antwort wie die laufenden.
+///
+/// `stationary-offers/<markt>` liefert `data.offers.current` **und**
+/// `data.offers.next`; `rewerse discounts` wirft eine der beiden weg, je
+/// nachdem, was `defaultWeek` sagt. `-raw` gibt beide heraus. Damit ist die
+/// REWE-Vorschau derselbe Aufruf mit demselben Zertifikat — kein zweiter
+/// Endpunkt, keine Marktwahl im Browser, nichts Neues zu authentifizieren.
+///
+/// Der Aufruf läuft trotzdem ein zweites Mal statt die laufende Woche auf
+/// `-raw` umzustellen: Die laufende Woche soll byte-genau bleiben, was sie
+/// war. Eine Vorschau darf sie nie kosten.
+///
+/// Gibt bei jedem Fehler eine leere Liste zurück statt `Err` — wie bei
+/// ALDI Nord und Lidl.
+pub fn fetch_next_week(market: &Market, cert: &str, key: &str) -> Vec<Offer> {
+    let output = match rewerse_cmd(cert, key)
+        .args(["-json", "discounts", "-market", &market.id, "-raw"])
+        .output()
+    {
+        Ok(o) if o.status.success() => o,
+        Ok(o) => {
+            eprintln!(
+                "WARNUNG [REWE] Vorschau übersprungen (rewerse -raw): {}",
+                String::from_utf8_lossy(&o.stderr).trim()
+            );
+            return Vec::new();
+        }
+        Err(e) => {
+            eprintln!("WARNUNG [REWE] Vorschau übersprungen (rewerse nicht aufrufbar): {e}");
+            return Vec::new();
+        }
+    };
+
+    let raw: serde_json::Value = match serde_json::from_slice(&output.stdout) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("WARNUNG [REWE] Vorschau übersprungen (JSON): {e}");
+            return Vec::new();
+        }
+    };
+
+    let today = chrono::Utc::now()
+        .with_timezone(&chrono_tz::Europe::Berlin)
+        .date_naive()
+        .format("%Y-%m-%d")
+        .to_string();
+    let offers = parse_next_week_offers(&raw, &market.id, &today);
+    println!("  Vorschau: {} Angebote der Folgewoche", offers.len());
+    offers
+}
+
+/// `data.offers.next` in Angebote übersetzen.
+///
+/// Kein `Result`: Baut REWE den Block um, soll der Lauf die laufende Woche
+/// trotzdem hochladen.
+///
+/// Zwei Bedingungen, und beide sind nötig. `available` sagt, ob REWE die
+/// Folgewoche überhaupt schon freigegeben hat (`nextWeekAvailableFrom` steht
+/// auf „saturday"). Und `fromDate` muss **nach heute** liegen — am Samstag
+/// selbst kann `next` bereits die Woche sein, die morgen läuft; ohne diese
+/// Prüfung stünde ein Preis der laufenden Woche in der Vorschau.
+pub fn parse_next_week_offers(
+    raw: &serde_json::Value,
+    market_id: &str,
+    today: &str,
+) -> Vec<Offer> {
+    let Some(next) = raw.pointer("/data/offers/next") else {
+        eprintln!("WARNUNG [REWE] Vorschau: data.offers.next fehlt.");
+        return Vec::new();
+    };
+    if next.get("available").and_then(|v| v.as_bool()) != Some(true) {
+        return Vec::new();
+    }
+    let from = next.get("fromDate").and_then(|v| v.as_str()).unwrap_or_default();
+    if from.is_empty() || from <= today {
+        return Vec::new();
+    }
+    let until = next.get("untilDate").and_then(|v| v.as_str());
+
+    let mut offers = Vec::new();
+    for cat in next.get("categories").and_then(|v| v.as_array()).into_iter().flatten() {
+        let category = cat.get("title").and_then(|v| v.as_str()).map(String::from);
+        for raw_offer in cat.get("offers").and_then(|v| v.as_array()).into_iter().flatten() {
+            // Nur echte Angebotskacheln; alles andere sind Banner und Bühnen.
+            if raw_offer.get("cellType").and_then(|v| v.as_str()) != Some("DEFAULT") {
+                continue;
+            }
+            let Some(title) = raw_offer.get("title").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let text = |key: &str| {
+                raw_offer.get(key).and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(String::from)
+            };
+            let price_at = |path: &str| {
+                raw_offer.pointer(path).and_then(|v| v.as_str()).and_then(parse_price_str)
+            };
+
+            offers.push(Offer {
+                id: Offer::build_id(market_id, title, Some(from)),
+                market_id: market_id.to_string(),
+                title: title.to_string(),
+                subtitle: text("subtitle"),
+                // Die Marke steht bei REWE im Overline — sie muss mit, sonst
+                // fehlt sie dem Matcher (siehe [EXTRAKT-1]).
+                overline: text("overline"),
+                price: price_at("/priceData/price"),
+                // `regularPrice` trägt auch Etiketten wie „Knaller"; was sich
+                // nicht als Preis lesen lässt, bleibt leer.
+                regular_price: price_at("/priceData/regularPrice"),
+                category: category.clone(),
+                nutri_score: raw_offer
+                    .pointer("/detail/nutriScore")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(String::from),
+                valid_from: Some(from.to_string()),
+                valid_until: until.map(String::from),
+                images: raw_offer
+                    .get("images")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.iter().filter_map(|v| v.as_str()).map(String::from).collect())
+                    .unwrap_or_default(),
+                biozid: raw_offer.get("biozid").and_then(|v| v.as_bool()).unwrap_or(false),
+                flyer_page: raw_offer.pointer("/rawValues/flyerPage").and_then(|v| v.as_i64()),
+            });
+        }
+    }
+    offers
 }
 
 fn check_certs(cert: &str, key: &str) -> Result<()> {
