@@ -176,6 +176,110 @@ fn the_preview_flag_is_off_unless_someone_switches_it_on() {
     }
 }
 
+// ============================== REWE ==============================
+
+const REWE_RAW: &str = include_str!("fixtures/rewe/discounts_raw_vorschau.json");
+
+fn rewe_raw() -> serde_json::Value {
+    serde_json::from_str(REWE_RAW).unwrap()
+}
+
+/// **Der Befund, und er ist derselbe wie bei Kaufland:** Die Folgewoche liegt
+/// in derselben Antwort. `stationary-offers/<markt>` liefert `current` **und**
+/// `next`; `rewerse discounts` gibt nur eine der beiden heraus, je nachdem, was
+/// `defaultWeek` sagt. Kein zweiter Endpunkt, kein zweites Zertifikat.
+///
+/// Am 2026-08-01 auf dem Runner gemessen (Markt 565005): current 18 Kategorien
+/// / 352 Angebote, **next 19 Kategorien / 333 Angebote** (03.08.–08.08.).
+/// Der Fixture ist der gekürzte Auszug davon.
+#[test]
+fn rewe_next_week_rides_in_the_same_response() {
+    let next = scrapers::rewe::parse_next_week_offers(&rewe_raw(), "565005", "2026-08-01");
+
+    assert_eq!(next.len(), 12, "12 DEFAULT-Kacheln in den drei Kategorien");
+    assert!(
+        next.iter().all(|o| o.valid_from.as_deref() == Some("2026-08-03")),
+        "Eine Zeile ohne das gemessene Startdatum"
+    );
+    assert!(next.iter().all(|o| o.valid_until.as_deref() == Some("2026-08-08")));
+
+    let butter = next
+        .iter()
+        .find(|o| o.title == "Weihenstephan Butter oder Die Streichzarte")
+        .expect("Die Butter aus der Messung fehlt");
+    assert_eq!(butter.price, Some(1.29));
+    assert_eq!(butter.category.as_deref(), Some("Top-Angebote in deinem Markt"));
+    // Die Marke steht im Overline und muss mitkommen — sonst fehlt sie dem
+    // Matcher, genau der Fehler aus [EXTRAKT-1].
+    assert_eq!(butter.overline.as_deref(), Some("Mo. 3.8. bis Sa. 8.8."));
+    // `regularPrice` trägt hier „Knaller", kein Preis. Wer das als Zahl liest,
+    // erfindet einen Streichpreis.
+    assert_eq!(butter.regular_price, None);
+}
+
+/// **Die Gegenprobe:** Der bestehende Weg (`parse_offers` auf der gekürzten
+/// `discounts -json`-Form) findet in derselben Datei **nichts** — er kennt
+/// weder `data.offers` noch `priceData`. Fiele dieser Test, hätte der neue
+/// Parser nichts Neues erschlossen.
+#[test]
+fn the_old_rewe_parser_sees_none_of_them() {
+    let old = scrapers::rewe::parse_offers(rewe_raw(), "565005").unwrap();
+
+    assert!(old.is_empty(), "Der alte Weg sollte in der Rohform nichts finden");
+}
+
+/// Nicht jede Kachel ist ein Angebot: `HERO` und `MOOD` sind Bühnen und Banner.
+/// Der Fixture trägt je eine davon — ohne den `cellType`-Filter stünden sie als
+/// Produkte in der Datenbank.
+#[test]
+fn rewe_preview_skips_stage_and_mood_tiles() {
+    let raw = rewe_raw();
+    let alle: usize = raw
+        .pointer("/data/offers/next/categories")
+        .and_then(|v| v.as_array())
+        .map(|cats| {
+            cats.iter()
+                .filter_map(|c| c.get("offers")?.as_array())
+                .map(|o| o.len())
+                .sum()
+        })
+        .unwrap();
+
+    let next = scrapers::rewe::parse_next_week_offers(&raw, "565005", "2026-08-01");
+
+    assert_eq!(alle, 14, "Im Fixture stehen 14 Kacheln");
+    assert_eq!(next.len(), 12, "Zwei davon sind HERO/MOOD und dürfen nicht mit");
+}
+
+/// **Die Grenze, und sie ist bei REWE schärfer als anderswo.**
+/// `nextWeekAvailableFrom` steht auf `saturday` — am Samstag zeigt `next` also
+/// die Woche, die am Montag *anfängt*, und `defaultWeek` kann auf `next`
+/// springen. Ohne die Prüfung `fromDate > heute` stünde ein Preis der
+/// laufenden Woche in der Vorschau.
+#[test]
+fn rewe_preview_never_returns_the_running_week() {
+    let raw = rewe_raw();
+
+    // Stichtag am Starttag selbst und danach: nichts mehr.
+    for today in ["2026-08-03", "2026-08-05", "2026-12-31"] {
+        let none = scrapers::rewe::parse_next_week_offers(&raw, "565005", today);
+        assert!(none.is_empty(), "{today}: die Vorschau lieferte die laufende Woche");
+    }
+}
+
+/// `available: false` heißt „REWE hat die Folgewoche noch nicht freigegeben" —
+/// dann ist die Vorschau leer, nicht kaputt.
+#[test]
+fn rewe_preview_is_empty_while_next_week_is_not_released() {
+    let mut raw = rewe_raw();
+    raw.pointer_mut("/data/offers/next/available")
+        .map(|v| *v = serde_json::Value::Bool(false));
+
+    let next = scrapers::rewe::parse_next_week_offers(&raw, "565005", "2026-08-01");
+
+    assert!(next.is_empty());
+}
+
 /// Die Quellen-Tabelle beschreibt neun Ketten — keine doppelt, keine
 /// vergessen. Sie ist Dokumentation, und Dokumentation altert; dieser Test
 /// ist der Wecker.

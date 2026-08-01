@@ -36,15 +36,17 @@ pub mod sources {
     pub const ALREADY_LIVE: &[&str] = &["Penny", "NORMA"];
 
     /// Ketten, für die dieser Zweig den Weg gebaut hat.
-    pub const BUILT: &[&str] = &["Kaufland", "Lidl", "ALDI Nord"];
+    pub const BUILT: &[&str] = &["Kaufland", "Lidl", "ALDI Nord", "REWE"];
 
     /// Nachweislich vorhanden, aber hier nicht gebaut — mit dem Grund.
+    ///
+    /// Beide Gründe sind am 2026-08-01 **aus zwei Netzen** gemessen, diesem
+    /// Mac und einem GitHub-Runner. Das ist der Unterschied zu „hat bei mir
+    /// nicht geklappt": Akamai weist beide ab, es ist keine IP-Frage.
     pub const MEASURED_NOT_BUILT: &[(&str, &str)] = &[
-        ("ALDI SÜD", "Seite /angebote/<datum> liegt hinter Akamai; der API-Weg \
-                      kennt keinen Datumsparameter"),
+        ("ALDI SÜD", "Seite /angebote/<datum> antwortet Mac wie Runner mit 403 \
+                      (Akamai); der API-Weg kennt keinen Datumsparameter"),
         ("Netto", "Der Vorschau-Prospekt hängt an der Filialwahl per Cookie"),
-        ("REWE", "Der Reiter rendert erst mit Marktwahl; braucht den \
-                  zertifikatsgebundenen Abruf"),
     ];
 
     /// Veröffentlicht nachweislich nichts im Voraus. Die App sagt das,
