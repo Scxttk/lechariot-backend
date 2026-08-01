@@ -12,8 +12,20 @@ schreibt sie in die Spalte `offers.match_key text[]`
 ## Wörterbuch pflegen
 
 Quelle ist `docs/matching-woerterbuch.json` (Sektionen `begriffe` mit
-exact/suffix/block und `marken` Marke→Begriff bzw. `NONFOOD`). Nach jeder
-Änderung:
+exact/suffix/prefix/block, `kategorien` Kategorie→Begriff und `marken`
+Marke→Begriff bzw. `NONFOOD`). Geschrieben wird sie nie von Hand, sondern von
+`docs/matching-woerterbuch-eval.py` — dort stehen die Listen mit ihrer
+Begründung.
+
+`suffix` und `prefix` sind die beiden Hälften des Kompositum-Wegs: das
+bekannte Wort steht im Deutschen mal hinten („Steinofen**baguette**") und mal
+vorne („**Kartoffel**taschen"). Beide greifen erst ab vier Zeichen, beide
+achten auf `SUFFIX_STOP` („Reis"/„Preis", „Wein"/„Schwein") und auf die
+Blockliste des Begriffs. Sie gehören pro Begriff gepflegt, nie pauschal — die
+Sperrlisten in der Python-Referenz führen zu jeder Ausnahme den gemessenen
+Fehltreffer mit.
+
+Nach jeder Änderung:
 
 1. `python3 docs/matching-woerterbuch-eval.py` — misst Abdeckung gegen die
    lokale Nightly-DB und regeneriert die JSON aus der Python-Referenz.
