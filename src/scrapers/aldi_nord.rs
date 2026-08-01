@@ -19,6 +19,18 @@ use crate::scrapers::{store_finder, util};
 
 const OFFERS_URL: &str = "https://www.aldi-nord.de/angebote.html";
 
+/// Die Vorschauseite. **Gefunden, nicht geraten:** Die Angebotsseite trägt sich
+/// selbst als `pages/offerCurrent` aus und führt in ihren eigenen Pfaden
+/// `/angebote-vorschau`; die Seite dahinter trägt `pages/offerNext`. Fünf
+/// naheliegende URLs (`angebote/naechste-woche.html` und Verwandte) antworten
+/// mit 504 oder 404 — Raten wäre also falsch gewesen.
+///
+/// Gemessen am 2026-08-01: derselbe `__NEXT_DATA__`-Aufbau wie die laufende
+/// Seite (`OFFER_GET` → `res.algoliaDataMap` mit 253 Produkten, `res.categories`
+/// mit den Aktionstagen Mo 3.8., Do 6.8., Sa 8.8.). Sie liest deshalb derselbe
+/// Parser, ohne eine Zeile Sonderfall.
+const NEXT_WEEK_URL: &str = "https://www.aldi-nord.de/angebote-vorschau.html";
+
 /// Echte Filiale über den Store-Finder; None ohne Filiale im Umkreis der PLZ.
 /// Angebote bleiben der nationale Katalog (siehe store_finder.rs).
 pub fn find_market(zip: &str) -> Result<Option<Market>> {
@@ -32,23 +44,47 @@ pub fn national() -> Market {
 }
 
 pub fn fetch_offers(market: &Market) -> Result<Vec<Offer>> {
-    util::polite_pause(OFFERS_URL);
-    let html = util::blocking_client()?
-        .get(OFFERS_URL)
-        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-        .header("Accept-Language", "de-DE,de;q=0.9")
-        .send()
-        .with_context(|| util::ctx("ALDI Nord", "Angebote laden", OFFERS_URL))?
-        .error_for_status()
-        .with_context(|| util::ctx("ALDI Nord", "Angebote laden (HTTP-Status)", OFFERS_URL))?
-        .text()
-        .with_context(|| util::ctx("ALDI Nord", "Angebote lesen", OFFERS_URL))?;
-
-    let offers = parse_offers(&html, &market.id)?;
+    let html = load(OFFERS_URL)?;
+    let mut offers = parse_offers(&html, &market.id)?;
     if offers.is_empty() {
         bail!("Keine ALDI-Nord-Angebote gefunden — Seitenstruktur hat sich möglicherweise geändert");
     }
+    if crate::preview::enabled() {
+        offers.extend(fetch_next_week(market));
+    }
     Ok(offers)
+}
+
+/// Die Angebote der Folgewoche von der Vorschauseite.
+///
+/// Gibt bei jedem Fehler eine leere Liste zurück statt `Err`: Die laufende
+/// Woche steht schon, und sie wegen einer fehlenden Vorschau nicht
+/// hochzuladen wäre der teurere Fehler.
+pub fn fetch_next_week(market: &Market) -> Vec<Offer> {
+    match load(NEXT_WEEK_URL).and_then(|html| parse_offers(&html, &market.id)) {
+        Ok(offers) => {
+            println!("  Vorschau: {} Angebote der Folgewoche", offers.len());
+            offers
+        }
+        Err(e) => {
+            eprintln!("WARNUNG [ALDI Nord] Vorschau übersprungen: {e:#}");
+            Vec::new()
+        }
+    }
+}
+
+fn load(url: &str) -> Result<String> {
+    util::polite_pause(url);
+    util::blocking_client()?
+        .get(url)
+        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        .header("Accept-Language", "de-DE,de;q=0.9")
+        .send()
+        .with_context(|| util::ctx("ALDI Nord", "Angebote laden", url))?
+        .error_for_status()
+        .with_context(|| util::ctx("ALDI Nord", "Angebote laden (HTTP-Status)", url))?
+        .text()
+        .with_context(|| util::ctx("ALDI Nord", "Angebote lesen", url))
 }
 
 pub fn parse_offers(html: &str, market_id: &str) -> Result<Vec<Offer>> {

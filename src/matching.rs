@@ -95,6 +95,13 @@ fn dict() -> &'static Dict {
                 Some((b, key))
             })
             .collect();
+        // Längste Marke zuerst. Der Fallback prüft `contains`, und in
+        // JSON-Reihenfolge gewann die **kürzere**: „MILKANA" (Schmelzkäse)
+        // enthält „milka" und bekam `schokolade` statt `käse` — dieselbe
+        // Teilzeichenketten-Falle wie `reis` in „P**reis**". Gefunden am
+        // 01.08. beim Messen von [EXTRAKT-1], vorhanden war sie vorher.
+        let mut brands: Vec<(String, String)> = brands;
+        brands.sort_by(|a, b| b.0.len().cmp(&a.0.len()).then_with(|| a.0.cmp(&b.0)));
         // Regexe kommen aus der JSON — eine Quelle mit der Python-Referenz.
         // Python-Patterns tragen kein eingebettetes (?i), daher hier ergänzen.
         //
@@ -166,6 +173,35 @@ fn tokens(ntext: &str) -> Vec<String> {
         }
     }
     all
+}
+
+/// Wie [`match_keys`], zieht aber die **Marke** heran, wenn Titel und
+/// Untertitel allein nichts ergeben.
+///
+/// Der Fall: ALDI Nords Untertitel ist oft nur eine Variante („Berry",
+/// „Medium", „Zero Sugar"), und der Produktname steht in der Marke — `Berry`
+/// ist *JACK DANIEL'S*, `Medium` ist *GEROLSTEINER*, `Original` ist *LÄTTA*.
+/// 27 der 62 ungetaggten Zeilen mit reiner Packungsangabe kamen so zustande
+/// (gemessen 01.08. am 11-Regionen-Korpus).
+///
+/// **Nur als Rückfall**, und das ist die Lehre aus der Messung: Die Marke
+/// immer mitzugeben ändert Tags in gesunden Zeilen. Wer schon ein Tag hat,
+/// bekommt die Marke gar nicht erst zu sehen — dann kann sie auch nichts
+/// kaputt machen.
+pub fn match_keys_with_brand(
+    title: &str,
+    subtitle: Option<&str>,
+    category: Option<&str>,
+    brand: Option<&str>,
+) -> Vec<String> {
+    let keys = match_keys(title, subtitle, category);
+    if !keys.is_empty() {
+        return keys;
+    }
+    let Some(brand) = brand.map(str::trim).filter(|b| !b.is_empty()) else {
+        return keys;
+    };
+    match_keys(&format!("{brand} {title}"), subtitle, category)
 }
 
 /// `match_key`-Tags für ein Angebot: Begriffs-Tags, `["nonfood"]` für
@@ -896,6 +932,58 @@ mod tests {
     fn marken_fallback() {
         assert_eq!(keys("Fruchtzwerge"), vec!["joghurt"]);
         assert_eq!(keys("Bitburger Premium"), vec!["bier"]);
+    }
+
+    /// **Die längere Marke gewinnt.** In JSON-Reihenfolge bekam „MILKANA"
+    /// (Schmelzkäse) `schokolade`, weil der Name „milka" enthält und der
+    /// Fallback beim ersten `contains` stehenblieb. Gegen den Stand vor der
+    /// Sortierung fällt dieser Test mit `schokolade`.
+    #[test]
+    fn die_laengere_marke_gewinnt_gegen_die_teilzeichenkette() {
+        assert_eq!(keys("MILKANA"), vec!["käse"]);
+        assert_eq!(keys("MILKANA Tolle Rolle!"), vec!["käse"]);
+        // Und die kurze Marke behält, was ihr gehört.
+        assert_eq!(keys("Milka Alpenmilch"), vec!["schokolade"]);
+    }
+
+    /// Die Marke zieht **nur**, wenn Titel und Untertitel nichts ergeben.
+    ///
+    /// ALDI Nords Untertitel ist oft bloß eine Variante („Zero Sugar",
+    /// „Medium"), und der Produktname steckt in der Marke. Gemessen am
+    /// 11-Regionen-Korpus: **72 Zeilen neu getaggt (12 verschiedene Produkte),
+    /// 0 Zeilen mit verändertem oder verlorenem Tag.** Der naive Weg — die
+    /// ganze Überzeile an den Untertitel hängen — änderte 48.
+    #[test]
+    fn die_marke_taggt_nur_was_sonst_leer_bliebe() {
+        // Ohne Marke ungetaggt, mit Marke richtig.
+        assert!(match_keys("Zero Sugar", Some("2-L-Flasche"), None).is_empty());
+        assert_eq!(
+            match_keys_with_brand("Zero Sugar", Some("2-L-Flasche"), None, Some("COCA-COLA")),
+            vec!["limonade"]
+        );
+        assert_eq!(
+            match_keys_with_brand("Medium", Some("1,5-L-Flasche"), None, Some("GEROLSTEINER")),
+            vec!["wasser"]
+        );
+
+        // Und der Gegenbeweis: Wo schon ein Tag steht, kommt die Marke gar
+        // nicht erst zum Zug — auch dann nicht, wenn sie ein anderes brächte.
+        let ohne = match_keys("Vollmilch", Some("1 l"), None);
+        assert_eq!(ohne, vec!["milch"]);
+        assert_eq!(
+            match_keys_with_brand("Vollmilch", Some("1 l"), None, Some("Milka")),
+            ohne,
+            "Die Marke darf ein vorhandenes Tag nicht überschreiben"
+        );
+    }
+
+    /// Eine leere oder fehlende Marke ändert nichts — sonst hinge das Ergebnis
+    /// daran, ob ein Scraper `None` oder `Some("")` liefert.
+    #[test]
+    fn leere_marke_aendert_nichts() {
+        for brand in [None, Some(""), Some("   ")] {
+            assert!(match_keys_with_brand("Zero Sugar", Some("2-L-Flasche"), None, brand).is_empty());
+        }
     }
 
     #[test]

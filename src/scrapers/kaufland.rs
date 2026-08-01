@@ -168,11 +168,150 @@ pub fn fetch_offers(market: &Market) -> Result<Vec<Offer>> {
         .text()
         .with_context(|| util::ctx("Kaufland", "Angebote lesen", OFFERS_URL))?;
 
-    let offers = parse_offers(&html, &market.id)?;
+    let mut offers = parse_offers(&html, &market.id)?;
     if offers.is_empty() {
         bail!("Keine Angebote gefunden — Seitenstruktur hat sich möglicherweise geändert");
     }
+    // Kein zweiter Abruf: Die Folgewoche steht in derselben Antwort, nur nicht
+    // im gerenderten HTML. Siehe parse_next_week_offers.
+    if crate::preview::enabled() {
+        let next = parse_next_week_offers(&html, &market.id, &today());
+        println!("  Vorschau: {} Angebote der Folgewoche", next.len());
+        offers.extend(next);
+    }
     Ok(offers)
+}
+
+/// Die Angebote der Folgewoche — aus **derselben** Antwort wie die laufenden.
+///
+/// Der gerenderte Teil der Seite zeigt nur die laufende Woche; die Folgewoche
+/// liegt im SSR-Zustand `window.SSR[…] = {…}` unter
+/// `props.offerData.cycles[].categories[]`, jede Kategorie mit `dateFrom`/
+/// `dateTo` und ihren `offers`. Gemessen am 2026-08-01 für DE7380: drei
+/// Zyklen, 811 laufende und **35 künftige** Angebote (Fenster 06.08.–12.08.
+/// und 06.08.–08.08.).
+///
+/// Kein `Result`: Wenn Kaufland den Block umbaut, soll der Lauf die laufende
+/// Woche trotzdem hochladen. Ein Fehlschlag hier ist eine leere Vorschau,
+/// kein kaputter Lauf.
+pub fn parse_next_week_offers(html: &str, market_id: &str, today: &str) -> Vec<Offer> {
+    let Some(state) = extract_ssr_state(html) else {
+        eprintln!("WARNUNG [Kaufland] SSR-Block nicht gefunden — Vorschau übersprungen.");
+        return Vec::new();
+    };
+    let mut offers = Vec::new();
+    let cycles = state
+        .pointer("/props/offerData/cycles")
+        .and_then(|v| v.as_array());
+    for category in cycles.into_iter().flatten().filter_map(|c| c.get("categories")?.as_array()) {
+        for cat in category {
+            let from = cat.get("dateFrom").and_then(|v| v.as_str()).unwrap_or_default();
+            // Nur echte Zukunft. Ein Fenster, das heute schon läuft, gehört in
+            // die laufende Woche und steht dort bereits.
+            if from <= today {
+                continue;
+            }
+            let until = cat.get("dateTo").and_then(|v| v.as_str());
+            let display = cat.get("displayName").and_then(|v| v.as_str());
+            for raw in cat.get("offers").and_then(|v| v.as_array()).into_iter().flatten() {
+                if let Some(offer) = json_offer(raw, market_id, display, Some(from), until) {
+                    offers.push(offer);
+                }
+            }
+        }
+    }
+    offers
+}
+
+/// Ein Angebot aus dem SSR-JSON. Dieselben Felder wie die Kachel, nur schon
+/// getrennt statt aus dem HTML gefischt.
+fn json_offer(
+    raw: &serde_json::Value,
+    market_id: &str,
+    category: Option<&str>,
+    valid_from: Option<&str>,
+    valid_until: Option<&str>,
+) -> Option<Offer> {
+    let text = |key: &str| {
+        raw.get(key)
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    let mut subtitle = text("subtitle");
+    // Wie im HTML-Weg: Markenlose Produkte tragen nur den Untertitel.
+    let title = match text("title") {
+        Some(t) => t,
+        None => subtitle.take()?,
+    };
+    let price = raw.get("price").and_then(|v| v.as_f64());
+    // `discount` ist der Rabatt in Prozent; der Streichpreis steht nicht drin.
+    let regular_price = match (price, raw.get("discount").and_then(|v| v.as_f64())) {
+        (Some(p), Some(d)) if d > 0.0 && d < 100.0 => {
+            Some(((p / (1.0 - d / 100.0)) * 100.0).round() / 100.0)
+        }
+        _ => None,
+    };
+    let overline = match (text("unit"), text("basePrice")) {
+        (Some(unit), Some(base)) => Some(format!("{unit} {base}")),
+        (unit, base) => unit.or(base),
+    };
+    let id_key = match &subtitle {
+        Some(s) => format!("{title} {s}"),
+        None => title.clone(),
+    };
+    Some(Offer {
+        id: Offer::build_id(market_id, &id_key, valid_from),
+        market_id: market_id.to_string(),
+        title,
+        subtitle,
+        overline,
+        price,
+        regular_price,
+        category: category.map(str::to_string),
+        nutri_score: None,
+        valid_from: valid_from.map(str::to_string),
+        valid_until: valid_until.map(str::to_string),
+        images: text("listImage").into_iter().collect(),
+        biozid: false,
+        flyer_page: None,
+    })
+}
+
+/// Den `window.SSR[…] = { … };`-Block als JSON herausschneiden.
+///
+/// Von Hand geklammert statt per Regex: Der Block ist knapp 3 MB und enthält
+/// selbst geschweifte Klammern in Strings.
+fn extract_ssr_state(html: &str) -> Option<serde_json::Value> {
+    let anchor = html.find("window.SSR[")?;
+    let start = html[anchor..].find("= {")? + anchor + 2;
+    let bytes = html.as_bytes();
+    let (mut depth, mut in_string, mut escaped) = (0i32, false, false);
+    for i in start..bytes.len() {
+        let c = bytes[i];
+        if in_string {
+            match c {
+                _ if escaped => escaped = false,
+                b'\\' => escaped = true,
+                b'"' => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        match c {
+            b'"' => in_string = true,
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return serde_json::from_str(&html[start..=i]).ok();
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 // Kaufland listet dasselbe Angebot in mehreren Kategorien (z. B. in der
