@@ -526,6 +526,27 @@ mod tests {
             .contains(&"kaffee".to_string()));
     }
 
+    /// Zwei Meldungen aus `match_feedback` vom 2026-07-31, beide vom selben
+    /// Tester binnen einer Minute, beide vom Kompositum-Typ: Ein Wort steckt
+    /// im Titel, meint dort aber etwas anderes.
+    ///
+    /// Die Gegenproben stehen bewusst daneben. Eine Sperre, die „Butter" oder
+    /// „Brot" insgesamt schwächt, wäre teurer als der Fehltreffer, den sie
+    /// abstellt — ein fehlendes Tag kostet einen Treffer, ein falsches legt
+    /// jemandem das falsche Produkt in den Einkauf.
+    #[test]
+    fn tester_meldungen_31_07() {
+        // Süßware, keine Butter.
+        assert!(keys("KORO Bio-Nut-Butter-Cups").is_empty());
+        // Gebäck, kein Brot — und über die Marke landet es sogar richtig.
+        assert_eq!(keys("BAHLSEN ABC Russisch Brot*"), vec!["kekse"]);
+
+        // Gegenproben: echte Butter und echtes Brot bleiben unberührt.
+        assert_eq!(keys("Kerrygold Original Irische Butter"), vec!["butter"]);
+        assert_eq!(keys("HARRY Vollkornbrot"), vec!["brot"]);
+        assert_eq!(keys("GOLDEN TOAST Toastbrot*"), vec!["brot"]);
+    }
+
     #[test]
     fn marken_fallback() {
         assert_eq!(keys("Fruchtzwerge"), vec!["joghurt"]);
