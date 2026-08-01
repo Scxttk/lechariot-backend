@@ -56,6 +56,30 @@ KAT_ROH = {
     "herzhafte Aufstriche": "soßen",
     "Dips": "soßen",
     "Windeln": "windeln/hygiene",
+    # Runde 2026-08-01, Op 2: zwölf weitere Kategorien aus dem 11-Regionen-
+    # Korpus. Aufnahmekriterium war nicht „hilft viel", sondern: JEDES Produkt,
+    # das im Korpus unter dieser Kategorie steht, gehört zu dem Begriff —
+    # nachgesehen, nicht geschätzt (Produkte gesamt / davon vorher ungetaggt).
+    "Bier": "bier",                       # 26/3  — alle 26 sind Bier, 23 tragen `bier` schon über den Titel
+    "Fisch": "fisch",                     # 6/2   — alle 6 sind Fisch (die 2: Flusskrebssalat, Norweg. Lachsfiletseite)
+    "Schnittkäse": "käse",                # 7/4   — die 4 sind „Plus Pack 156 g, Bärlauch/Cremig/Mild Nussig/Würzig"
+    "Kaffee": "kaffee",                   # 2/1   — „Crema e Aroma 1 kg"
+    "Schinken": "wurst",                  # 4/1   — „Bacon 150 g"; die anderen 3 tragen `wurst` schon
+    "Bäckerei": "backwaren",              # 7/3   — Dinkel-Bürli, Vollkorn-Saaten-Rusti, Speck-Käse-Twister
+    "Sportnahrung": "protein/fitness",    # 9/4   — Kreatinpulver, Magnesium-Sticks, Flavor Powder, Getränkesirup
+    "Chips & Knabbereien": "chips",       # 4/2   — Grissotti (Sesam, Sesam-Mohn-Leinsamen); `chips` führt Cracker und Salzstangen
+    "Lakritz & Fruchtgummi": "schokolade",# 4/2   — `schokolade` ist der Süßwaren-Topf des Wörterbuchs (Haribo, Katjes, Lakritz)
+    "Nudeln & Pasta": "nudeln",           # 1/1   — „Lasagneblätter 500 g"
+    "Nüsse & Trockenfrüchte": "nüsse",    # 1/1   — „Getrocknete Cranberries 200 g"
+    "Rindfleisch": "rind",                # 1/1   — „Rind Hamburger 400 g"
+    # Bewusst NICHT aufgenommen, obwohl sie ungetaggte Zeilen tragen: die
+    # Kategorie nennt zwei Familien oder eine ganze Abteilung, und ein Begriff
+    # daraus wäre für den Rest falsch. „Molkereiprodukte, Fette" (5 ungetaggt,
+    # aber Käse, Joghurt, Pudding, Margarine nebeneinander), „Alkoholfreie
+    # Getränke" (Wasser/Limo/Saft gemischt), „Obst und Gemüse", „Frühstück",
+    # „Grundnahrungsmittel", „Kochen und Backen", „Feinkost, Konserven",
+    # „Frische-Aktion: Fleisch & Fisch", „Wein und Spirituosen", „Kühlung"
+    # (14 ungetaggt, aber Wurst, Käse, Milch, Rote Grütze in einem Regal).
 }
 
 # Wörterbuch: begriff -> (exakte tokens, komposita-suffixe, blockliste)

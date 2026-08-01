@@ -287,6 +287,48 @@ mod tests {
         assert_eq!(keys("Deutsche Markenbutter"), vec!["butter"]);
     }
 
+    /// Wörterbuch-Runde 2026-08-01, Op 2: zwölf weitere Kategorien. Jeder Fall
+    /// hier ist eine Zeile, die im 11-Regionen-Korpus vorher ungetaggt war —
+    /// keiner ist ausgedacht. Aufnahmekriterium war, dass JEDES Korpus-Produkt
+    /// unter der Kategorie zum Begriff gehört; die Zahlen stehen bei `KAT_ROH`.
+    #[test]
+    fn kategorie_runde_2026_08_01() {
+        assert_eq!(keys_cat("Haake-Beck", "Bier"), vec!["bier"]);
+        assert_eq!(keys_cat("Kosmonaut Hell", "Bier"), vec!["bier"]);
+        assert_eq!(keys_cat("Flusskrebssalat", "Fisch"), vec!["fisch"]);
+        assert_eq!(keys_cat("Plus Pack 156 g, Würzig", "Schnittkäse"), vec!["käse"]);
+        assert_eq!(keys_cat("Crema e Aroma 1 kg", "Kaffee"), vec!["kaffee"]);
+        assert_eq!(keys_cat("Bacon 150 g", "Schinken"), vec!["wurst"]);
+        assert_eq!(keys_cat("Dinkel-Bürli", "Bäckerei"), vec!["backwaren"]);
+        assert_eq!(keys_cat("Kreatinpulver", "Sportnahrung"), vec!["protein/fitness"]);
+        assert_eq!(keys_cat("Grissotti 200 g, Sesam", "Chips & Knabbereien"), vec!["chips"]);
+        assert_eq!(keys_cat("Fruchtgummi 175 g, Quaxi", "Lakritz & Fruchtgummi"), vec!["schokolade"]);
+        assert_eq!(keys_cat("Lasagneblätter 500 g", "Nudeln & Pasta"), vec!["nudeln"]);
+        assert_eq!(keys_cat("Getrocknete Cranberries 200 g", "Nüsse & Trockenfrüchte"), vec!["nüsse"]);
+        assert_eq!(keys_cat("Rind Hamburger 400 g", "Rindfleisch"), vec!["rind"]);
+
+        // Gegenprobe 1: die Kategorie bleibt der LETZTE Ausweg. „Plus Pack
+        // 156 g, Chili Paprika" steht auch unter *Schnittkäse* und behält
+        // seinen Titel-Treffer — die Kategorie überstimmt ihn nicht.
+        assert_eq!(keys_cat("Plus Pack 156 g, Chili Paprika", "Schnittkäse"), vec!["paprika"]);
+        // Gegenprobe 2: Substring reicht nicht, verglichen wird auf Gleichheit
+        // der normalisierten Kategorie. Sonst zöge „Bier" auch „Bier & Wein"
+        // und „Alkoholfreies Bier und mehr" an sich.
+        assert!(keys_cat("Irgendwas", "Bier & Wein").is_empty());
+        assert!(keys_cat("Irgendwas", "Fischers Fritz").is_empty());
+        // Gegenprobe 3: die Blockliste des Begriffs gilt auch auf diesem Weg —
+        // „Käsekuchen" ist gesperrt und darf `käse` nicht über *Schnittkäse*
+        // zurückbekommen.
+        assert!(keys_cat("Käsekuchen nach Omas Art", "Schnittkäse")
+            .iter()
+            .all(|k| k != "käse"));
+        // Gegenprobe 4: bewusst NICHT zugeordnet, weil die Kategorie zwei
+        // Familien nennt — ein Begriff daraus wäre für den Rest falsch.
+        assert!(keys_cat("PUSTERIA", "Molkereiprodukte, Fette").is_empty());
+        assert!(keys_cat("Hella Near Water", "Alkoholfreie Getränke").is_empty());
+        assert!(keys_cat("Lachsfiletseite", "Frische-Aktion: Fleisch & Fisch").is_empty());
+    }
+
     /// Die drei Beobachtungen aus dem Backlog, abgearbeitet am 2026-07-26.
     /// Alle drei kamen aus echten Fehltreffern, nicht aus dem Kopf.
     #[test]
