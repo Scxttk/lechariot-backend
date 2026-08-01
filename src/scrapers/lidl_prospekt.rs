@@ -59,6 +59,34 @@ const PAIR_GAP_PT: f64 = 120.0;
 const BADGE_GAP_PT: f64 = 45.0;
 /// Toleranz der Rechenprobe (siehe [`arithmetic_check`]).
 const PRICE_TOLERANCE: f64 = 0.06;
+/// Kleinster Schriftgrad, in dem der Prospekt einen Produktnamen setzt (pt).
+///
+/// Der Prospekt setzt nicht stufenlos, sondern in wenigen festen Graden.
+/// Gemessen am Prospekt vom 27.07.2026 über die Titelzeilen aller 243 Kacheln,
+/// die ein Angebot geworden sind:
+///
+/// | Grad | Kacheln | was dort steht |
+/// |---|---:|---|
+/// | 5,8-9,4 | 18 | ausschließlich Bildbeschriftungen („Rohrschneider", „Sechskant-aufnahme", „Farbdisplay Auflösung Speicher") |
+/// | 10,93 | 9 | acht echte Namen (BABYBEL, Lavendel, Grünpflanze, TEMPO) und eine Beschriftung |
+/// | 11,96 | 210 | die Regelgröße für Marke + Produktname |
+///
+/// **10,93 ist ein Namensgrad, und die Schranke liegt trotzdem darüber.** Alle
+/// acht echten 10,93er stehen in ihrer **eigenen Preiskachel**, und die prüft
+/// diese Schranke gar nicht — sie greift nur bei der Rollenzuteilung, also für
+/// Kacheln **ohne** eigenen Sternpreis. Nachgemessen wurde beides:
+///
+/// - **11,0** → 252 Angebote, die sechs Layoutzeilen weg, **kein echter
+///   Artikel verloren**.
+/// - **10,5** (unter die 10,93 gelegt, um sie ausdrücklich zu schonen) → 251
+///   Angebote und **zwei echte Artikel weniger** (PARKSIDE Mobile Akku-Kühlbox,
+///   SILVERCREST Waffeleisen): Die geschonte Beschriftung „17-teilig Für Lacke,
+///   Holzschutzgel und -farbe" bleibt Produktkachel und nimmt weiter Preise weg.
+///
+/// Die vorsichtigere Zahl ist also die teurere. Sollte in einer anderen Woche
+/// ein 10,93er Name ohne eigenen Preis stehen, kostet ihn diese Schranke —
+/// dieser Prospekt kennt den Fall nicht.
+const MIN_NAME_PT: f64 = 11.0;
 /// Preise außerhalb dieser Spanne sind keine Lebensmittelangebote.
 const MIN_PRICE: f64 = 0.10;
 const MAX_PRICE: f64 = 100.0;
@@ -331,6 +359,18 @@ const REMNANT_TEXT: &[&str] = &[
     // Rest der Haltungsform-Plakette („Mehr Stall + Platz"), dieselbe
     // zerlegte Grafik wie „AUS UT HER LAN".
     "stall + platz",
+    // Drei Zeilen, die erst durch die Schriftgrad-Schranke sichtbar wurden
+    // (siehe [`MIN_NAME_PT`]): Wo eine Beschriftung ihrer Preiskachel den
+    // Preis nicht mehr wegnimmt, wird die Kachel selbsttragend — und einige
+    // wenige tragen als „Namen" eine Werbezeile. Alle drei sind wörtliche
+    // Wendungen, die in keinem Produktnamen des Prospekts vorkommen:
+    //
+    // „Frischer Fisch, nie gefroren" (Seite 55, Fischtheke), „Gültig am 1.8."
+    // (Seite 64, Coupon-Fußnote) und „Breite Form für hohe Kippstabilität"
+    // (Seite 64, Eigenschaft der CRIVIT-Trinkflasche).
+    "nie gefroren",
+    "gültig am",
+    "kippstabilität",
 ];
 
 /// Titel, die aus **einem** Wort bestehen, das für sich nichts benennt: eine
@@ -591,11 +631,30 @@ struct Island {
     x1: f64,
     y1: f64,
     lines: Vec<String>,
+    /// Größte Worthöhe **je Zeile**, in PDF-Punkten — der Schriftgrad, in dem
+    /// der Prospekt diese Zeile gesetzt hat. `pdftotext -bbox-layout` nennt zu
+    /// jedem Wort `yMin`/`yMax`; die Differenz ist alles, was hier gebraucht
+    /// wird. Die Liste läuft parallel zu `lines`.
+    ///
+    /// Der Text sagt nicht, ob „Rohrschneider" ein Artikel ist oder die
+    /// Beschriftung eines Fotos. Der Schriftgrad sagt es: Der Prospekt setzt
+    /// Produktnamen groß und Bildbeschriftungen klein.
+    line_pt: Vec<f64>,
 }
 
 impl Island {
     fn text(&self) -> String {
         self.lines.join(" ")
+    }
+
+    /// Der größte Schriftgrad der Insel, in PDF-Punkten.
+    ///
+    /// Das Maximum und nicht der Median: Eine Produktkachel trägt Marke und
+    /// Namen groß und die Beschreibung klein, ihr Median liegt deshalb bei der
+    /// Beschreibung. Gefragt ist aber, ob **irgendwo** in dieser Kachel etwas
+    /// in Namensgröße steht.
+    fn font_pt(&self) -> f64 {
+        self.line_pt.iter().copied().fold(0.0_f64, f64::max)
     }
 
     /// Abstand zweier Rechtecke; 0, wenn sie sich überlappen.
@@ -611,6 +670,7 @@ impl Island {
         self.x1 = self.x1.max(other.x1);
         self.y1 = self.y1.max(other.y1);
         self.lines.extend(other.lines.iter().cloned());
+        self.line_pt.extend(other.line_pt.iter().copied());
     }
 }
 
@@ -871,8 +931,10 @@ fn parse_bbox_layout(xml: &str) -> Vec<Vec<Island>> {
     let mut pages: Vec<Vec<Island>> = Vec::new();
     let mut island: Option<Island> = None;
     let mut line_words: Vec<String> = Vec::new();
+    // Die Worthöhen derselben Zeile, parallel zu `line_words`.
+    let mut line_pts: Vec<f64> = Vec::new();
 
-    let flush_line = |island: &mut Option<Island>, words: &mut Vec<String>| {
+    let flush_line = |island: &mut Option<Island>, words: &mut Vec<String>, pts: &mut Vec<f64>| {
         if !words.is_empty()
             && let Some(isl) = island.as_mut()
         {
@@ -881,8 +943,11 @@ fn parse_bbox_layout(xml: &str) -> Vec<Vec<Island>> {
             // Ein Trennstrich am Zeilenende bleibt stehen: dort setzt
             // `title_of` beim Zusammenfügen der Zeilen wieder an.
             isl.lines.push(words.join(" ").replace("\u{00ad} ", ""));
+            isl.line_pt
+                .push(pts.iter().copied().fold(0.0_f64, f64::max));
         }
         words.clear();
+        pts.clear();
     };
 
     for raw_line in cleaned.lines() {
@@ -896,9 +961,10 @@ fn parse_bbox_layout(xml: &str) -> Vec<Vec<Island>> {
                 x1: 0.0,
                 y1: 0.0,
                 lines: vec![],
+                line_pt: vec![],
             });
         } else if line.starts_with("</flow>") {
-            flush_line(&mut island, &mut line_words);
+            flush_line(&mut island, &mut line_words, &mut line_pts);
             if let Some(isl) = island.take()
                 && !isl.lines.is_empty()
                 && isl.x0 <= isl.x1
@@ -915,11 +981,14 @@ fn parse_bbox_layout(xml: &str) -> Vec<Vec<Island>> {
                 isl.y1 = isl.y1.max(b.3);
             }
         } else if line.starts_with("<line ") {
-            flush_line(&mut island, &mut line_words);
+            flush_line(&mut island, &mut line_words, &mut line_pts);
         } else if line.starts_with("<word ")
             && let Some(text) = word_text(line)
             && !text.is_empty()
         {
+            if let Some(b) = bbox_of(line) {
+                line_pts.push(b.3 - b.1);
+            }
             line_words.push(text);
         }
     }
@@ -1042,8 +1111,20 @@ fn is_boilerplate(text: &str) -> bool {
 
 /// Marke + Produktname: die Zeilen vor der ersten beschreibenden Zeile.
 fn title_of(island: &Island) -> String {
+    head_of(island).0
+}
+
+/// Wie [`title_of`], nennt zusätzlich den **Schriftgrad**, in dem diese Zeilen
+/// gesetzt sind (pt, größte Worthöhe der benutzten Zeilen).
+///
+/// Getrennt von `Island::font_pt` gebraucht: Eine Preiskachel trägt ihren
+/// Preis in 43 pt, ihren Namen aber in 12 pt und ihre Bildbeschriftung in
+/// 8 pt. Für die Frage „steht in dieser Kachel ein Produktname?" zählt der
+/// Grad der **Titelzeilen**, nicht der der Preisziffern.
+fn head_of(island: &Island) -> (String, f64) {
     let mut head: Vec<String> = Vec::new();
-    for line in &island.lines {
+    let mut pt = 0.0_f64;
+    for (i, line) in island.lines.iter().enumerate() {
         if name_words(line).is_empty() {
             if head.is_empty() {
                 continue;
@@ -1054,6 +1135,7 @@ fn title_of(island: &Island) -> String {
             break;
         }
         head.push(line.split_whitespace().collect::<Vec<_>>().join(" "));
+        pt = pt.max(island.line_pt.get(i).copied().unwrap_or(0.0));
         if head.len() >= 3 {
             break;
         }
@@ -1065,13 +1147,14 @@ fn title_of(island: &Island) -> String {
         .replace("\u{00ad} ", "")
         .replace('\u{00ad}', "")
         .replace("- ", "-");
-    BADGE_TOKEN
+    let title = BADGE_TOKEN
         .replace_all(&joined, "")
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
         .trim_matches(|c: char| c.is_whitespace() || c == ',' || c == '.' || c == '-')
-        .to_string()
+        .to_string();
+    (title, pt)
 }
 
 /// Taugt der Text als Produktname?
@@ -1159,6 +1242,7 @@ fn title_after_leading_banner(island: &Island) -> String {
         x1: island.x1,
         y1: island.y1,
         lines: island.lines[skip..].to_vec(),
+        line_pt: island.line_pt[skip..].to_vec(),
     };
     title_of(&after)
 }
@@ -1543,6 +1627,55 @@ struct OpenTile {
     tile: Island,
 }
 
+/// Schließt diese Preiskachel die Produktkachel ein, ohne dass einer ihrer
+/// Preise zum Produkt passt?
+///
+/// `Island::gap` ist 0, sobald sich zwei Rechtecke überschneiden — und eine
+/// breite Preiskachel überschneidet regelmäßig die kleine Kachel des
+/// Nachbarprodukts. Auf Seite 60 des Prospekts vom 27.07.2026 umschließt
+/// „CHEF SELECT Burger Scheiben" (11.49*) das Rechteck von „EXQUISA
+/// Frischkäse" vollständig; dessen eigener Preis (1.11*) steht 17 pt daneben.
+/// Nach reinem Abstand gewinnt die 0.
+///
+/// Die Umschließung allein sagt nichts — sie kommt auch bei richtig
+/// zusammengesetzten Kacheln vor. Deshalb müssen **zwei** Dinge zutreffen:
+/// Die Preiskachel umschließt das Produkt, **und** der Produkttext rechnet
+/// gegen jeden ihrer Preise dagegen. Der Frischkäse schreibt „Je 200/175 g,
+/// 1 kg = 5.55/6.34" — das sind 1.11 €, nicht 11.49 €. Gerechnet wird bewusst
+/// nur mit dem Text der **Produktkachel**: Nur dort ist belegt, dass
+/// Packungsgröße und Grundpreis zu diesem Produkt gehören.
+///
+/// Verworfen wird das **Paar**, nicht das Angebot. Die Preiskachel bleibt frei
+/// und wird unten selbsttragend (CHEF SELECT bekommt seine 11.49 € unter
+/// eigenem Namen), das Produkt sucht sich den nächsten Preis (der Frischkäse
+/// seine 1.11 €). Am Prospekt vom 27.07. greift die Regel fünfmal auf vier
+/// Seiten (ZOTT Monte Mega, BON GELATI Mini Mix, EXQUISA Frischkäse, AMICELLI
+/// Milchcreme, KIDSMANIA Candy), und jedes Mal bekommen danach **beide**
+/// Kacheln einen Preis statt nur einer.
+fn encloses_wrong_price(product: &Island, price: &Island) -> bool {
+    let encloses = product.x0 >= price.x0
+        && product.x1 <= price.x1
+        && product.y0 >= price.y0
+        && product.y1 <= price.y1;
+    if !encloses {
+        return false;
+    }
+    let own = product.text();
+    let mut checked = false;
+    for c in PRICE_STAR.captures_iter(&price.text()) {
+        let Some(value) = c.get(1).and_then(|m| parse_price(m.as_str())) else {
+            continue;
+        };
+        match arithmetic_check(&own, value) {
+            Some(false) => checked = true,
+            // Passt einer der Preise oder lässt sich nichts nachrechnen, ist
+            // die Umschließung kein Beleg gegen die Paarung.
+            _ => return false,
+        }
+    }
+    checked
+}
+
 pub fn extract_offers_with_shots(
     xml: &str,
     market_id: &str,
@@ -1590,7 +1723,10 @@ fn extract_offers_shots_and_open(
         for tile in tiles {
             if PRICE_STAR.is_match(&tile.text()) {
                 prices.push(tile);
-            } else if is_plausible_title(&title_of(&tile)) && !is_layout_text(&title_of(&tile)) {
+            } else if tile.font_pt() >= MIN_NAME_PT
+                && is_plausible_title(&title_of(&tile))
+                && !is_layout_text(&title_of(&tile))
+            {
                 // Bewusst am *Titel* gemessen, nicht am ganzen Kacheltext:
                 // Auf einer Fleisch-Kachel steht neben dem Namen auch
                 // „Frischluftstall", und danach zu verwerfen hätte
@@ -1606,9 +1742,10 @@ fn extract_offers_shots_and_open(
         for (i, product) in products.iter().enumerate() {
             for (j, price) in prices.iter().enumerate() {
                 let gap = product.gap(price);
-                if gap <= PAIR_GAP_PT {
-                    pairs.push((gap, i, j));
+                if gap > PAIR_GAP_PT || encloses_wrong_price(product, price) {
+                    continue;
                 }
+                pairs.push((gap, i, j));
             }
         }
         pairs.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -1760,6 +1897,7 @@ fn extract_offers_shots_and_open(
             // der *Grundpreis* vom Nachbarn stammt, und ein Veto würde ein
             // korrektes Angebot wegwerfen (BELBAKE Speisestärke 0.59 €).
             let veto = usable.len() > 1;
+
 
             // Die Streichpreise werden **vor** der Preisschleife verteilt:
             // Eine Plakette gehört zu genau einem Preis der Kachel, das lässt
@@ -3284,7 +3422,91 @@ mod tests {
     }
 
     fn island(x0: f64, y0: f64, x1: f64, y1: f64) -> Island {
-        Island { x0, y0, x1, y1, lines: vec!["x".into()] }
+        Island { x0, y0, x1, y1, lines: vec!["x".into()], line_pt: vec![8.0] }
+    }
+
+    /// Der Schriftgrad steht in den Wortrechtecken und nirgends sonst — er muss
+    /// beim Einlesen mitkommen, Zeile für Zeile.
+    #[test]
+    fn the_type_size_comes_out_of_the_word_boxes() {
+        // Zwei Zeilen einer Kachel, so wie pdftotext sie ausgibt: der Name in
+        // 11,96 pt, die Beschriftung darunter in 8,01 pt.
+        let xml = concat!(
+            "<page width=\"467.72\" height=\"794.00\">\n",
+            "<flow>\n",
+            "<block xMin=\"88.79\" yMin=\"389.27\" xMax=\"147.40\" yMax=\"436.08\">\n",
+            "<line xMin=\"88.79\" yMin=\"389.27\" xMax=\"118.58\" yMax=\"401.23\">\n",
+            "<word xMin=\"88.79\" yMin=\"389.27\" xMax=\"118.58\" yMax=\"401.23\">Bolzenschneider</word>\n",
+            "</line>\n",
+            "<line xMin=\"167.45\" yMin=\"428.07\" xMax=\"206.72\" yMax=\"436.08\">\n",
+            "<word xMin=\"167.45\" yMin=\"428.07\" xMax=\"206.72\" yMax=\"436.08\">Rohrschneider</word>\n",
+            "</line>\n",
+            "</block>\n",
+            "</flow>\n",
+            "</page>\n",
+        );
+        let pages = parse_bbox_layout(xml);
+        let tile = &pages[0][0];
+        assert_eq!(tile.lines.len(), 2);
+        assert!((tile.line_pt[0] - 11.96).abs() < 0.01, "{:?}", tile.line_pt);
+        assert!((tile.line_pt[1] - 8.01).abs() < 0.01, "{:?}", tile.line_pt);
+        // `font_pt` ist das Maximum: In dieser Kachel steht etwas in
+        // Namensgröße, auch wenn die zweite Zeile klein gesetzt ist.
+        assert!((tile.font_pt() - 11.96).abs() < 0.01);
+        assert!(tile.font_pt() >= MIN_NAME_PT);
+    }
+
+    fn kachel(rect: (f64, f64, f64, f64), lines: &[&str], pt: f64) -> Island {
+        Island {
+            x0: rect.0,
+            y0: rect.1,
+            x1: rect.2,
+            y1: rect.3,
+            lines: lines.iter().map(|s| s.to_string()).collect(),
+            line_pt: vec![pt; lines.len()],
+        }
+    }
+
+    /// Umschließung allein sagt nichts — erst die Rechnung im eigenen Text
+    /// macht sie zum Gegenbeweis.
+    #[test]
+    fn enclosure_alone_does_not_break_a_pair() {
+        let preis = kachel(
+            (14.0, 641.0, 453.0, 783.0),
+            &["CHEF SELECT Burger Scheiben", "Je 10x 100 g", "11.49*"],
+            11.96,
+        );
+        let frischkaese = kachel(
+            (167.0, 678.0, 213.0, 738.0),
+            &["EXQUISA Frischkäse", "Je 200/175 g", "1 kg = 5.55/6.34"],
+            11.96,
+        );
+        // Umschlossen **und** die eigene Rechnung sagt 1.11 statt 11.49:
+        // Das Paar fällt.
+        assert!(encloses_wrong_price(&frischkaese, &preis));
+
+        // Gegenprobe 1: dasselbe Produkt neben der Preiskachel statt in ihr.
+        let daneben = kachel(
+            (460.0, 678.0, 500.0, 738.0),
+            &["EXQUISA Frischkäse", "Je 200/175 g", "1 kg = 5.55/6.34"],
+            11.96,
+        );
+        assert!(!encloses_wrong_price(&daneben, &preis));
+
+        // Gegenprobe 2: umschlossen, aber die Rechnung geht auf. Dann ist die
+        // Umschließung genau das, wonach sie aussieht — dieselbe Kachel.
+        let passend = kachel(
+            (167.0, 678.0, 213.0, 738.0),
+            &["CHEF SELECT Burger", "Je 1000 g", "1 kg = 11.49"],
+            11.96,
+        );
+        assert!(!encloses_wrong_price(&passend, &preis));
+
+        // Gegenprobe 3: umschlossen, aber im Produkttext steht nichts zum
+        // Nachrechnen. Ohne Beleg keine Trennung — sonst verlöre jede kurze
+        // Kachel ihren Preis.
+        let ohne_rechnung = kachel((167.0, 678.0, 213.0, 738.0), &["EXQUISA Frischkäse"], 11.96);
+        assert!(!encloses_wrong_price(&ohne_rechnung, &preis));
     }
 
     /// Der Schnitt darf nur dort entstehen, wo der Platz über der Kachel
@@ -3396,7 +3618,7 @@ mod tests {
     }
 
     fn tile_at(x0: f64, y0: f64, x1: f64, y1: f64) -> Island {
-        Island { x0, y0, x1, y1, lines: vec!["Produkt".to_string()] }
+        Island { x0, y0, x1, y1, lines: vec!["Produkt".to_string()], line_pt: vec![8.0] }
     }
 
     fn img_at(x0: f64, y0: f64, x1: f64, y1: f64, file: &str) -> EmbeddedImage {
@@ -3671,6 +3893,46 @@ mod tests {
         }
     }
 
+    /// Messgerät, kein Test: die **Geometrie** jeder Kachel, nicht ihr Text.
+    ///
+    /// Eine Zeile je Kachel, TSV: Seite, Rechteck, Rolle, Zahl der
+    /// Sternpreise, Schriftgröße (Median der Worthöhen), Titel, Rohtext. Damit
+    /// lässt sich außerhalb von Rust nachrechnen, was der Text nicht hergibt —
+    /// ob eine Kachel in einer anderen liegt, ob über ihr eine größere
+    /// Überschrift steht, ob sie einen eigenen Preis trägt.
+    #[test]
+    #[ignore = "Messgerät — braucht LIDL_PDF mit lokaler Prospekt-PDF"]
+    fn measure_tile_geometry() {
+        let pdf = std::env::var("LIDL_PDF").expect("LIDL_PDF fehlt");
+        let xml = run_pdftotext(std::path::Path::new(&pdf), "-bbox-layout").expect("pdftotext");
+        println!("seite\tx0\ty0\tx1\ty1\trolle\tsterne\thoehe\ttitel\ttext");
+        for (p, islands) in parse_bbox_layout(&xml).into_iter().enumerate() {
+            for tile in cluster(islands) {
+                let text = tile.text();
+                let title = tile_title(&tile);
+                let rolle = if PRICE_STAR.is_match(&text) {
+                    "PREIS"
+                } else if is_plausible_title(&title_of(&tile)) && !is_layout_text(&title_of(&tile)) {
+                    "PRODUKT"
+                } else {
+                    "BADGE"
+                };
+                println!(
+                    "{}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{rolle}\t{}\t{:.2}\t{}\t{}",
+                    p + 1,
+                    tile.x0,
+                    tile.y0,
+                    tile.x1,
+                    tile.y1,
+                    PRICE_STAR.find_iter(&text).count(),
+                    tile.font_pt(),
+                    title,
+                    text.chars().take(160).collect::<String>().replace('\t', " "),
+                );
+            }
+        }
+    }
+
     /// Messgerät, kein Test: nur der Textweg, damit die Verwurfsgründe je
     /// Kachel sichtbar werden. Ohne Netz und ohne Rastern, also in Sekunden.
     /// `LIDL_PDF` zeigt auf eine lokale Prospekt-PDF;
@@ -3688,6 +3950,24 @@ mod tests {
             titles.dedup();
             for t in titles {
                 eprintln!("TITEL\t{t}");
+            }
+            // Dieselbe Liste mit Seite und Preis, damit ein Vorher/Nachher
+            // nicht nur zeigt, WELCHE Zeile verschwindet, sondern auch, wer
+            // ihren Preis danach trägt.
+            let mut zeilen: Vec<String> = offers
+                .iter()
+                .map(|o| {
+                    format!(
+                        "S{:02}\t{:.2}\t{}",
+                        o.flyer_page.unwrap_or(0),
+                        o.price.unwrap_or(0.0),
+                        o.title
+                    )
+                })
+                .collect();
+            zeilen.sort();
+            for z in zeilen {
+                eprintln!("ZEILE\t{z}");
             }
         }
         let mit: Vec<&Offer> = offers.iter().filter(|o| o.regular_price.is_some()).collect();
