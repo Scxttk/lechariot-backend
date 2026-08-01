@@ -18,14 +18,6 @@ pub const NONFOOD_KEY: &str = "nonfood";
 
 const DICT_JSON: &str = include_str!("../docs/matching-woerterbuch.json");
 
-// Ketten-Marketing-Kategorien, die klar Non-Food sind.
-const NONFOOD_CAT: &str = r"(?i)mode|style|heim|haus|garten|haustier|tierbedarf|tiernahrung|pflanzen|angeln|elektro|medien|kinderzimmer|wäschepflege|schulstart|kochen-und-grillen|drogerie|spielzeug|alltagshelfer|technik|spielwaren|baumarkt|multimedia|bekleidung|schuhe|camping|auto|buero|non.?food";
-
-// Non-Food-Begriffe im Titel (fängt Non-Food in Food-Kategorien wie „Wochenangebote").
-const FOOD_CAT: &str = r"(?i)obst|gemüse|fleisch|geflügel|wurst|molkerei|fette|getränke|feinkost|konserven|kaffee|tee|süßwaren|knabber|grundnahrung|fisch|bäckerei|backwaren|tiefkühl";
-
-const NONFOOD_TERMS: &str = r"(?i)lichterkette|lampion|wäschest|wäscheklammer|wäschekorb|kettensäge|akku|werkzeug|kinderbuch|spielzeug|rosen\b|blumen|pflanze|socken|shorts|shirt|cap\b|hose|schuhe|handtuch|bettwäsche|pfannen?\b|topf\b|löffel|messer|grill\b|kohle|batterie|lampe|leuchte|katzen|hunde|tiernahrung|nassfutter|trockenfutter|snack für|rasenkanten|solar|deko|kissen|matratze|drucker|kopfhörer|wc-|reiniger|megaperls|oxi action|schreibwaren|mikrofon|duschregal|sonnensegel|wäscheparf|karaoke|trinkzubehör|wäschetrockner|weißer riese|sonnenspray|duftspüler|sonnencreme|feuchttücher|servietten|haushaltstücher|klumpstreu|geschirrtücher|platzset|schlafsack|fusselrolle|bügeleisen|glasschüssel|lautsprecher|geräusche-box|fliegengitter|kajak|husarenknöpfchen|lavendel|bilderbuch|wecker|hairstyler|bastelkoffer|kochgeschirr|grillplatte|boombox|fliegenfalle|mottenabwehr|badvorleger|schrubber|kosmetikspiegel|shorty|plaid|fototafel|komfort-bh|pantoletten|spannbetttuch|küchentücher|sneaker|hoodie|bodyspray|deospray|sonnenschutz|dutch oven|gläsersortiment|sonnenschirm|tischdecke|fleece|wellnessbürste|maniküre|pediküre|teppich|taillenslip|haftcreme|wasserballon|corega|axe ";
-
 // Tokens, bei denen Suffix-Matching generell verboten ist (falsche Komposita).
 const SUFFIX_STOP: &[&str] = &[
     "reis", "preis", "schwein", "schweine", "kreis", "eis", "wein", "hackfleisch", "gehacktes",
@@ -103,14 +95,19 @@ fn dict() -> &'static Dict {
                 Some((b, key))
             })
             .collect();
-        // Regexe kommen aus der JSON (eine Quelle mit der Python-Referenz);
-        // die Konstanten sind nur Fallback für alte JSON-Stände. Python-
-        // Patterns tragen kein eingebettetes (?i), daher hier ergänzen.
-        let rx = |field: &str, fallback: &str| -> Regex {
-            match v[field].as_str() {
-                Some(p) => Regex::new(&format!("(?i){p}")).unwrap(),
-                None => Regex::new(fallback).unwrap(),
-            }
+        // Regexe kommen aus der JSON — eine Quelle mit der Python-Referenz.
+        // Python-Patterns tragen kein eingebettetes (?i), daher hier ergänzen.
+        //
+        // Fehlt ein Feld, bricht das ab, statt still auf eine Konstante
+        // zurückzufallen. Die Fallbacks standen bis zum 2026-08-01 hier und
+        // waren um 46 Kategorie- und 180 Titelmuster ärmer als die JSON — ein
+        // umbenannter Schlüssel hätte den Filter halbiert, ohne dass irgendwo
+        // etwas fehlgeschlagen wäre.
+        let rx = |field: &str| -> Regex {
+            let pattern = v[field]
+                .as_str()
+                .unwrap_or_else(|| panic!("matching-woerterbuch.json: Feld `{field}` fehlt"));
+            Regex::new(&format!("(?i){pattern}")).unwrap()
         };
         // Fehlt die Sektion (alter JSON-Stand), bleibt die Zuordnung leer und
         // das Verhalten ist exakt das vor dieser Regel.
@@ -127,9 +124,9 @@ fn dict() -> &'static Dict {
             terms,
             categories,
             brands,
-            nonfood_cat: rx("nonfood_cat", NONFOOD_CAT),
-            nonfood_terms: rx("nonfood_terms", NONFOOD_TERMS),
-            food_cat: rx("food_cat", FOOD_CAT),
+            nonfood_cat: rx("nonfood_cat"),
+            nonfood_terms: rx("nonfood_terms"),
+            food_cat: rx("food_cat"),
         }
     })
 }
@@ -719,7 +716,7 @@ mod tests {
         // Warengruppen der Ketten, die klar Non-Food sind und bisher in den
         // Lebensmitteln standen. Über 11 Regionen gemessen: E-Bikes,
         // Staubsauger, Unterwäsche, Geschirr, Batterien, Nähmaschinen.
-        // `FOOD_CAT` sticht weiterhin — deshalb die Gegenproben unten.
+        // Das Food-Veto sticht weiterhin — deshalb die Gegenproben unten.
         for (titel, kat) in [
             ("FISCHER E-MTB Montis 2.2 29 Zoll", "E-Bikes"),
             ("Bodenstaubsauger", "Reinigungsgeräte"),
@@ -811,6 +808,88 @@ mod tests {
         // Gegenproben: Der Filter darf nichts Essbares mitnehmen.
         assert_eq!(keys("Kerrygold Original Irische Butter"), vec!["butter"]);
         assert_eq!(keys("Speisekartoffeln festkochend"), vec!["kartoffeln"]);
+    }
+
+    /// **Das Food-Veto greift auf dem Wort, nicht auf der Zeichenkette**
+    /// (2026-08-01).
+    ///
+    /// Das Veto gibt es, weil Kauflands Obsttheke „Obst, Gemüse, Pflanzen"
+    /// heißt und sonst über „Pflanzen" komplett herausflöge. Es kippte aber
+    /// auch andersherum: In „Elektro, Kaffeemaschinen" trifft `nonfood_cat`
+    /// das „Elektro" — und `kaffee` als Teilzeichenkette von „Kaffeemaschinen"
+    /// legte sein Veto ein. Ein Kaffeevollautomat, dessen Titel das Wort nicht
+    /// nennt, fiel damit durch in die normale Suche.
+    ///
+    /// **Auf dem 11-Regionen-Korpus ändert das null Zeilen** — dort ist
+    /// „Obst, Gemüse, Pflanzen" die einzige Kategorie, in der beide Muster
+    /// treffen. Eine schlafende Lücke, kein gemessener Ertrag; dieser Test ist
+    /// der einzige Ort, an dem sie sichtbar bleibt.
+    #[test]
+    fn food_veto_greift_nur_auf_dem_ganzen_wort() {
+        for kategorie in ["Elektro, Kaffeemaschinen", "Haushalt: Kaffeemaschinen"] {
+            assert_eq!(
+                match_keys("SKV 1200 A1", None, Some(kategorie)),
+                vec![NONFOOD_KEY],
+                "{kategorie} ist keine Lebensmittel-Warengruppe"
+            );
+        }
+        // Gegenproben: Das Veto muss bleiben, wo es gebaut wurde.
+        assert_eq!(
+            match_keys("Dtsch. Zwetschgen, lose", None, Some("Obst, Gemüse, Pflanzen")),
+            vec!["pfirsich"]
+        );
+        assert!(match_keys("Jacobs Krönung", None, Some("Kaffee, Tee, Süßwaren"))
+            .contains(&"kaffee".to_string()));
+        assert!(match_keys("Dallmayr prodomo", None, Some("Kaffee"))
+            .contains(&"kaffee".to_string()));
+    }
+
+    /// **Drogerie-Grundbedarf ist nicht `nonfood`** (Runde 2026-08-01).
+    ///
+    /// Am 11-Regionen-Korpus gemessen: 28 Produkte bekamen zum ersten Mal ein
+    /// Tag, ungetaggt 247 → 219 (7,7 % → 6,9 %), **keine einzige Food-Zeile
+    /// wurde zu Non-Food umgestuft**.
+    ///
+    /// Die Trennung ist die eigentliche Entscheidung: Wer „Zahncreme" auf die
+    /// Liste schreibt, will einen Treffer. `nonfood` hieße, das Produkt aus der
+    /// Suche zu werfen — deshalb geht der Grundbedarf zu `windeln/hygiene`, und
+    /// nur das, was niemand auf einen Einkaufszettel schreibt, wird Non-Food.
+    /// Zwei Colgate-Zeilen wandern dabei bewusst von `nonfood` nach
+    /// `windeln/hygiene`: Sie waren vorher unfindbar.
+    #[test]
+    fn drogerie_grundbedarf_bleibt_findbar() {
+        for titel in [
+            "Listerine Mundspülung",
+            "elmex oder aronal Zahncreme",
+            "fit Geschirrspülmittel",
+            "Calgon Wasserenthärter",
+            "Tesori d‘Oriente Weichspüler",
+            "COLGATE Mundspülung*",
+        ] {
+            assert_eq!(keys(titel), vec!["windeln/hygiene"], "{titel} muss auffindbar bleiben");
+        }
+
+        for titel in [
+            "Treteimer \"Paso\"",
+            "Wäschesammler",
+            "Vorlesebuch",
+            "Elektrische Zitruspresse",
+            "Gaming Zubehör",
+            "Silikonformen für Heißluftfritteusen",
+            "Damen Shaping-Short oder Slip",
+            "GÖTZBURG Nachtwäsche*",
+            "All-in-1-Pods Color",
+            "Feuchte Allzwecktücher XXL",
+        ] {
+            assert_eq!(keys(titel), vec![NONFOOD_KEY], "{titel} ist kein Lebensmittel");
+        }
+
+        // Gegenproben: nichts Essbares mitnehmen — und „Büro" (Kaufland
+        // schreibt es mit ü, die Liste kannte nur „buero") ist keine
+        // Lebensmittelgruppe.
+        assert_eq!(keys("Kerrygold Original Irische Butter"), vec!["butter"]);
+        assert_eq!(keys("Speisekartoffeln festkochend"), vec!["kartoffeln"]);
+        assert_eq!(match_keys("Basics für die Schule", None, Some("Büro")), vec![NONFOOD_KEY]);
     }
 
     #[test]
