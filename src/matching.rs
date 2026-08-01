@@ -547,6 +547,31 @@ mod tests {
         assert_eq!(keys("GOLDEN TOAST Toastbrot*"), vec!["brot"]);
     }
 
+    /// Fünf Lücken im Non-Food-Filter, gemessen am 11-Regionen-Korpus
+    /// (2026-08-01). Sie sind die teuersten Fehler des Wörterbuchs, weil sie
+    /// nicht bloß fehlen, sondern Treffer verschmutzen: **Zwei davon trugen
+    /// vorher `kaffee`** — wer Kaffee suchte, bekam Haarspray und Waschpulver
+    /// angeboten.
+    ///
+    /// „Chrysantheme" stand nur im Plural in der Liste; die vier anderen
+    /// standen gar nicht darin.
+    #[test]
+    fn nonfood_luecken_korpus() {
+        for titel in [
+            "Chrysantheme",
+            "L’Oréal Paris Elnett Haarspray",
+            "Wilkinson Hydro 5 Rasierklingen",
+            "Waschpulver Color",
+            "Lego Set",
+        ] {
+            assert_eq!(keys(titel), vec![NONFOOD_KEY], "{titel} ist kein Lebensmittel");
+        }
+
+        // Gegenproben: Der Filter darf nichts Essbares mitnehmen.
+        assert_eq!(keys("Kerrygold Original Irische Butter"), vec!["butter"]);
+        assert_eq!(keys("Speisekartoffeln festkochend"), vec!["kartoffeln"]);
+    }
+
     #[test]
     fn marken_fallback() {
         assert_eq!(keys("Fruchtzwerge"), vec!["joghurt"]);
