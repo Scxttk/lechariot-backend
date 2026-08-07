@@ -3395,6 +3395,292 @@
    "suffix": [],
    "prefix": [],
    "block": []
+  },
+  "ketchup": {
+   "exact": [
+    "ketchup",
+    "tomatenketchup",
+    "curryketchup"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "mayonnaise": {
+   "exact": [
+    "mayonnaise",
+    "mayo",
+    "remoulade",
+    "aioli"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "salatmayonnaise"
+   ]
+  },
+  "senf": {
+   "exact": [
+    "senf",
+    "dijonsenf",
+    "mittelscharfer senf",
+    "honigsenf"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "senfkörner",
+    "feigensenf"
+   ]
+  },
+  "sojasauce": {
+   "exact": [
+    "sojasauce",
+    "sojasoße",
+    "teriyaki",
+    "kikkoman"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "pesto": {
+   "exact": [
+    "pesto",
+    "pesto verde",
+    "pesto rosso"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "hummus": {
+   "exact": [
+    "hummus",
+    "humus",
+    "kichererbsencreme"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "grillsauce": {
+   "exact": [
+    "bbq sauce",
+    "barbecuesauce",
+    "grillsauce",
+    "steaksauce"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "ingwer": {
+   "exact": [
+    "ingwer",
+    "ingwerknolle",
+    "galgant"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "ingwertee",
+    "ingwershot"
+   ]
+  },
+  "koriander": {
+   "exact": [
+    "koriander",
+    "korianderkraut",
+    "kerbel",
+    "liebstöckel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "pfeffer": {
+   "exact": [
+    "pfeffer",
+    "schwarzer pfeffer",
+    "cayennepfeffer"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "pfefferminze",
+    "pfefferminztee",
+    "paprikapulver",
+    "peperoni",
+    "pfefferoni"
+   ]
+  },
+  "paprikapulver": {
+   "exact": [
+    "paprikapulver",
+    "paprikagewürz",
+    "rosenpaprika"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "chili": {
+   "exact": [
+    "chilipulver",
+    "chiliflocken",
+    "sambal",
+    "harissa"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "chili paprika"
+   ]
+  },
+  "babynahrung": {
+   "exact": [
+    "babynahrung",
+    "babybrei",
+    "säuglingsnahrung",
+    "folgemilch",
+    "beikost"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "maultaschen": {
+   "exact": [
+    "maultaschen",
+    "ravioli",
+    "tortellini",
+    "tortelloni"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "wraps": {
+   "exact": [
+    "wrap",
+    "wraps",
+    "tortillafladen",
+    "fajita"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "hamburger": {
+   "exact": [
+    "hamburger",
+    "burgerpatty",
+    "frikadellen",
+    "buletten"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "hamburgerbrötchen"
+   ]
+  },
+  "hartkäse": {
+   "exact": [
+    "hartkäse",
+    "käseecken",
+    "käsestück",
+    "manchego",
+    "pecorino"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kräuterfrischkäse": {
+   "exact": [
+    "kräuterfrischkäse",
+    "frischkäse",
+    "doppelrahmstufe"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "panettone": {
+   "exact": [
+    "panettone",
+    "christstollen",
+    "stollen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "getreideriegel": {
+   "exact": [
+    "getreideriegel",
+    "haferriegel",
+    "fruchtriegel",
+    "energieriegel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "trüffel": {
+   "exact": [
+    "trüffel",
+    "trüffelöl",
+    "trüffelbutter"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "trüffelpralinen"
+   ]
+  },
+  "erdnussbutter": {
+   "exact": [
+    "erdnussbutter",
+    "erdnussmus"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kokoswasser": {
+   "exact": [
+    "kokoswasser",
+    "kokosnusswasser"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "pfefferminztee": {
+   "exact": [
+    "pfefferminztee",
+    "kräutertee",
+    "früchtetee",
+    "fencheltee",
+    "kamillentee"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "weißwein": {
+   "exact": [
+    "weißwein",
+    "weisswein",
+    "riesling",
+    "chardonnay",
+    "grauburgunder"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
   }
  },
  "marken": {

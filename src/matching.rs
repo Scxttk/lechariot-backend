@@ -339,7 +339,12 @@ mod tests {
         // Ein Titel-Treffer wird nie überstimmt, und eine Blockliste auch
         // nicht: „Erdnussbutter" steht auf der Blockliste von „butter" und
         // darf sie nicht über die Kategorie zurückbekommen.
-        assert!(keys_cat("Erdnussbutter", "Butter").is_empty());
+        //
+        // **Die Absicht war „keine Butter", nicht „gar nichts".** Bis Tranche
+        // 7 gab es keinen Begriff für Erdnussbutter, und leer war die einzige
+        // Art, das hinzuschreiben. Jetzt gibt es einen — und die Sperre bei
+        // `butter` gilt unverändert.
+        assert_eq!(keys_cat("Erdnussbutter", "Butter"), vec!["erdnussbutter"]);
         // Und die Gegenprobe zur Gegenprobe: echte Butter behält ihren Tag,
         // auch ohne Kategorie.
         assert_eq!(keys("Deutsche Markenbutter"), vec!["butter"]);
@@ -371,7 +376,9 @@ mod tests {
         // Kategorie „Nüsse & Trockenfrüchte" war die feinste Antwort. Eine
         // Cranberry ist keine Nuss — jetzt sagt der Fall das auch.
         assert_eq!(keys_cat("Getrocknete Cranberries 200 g", "Nüsse & Trockenfrüchte"), vec!["preiselbeeren"]);
-        assert_eq!(keys_cat("Rind Hamburger 400 g", "Rindfleisch"), vec!["rind"]);
+        // Seit Tranche 7 gibt es `hamburger` — die Frikadelle steht neben
+        // dem groben „rind", nicht statt seiner.
+        assert_eq!(keys_cat("Rind Hamburger 400 g", "Rindfleisch"), vec!["rind", "hamburger"]);
 
         // Gegenprobe 1: die Kategorie bleibt der LETZTE Ausweg. „Plus Pack
         // 156 g, Chili Paprika" steht auch unter *Schnittkäse* und behält
@@ -941,6 +948,27 @@ mod tests {
         assert_eq!(keys("Kerrygold Original Irische Butter"), vec!["butter"]);
         assert_eq!(keys("Speisekartoffeln festkochend"), vec!["kartoffeln"]);
         assert_eq!(match_keys("Basics für die Schule", None, Some("Büro")), vec![NONFOOD_KEY]);
+    }
+
+    /// **Tranche 7: die letzten Lebensmittel** (2026-08-07).
+    ///
+    /// 25 Begriffe — damit ist Bring!s Lebensmittelteil weitgehend
+    /// abgedeckt. Darunter `erdnussbutter`, das in Tranche 1 **zurückgezogen**
+    /// werden musste: Die Synonyme „peanut butter" und „nut butter" rissen
+    /// „KORO Bio-Nut-Butter-Cups" mit, eine Süßware. Ohne sie trägt der
+    /// Begriff, und der Testermeldung vom 31.07. geschieht nichts.
+    #[test]
+    fn artikelzeichen_tranche_7() {
+        assert_eq!(keys("Erdnussmus crunchy 500 g"), vec!["erdnussbutter"]);
+        // Die Meldung vom 31.07. bleibt erfüllt.
+        assert!(keys("KORO Bio-Nut-Butter-Cups").is_empty());
+
+        // Feiner neben dem groben.
+        assert_eq!(keys_cat("Rind Hamburger 400 g", "Rindfleisch"), vec!["rind", "hamburger"]);
+
+        // Die Sperren gegen die nahen Verwandten.
+        assert!(!keys("Pfefferminztee 20 Beutel").contains(&"pfeffer".to_string()));
+        assert!(!keys("Paprikapulver edelsüß").contains(&"pfeffer".to_string()));
     }
 
     /// **Tranche 6: der Rest aus Obst & Gemüse** (2026-08-07).
