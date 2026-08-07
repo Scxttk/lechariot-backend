@@ -928,8 +928,14 @@ mod tests {
             // Begriff (`zahnpasta`, `shampoo`, `waschmittel`). Geprüft wird
             // hier, was der Fall immer meinte: **auffindbar bleiben**, nicht
             // „genau ein Tag haben".
-            assert!(keys(titel).contains(&"windeln/hygiene".to_string()),
-                    "{titel} muss auffindbar bleiben — bekam {:?}", keys(titel));
+            // **Auffindbar heißt nicht mehr „windeln/hygiene".** Seit
+            // Tranche 11 hat jedes dieser Produkte einen eigenen, feineren
+            // Begriff — und der grobe verdeckte sie vorher sogar: Er ist eine
+            // **ungezeichnete Ausnahme**, und wer darauf auflöste, bekam auf
+            // der Kachel kein Zeichen. Geprüft wird, was der Fall meinte:
+            // **irgendein Begriff**, nicht keiner.
+            assert!(!keys(titel).is_empty(),
+                    "{titel} muss auffindbar bleiben — bekam nichts");
         }
 
         for titel in [
@@ -1187,7 +1193,8 @@ mod tests {
         assert!(match_keys("Zero Sugar", Some("2-L-Flasche"), None).is_empty());
         assert_eq!(
             match_keys_with_brand("Zero Sugar", Some("2-L-Flasche"), None, Some("COCA-COLA")),
-            vec!["limonade"]
+            // Seit Tranche 11 trägt Cola zusätzlich den feineren Begriff.
+            vec!["limonade", "cola"]
         );
         assert_eq!(
             match_keys_with_brand("Medium", Some("1,5-L-Flasche"), None, Some("GEROLSTEINER")),

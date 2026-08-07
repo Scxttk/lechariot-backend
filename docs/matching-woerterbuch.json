@@ -1544,28 +1544,14 @@
   "windeln/hygiene": {
    "exact": [
     "windeln",
-    "toilettenpapier",
-    "küchenrolle",
-    "taschentücher",
-    "zahnpasta",
-    "duschgel",
-    "shampoo",
-    "deo",
-    "deodorant",
-    "waschmittel",
-    "spülmittel",
     "vanish",
     "lenor",
     "zewa",
-    "mundspülung",
-    "zahncreme",
-    "weichspüler",
     "wasserenthärter",
     "calgon"
    ],
    "suffix": [
     "papier",
-    "waschmittel",
     "spülmittel"
    ],
    "prefix": [],
@@ -4536,6 +4522,73 @@
     "schneckenkorn",
     "unkrautvernichter",
     "insektizid"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "lippenpflege": {
+   "exact": [
+    "lippenpflege",
+    "lippenbalsam",
+    "labello",
+    "lippenstift pflege"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "rindfleisch": {
+   "exact": [
+    "rindfleisch",
+    "kalbfleisch",
+    "wildfleisch",
+    "gulaschfleisch",
+    "grillfleisch"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "naturtofu": {
+   "exact": [
+    "naturtofu",
+    "seidentofu",
+    "räuchertofu"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "speisemöhren": {
+   "exact": [
+    "speisemöhren",
+    "bundmöhren",
+    "karottensaft"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "fruchtsaft": {
+   "exact": [
+    "fruchtsaft",
+    "mehrfruchtsaft",
+    "direktsaft",
+    "nektar"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "cola": {
+   "exact": [
+    "cola",
+    "cola light",
+    "cola zero",
+    "spezi",
+    "koffeingetränk",
+    "energydrink"
    ],
    "suffix": [],
    "prefix": [],

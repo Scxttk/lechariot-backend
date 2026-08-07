@@ -182,6 +182,14 @@ V = {
  "schoten/hülsen":(["kaiserschoten","zuckerschoten","edamame","bohnen grün"],["schoten"],[]),
  "protein/fitness":(["proteinriegel","high protein","proteindrink","proteinpulver","whey","trinkmahlzeiten","trinkmahlzeit"],[],[]),
 
+ # --- Tranche 11: die letzten Lücken (2026-08-07) --------------------------
+ "lippenpflege":(["lippenpflege","lippenbalsam","labello","lippenstift pflege"],[],[]),
+ "rindfleisch":(["rindfleisch","kalbfleisch","wildfleisch","gulaschfleisch","grillfleisch"],[],[]),
+ "naturtofu":(["naturtofu","seidentofu","räuchertofu"],[],[]),
+ "speisemöhren":(["speisemöhren","bundmöhren","karottensaft"],[],[]),
+ "fruchtsaft":(["fruchtsaft","mehrfruchtsaft","direktsaft","nektar"],[],[]),
+ "cola":(["cola","cola light","cola zero","spezi","koffeingetränk","energydrink"],[],[]),
+
  # --- Tranche 10: der Rest (2026-08-07) ------------------------------------
  "haargel":(["haargel","haarspray","haaröl","haarwachs","haarschaum","bartöl"],[],[]),
  "gesichtsmaske":(["gesichtsmaske","peeling","scrub","gesichtswasser","serum"],[],[]),
