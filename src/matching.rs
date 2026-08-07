@@ -924,7 +924,12 @@ mod tests {
             "Tesori d‘Oriente Weichspüler",
             "COLGATE Mundspülung*",
         ] {
-            assert_eq!(keys(titel), vec!["windeln/hygiene"], "{titel} muss auffindbar bleiben");
+            // Seit Tranche 8 tragen einige davon zusätzlich einen feineren
+            // Begriff (`zahnpasta`, `shampoo`, `waschmittel`). Geprüft wird
+            // hier, was der Fall immer meinte: **auffindbar bleiben**, nicht
+            // „genau ein Tag haben".
+            assert!(keys(titel).contains(&"windeln/hygiene".to_string()),
+                    "{titel} muss auffindbar bleiben — bekam {:?}", keys(titel));
         }
 
         for titel in [
@@ -948,6 +953,29 @@ mod tests {
         assert_eq!(keys("Kerrygold Original Irische Butter"), vec!["butter"]);
         assert_eq!(keys("Speisekartoffeln festkochend"), vec!["kartoffeln"]);
         assert_eq!(match_keys("Basics für die Schule", None, Some("Büro")), vec![NONFOOD_KEY]);
+    }
+
+    /// **Tranche 8: Haushalt und Pflege** (2026-08-07).
+    ///
+    /// 28 Begriffe — und damit fällt der Riegel, an dem Non-Food seit dem
+    /// 06.08. hing. **Er hielt von selbst, das war nachzumessen statt zu
+    /// glauben:** `windeln/hygiene` ist längst ein Non-Food-Begriff, und
+    /// `NONFOOD_CAT`/`NONFOOD_TERMS` sortieren echte Nicht-Lebensmittel
+    /// weiter vorher aus. Von 669 Angeboten wechselten **zwei** die Seite —
+    /// Zahnbürsten und Mundspülung von „nonfood" zu `zahnpasta`, und das ist
+    /// richtig: Wer Zahnpasta aufschreibt, will genau die Angebote sehen.
+    ///
+    /// Was am 06.08. entschieden wurde, bleibt unberührt: Die Aktionsware
+    /// fliegt in der **Anzeige** aus den Top-Angeboten (`Categories
+    /// .middleAisle`), nicht im Wörterbuch.
+    #[test]
+    fn artikelzeichen_tranche_8() {
+        // Der Gewinn: Drogerie-Grundbedarf trägt jetzt einen genauen Begriff.
+        assert!(keys("COLGATE Zahnbürsten*").contains(&"zahnpasta".to_string()));
+
+        // Der Riegel hält: echte Nicht-Lebensmittel bleiben aussortiert.
+        assert_eq!(match_keys("Bosch Staubsauger", None, Some("Elektro")), vec![NONFOOD_KEY]);
+        assert_eq!(keys("Akku-Bohrhammer"), vec![NONFOOD_KEY]);
     }
 
     /// **Tranche 7: die letzten Lebensmittel** (2026-08-07).

@@ -3681,6 +3681,331 @@
    "suffix": [],
    "prefix": [],
    "block": []
+  },
+  "müllbeutel": {
+   "exact": [
+    "müllbeutel",
+    "müllsäcke",
+    "müllsack",
+    "gefrierbeutel",
+    "abfallbeutel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "alufolie": {
+   "exact": [
+    "alufolie",
+    "frischhaltefolie",
+    "backpapier",
+    "butterbrotpapier"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "geschirrtabs": {
+   "exact": [
+    "geschirrtabs",
+    "spülmaschinentabs",
+    "klarspüler",
+    "geschirrsalz"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "putzlappen": {
+   "exact": [
+    "putzlappen",
+    "schwamm",
+    "topfschwamm",
+    "mikrofasertuch",
+    "staubwedel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "allzweckreiniger": {
+   "exact": [
+    "allzweckreiniger",
+    "glasreiniger",
+    "badreiniger",
+    "abflussreiniger",
+    "wc-reiniger",
+    "toilettenreiniger",
+    "entkalker",
+    "essigessenz"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "servietten": {
+   "exact": [
+    "serviette",
+    "servietten",
+    "papierservietten"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kerzen": {
+   "exact": [
+    "kerze",
+    "kerzen",
+    "teelichter",
+    "christbaumkerzen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "streichhölzer": {
+   "exact": [
+    "streichhölzer",
+    "feuerzeug",
+    "grillanzünder"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "batterien": {
+   "exact": [
+    "batterie",
+    "batterien",
+    "knopfzelle",
+    "akkus"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "glühbirne": {
+   "exact": [
+    "glühbirne",
+    "glühlampe",
+    "leuchtmittel",
+    "led-lampe"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "strohhalme": {
+   "exact": [
+    "strohhalm",
+    "strohhalme",
+    "trinkhalme",
+    "spieße",
+    "zahnstocher"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "geschenkpapier": {
+   "exact": [
+    "geschenkpapier",
+    "geschenkband",
+    "geschenkschleife",
+    "tischbombe"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "stifte": {
+   "exact": [
+    "kugelschreiber",
+    "bleistift",
+    "filzstift",
+    "marker",
+    "textmarker",
+    "radiergummi",
+    "spitzer"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "notizblock": {
+   "exact": [
+    "notizblock",
+    "klebezettel",
+    "briefumschläge",
+    "schreibblock"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "seife": {
+   "exact": [
+    "seife",
+    "handseife",
+    "flüssigseife",
+    "kernseife"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "duschgel": {
+   "exact": [
+    "duschgel",
+    "badezusatz",
+    "badesalz",
+    "schaumbad"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "shampoo": {
+   "exact": [
+    "shampoo",
+    "haarspülung",
+    "conditioner",
+    "haarkur"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "deo": {
+   "exact": [
+    "deo",
+    "deodorant",
+    "rolldeo",
+    "deoroller",
+    "deostick"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "zahnpasta": {
+   "exact": [
+    "zahnpasta",
+    "zahncreme",
+    "zahnbürste",
+    "zahnseide",
+    "mundspülung"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "handcreme": {
+   "exact": [
+    "handcreme",
+    "bodylotion",
+    "gesichtscreme",
+    "körperlotion",
+    "peeling"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "sonnencreme": {
+   "exact": [
+    "sonnencreme",
+    "sonnenmilch",
+    "sonnenspray",
+    "aftersun"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "rasierer": {
+   "exact": [
+    "rasierer",
+    "rasierklingen",
+    "rasierschaum",
+    "rasiergel",
+    "rasierwasser"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "wattepads": {
+   "exact": [
+    "wattepads",
+    "wattestäbchen",
+    "kosmetiktücher",
+    "abschminktücher"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "pflaster": {
+   "exact": [
+    "pflaster",
+    "blasenpflaster",
+    "verband",
+    "kompressen",
+    "mullbinde"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "schmerzmittel": {
+   "exact": [
+    "schmerzmittel",
+    "kopfschmerztabletten",
+    "hustenbonbons",
+    "nasenspray",
+    "erkältungsmittel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "vitamine": {
+   "exact": [
+    "vitamine",
+    "vitamintabletten",
+    "magnesium",
+    "nahrungsergänzung"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "tampons": {
+   "exact": [
+    "tampon",
+    "tampons",
+    "binden",
+    "slipeinlagen",
+    "monatshygiene"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "makeup": {
+   "exact": [
+    "makeup",
+    "lippenstift",
+    "nagellack",
+    "wimperntusche",
+    "mascara",
+    "puder"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
   }
  },
  "marken": {

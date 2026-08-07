@@ -182,6 +182,44 @@ V = {
  "schoten/hülsen":(["kaiserschoten","zuckerschoten","edamame","bohnen grün"],["schoten"],[]),
  "protein/fitness":(["proteinriegel","high protein","proteindrink","proteinpulver","whey","trinkmahlzeiten","trinkmahlzeit"],[],[]),
 
+ # --- Tranche 8: Haushalt und Pflege (2026-08-07) --------------------------
+ #
+ # **Der Riegel, an dem ich Non-Food aufgehalten hatte, hält von selbst.**
+ # `windeln/hygiene` ist längst ein Non-Food-Begriff — Zahnpasta, Küchenrolle
+ # und Waschmittel sind darüber auffindbar —, und `NONFOOD_CAT`/`NONFOOD_TERMS`
+ # sortieren echte Nicht-Lebensmittel weiter vorher aus (Staubsauger bleibt
+ # nonfood). Ein Begriff auf der Liste heißt also nicht automatisch ein Posten
+ # im Angebotsvergleich. Nachgemessen, nicht geglaubt: siehe den Diff-Lauf im
+ # Commit.
+ "müllbeutel":(["müllbeutel","müllsäcke","müllsack","gefrierbeutel","abfallbeutel"],[],[]),
+ "alufolie":(["alufolie","frischhaltefolie","backpapier","butterbrotpapier"],[],[]),
+ "geschirrtabs":(["geschirrtabs","spülmaschinentabs","klarspüler","geschirrsalz"],[],[]),
+ "putzlappen":(["putzlappen","schwamm","topfschwamm","mikrofasertuch","staubwedel"],[],[]),
+ "allzweckreiniger":(["allzweckreiniger","glasreiniger","badreiniger","abflussreiniger","wc-reiniger","toilettenreiniger","entkalker","essigessenz"],[],[]),
+ "servietten":(["serviette","servietten","papierservietten"],[],[]),
+ "kerzen":(["kerze","kerzen","teelichter","christbaumkerzen"],[],[]),
+ "streichhölzer":(["streichhölzer","feuerzeug","grillanzünder"],[],[]),
+ "batterien":(["batterie","batterien","knopfzelle","akkus"],[],[]),
+ "glühbirne":(["glühbirne","glühlampe","leuchtmittel","led-lampe"],[],[]),
+ "strohhalme":(["strohhalm","strohhalme","trinkhalme","spieße","zahnstocher"],[],[]),
+ "geschenkpapier":(["geschenkpapier","geschenkband","geschenkschleife","tischbombe"],[],[]),
+ "stifte":(["kugelschreiber","bleistift","filzstift","marker","textmarker","radiergummi","spitzer"],[],[]),
+ "notizblock":(["notizblock","klebezettel","briefumschläge","schreibblock"],[],[]),
+ "seife":(["seife","handseife","flüssigseife","kernseife"],[],[]),
+ "duschgel":(["duschgel","badezusatz","badesalz","schaumbad"],[],[]),
+ "shampoo":(["shampoo","haarspülung","conditioner","haarkur"],[],[]),
+ "deo":(["deo","deodorant","rolldeo","deoroller","deostick"],[],[]),
+ "zahnpasta":(["zahnpasta","zahncreme","zahnbürste","zahnseide","mundspülung"],[],[]),
+ "handcreme":(["handcreme","bodylotion","gesichtscreme","körperlotion","peeling"],[],[]),
+ "sonnencreme":(["sonnencreme","sonnenmilch","sonnenspray","aftersun"],[],[]),
+ "rasierer":(["rasierer","rasierklingen","rasierschaum","rasiergel","rasierwasser"],[],[]),
+ "wattepads":(["wattepads","wattestäbchen","kosmetiktücher","abschminktücher"],[],[]),
+ "pflaster":(["pflaster","blasenpflaster","verband","kompressen","mullbinde"],[],[]),
+ "schmerzmittel":(["schmerzmittel","kopfschmerztabletten","hustenbonbons","nasenspray","erkältungsmittel"],[],[]),
+ "vitamine":(["vitamine","vitamintabletten","magnesium","nahrungsergänzung"],[],[]),
+ "tampons":(["tampon","tampons","binden","slipeinlagen","monatshygiene"],[],[]),
+ "makeup":(["makeup","lippenstift","nagellack","wimperntusche","mascara","puder"],[],[]),
+
  # --- Tranche 7: die letzten Lebensmittel (2026-08-07) ---------------------
  "ketchup":(["ketchup","tomatenketchup","curryketchup"],[],[]),
  "mayonnaise":(["mayonnaise","mayo","remoulade","aioli"],[],["salatmayonnaise"]),
