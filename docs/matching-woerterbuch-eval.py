@@ -182,6 +182,39 @@ V = {
  "schoten/hülsen":(["kaiserschoten","zuckerschoten","edamame","bohnen grün"],["schoten"],[]),
  "protein/fitness":(["proteinriegel","high protein","proteindrink","proteinpulver","whey","trinkmahlzeiten","trinkmahlzeit"],[],[]),
 
+ # --- Tranche 9: Baumarkt, Garten, Tierbedarf (2026-08-07) -----------------
+ #
+ # Der Rest von Bring!s Katalog. Hier steht der NONFOOD-Riegel besonders dicht
+ # davor (Rasenmäher, Heckenschere und Schrauben sind in `NONFOOD_TERMS`) —
+ # ein Begriff macht sie **auf der Liste** auffindbar, holt sie aber nicht in
+ # den Angebotsvergleich zurück.
+ "toilettenpapier":(["toilettenpapier","klopapier","küchenrolle","küchentücher","taschentücher","feuchttücher"],[],[]),
+ "waschmittel":(["waschmittel","weichspüler","fleckenentferner","colorwaschmittel","vollwaschmittel"],[],[]),
+ "spülmittel":(["spülmittel","handspülmittel","geschirrspülmittel"],[],[]),
+ "besteck":(["besteck","gabel","messer set","löffel set","einweggeschirr"],[],[]),
+ "pfanne":(["pfanne","bratpfanne","topf","kochtopf","schüssel"],[],[]),
+ "backform":(["backform","kuchenform","ausstechformen","muffinform","springform"],[],[]),
+ "küchenhelfer":(["schneebesen","schöpfkelle","pfannenwender","saftpresse","backpinsel","backpalette"],[],[]),
+ "schere":(["schere","küchenschere","pinzette","nagelschere"],[],[]),
+ "handschuhe":(["handschuhe","putzhandschuhe","gartenhandschuhe","einweghandschuhe"],[],[]),
+ "luftballon":(["luftballon","luftballons","ballon","partydeko","lametta","girlande"],[],[]),
+ "taschenlampe":(["taschenlampe","stirnlampe","handleuchte"],[],[]),
+ "büroklammern":(["büroklammern","locher","tacker","tintenpatronen","klebeband"],[],[]),
+ "hundefutter":(["hundefutter","hundesnack","hundeleckerli","nassfutter hund"],[],[]),
+ "katzenfutter":(["katzenfutter","katzensnack","katzenstreu","nassfutter katze"],[],[]),
+ "vogelfutter":(["vogelfutter","fischfutter","meisenknödel","nagerfutter"],[],[]),
+ "blumenerde":(["blumenerde","pflanzerde","substrat","setzholz","setzlinge","sämereien","saatgut"],[],[]),
+ "blumentopf":(["blumentopf","übertöpfe","übertopf","pflanzkübel","gießkanne"],[],[]),
+ "zimmerpflanze":(["zimmerpflanze","zimmerpflanzen","grünpflanze","topfpflanze","schnittblumen"],[],[]),
+ "gartenwerkzeug":(["schaufel","hacke","harke","rechen","gartenschere","heckenschere","rasenmäher"],[],[]),
+ "schrauben":(["schrauben","nägel","dübel","muttern","unterlegscheiben"],[],[]),
+ "pinsel":(["pinsel","malerpinsel","farbrolle","malerrolle"],[],[]),
+ "streusalz":(["streusalz","auftausalz","schneeketten","splitt"],[],[]),
+ "holzkohle":(["holzkohle","grillkohle","briketts","propangas","grillanzünder holz"],[],[]),
+ "grillzubehör":(["grillzange","grillrost","grillspieße","alugrillschale"],[],[]),
+ "sonnenschirm":(["sonnenschirm","sonnensegel","schirmständer"],[],[]),
+ "socken":(["socken","wollsocken","strümpfe","mütze","schal","handschuhe wolle"],[],[]),
+
  # --- Tranche 8: Haushalt und Pflege (2026-08-07) --------------------------
  #
  # **Der Riegel, an dem ich Non-Food aufgehalten hatte, hält von selbst.**

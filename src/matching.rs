@@ -955,6 +955,29 @@ mod tests {
         assert_eq!(match_keys("Basics für die Schule", None, Some("Büro")), vec![NONFOOD_KEY]);
     }
 
+    /// **Tranche 9: Baumarkt, Garten, Tierbedarf** (2026-08-07).
+    ///
+    /// 26 Begriffe, und der NONFOOD-Riegel hält **vollständig**: Von 669
+    /// Angeboten wechselte keines die Seite, die Food-Zahl blieb bei 416.
+    /// Rasenmäher, Heckenschere und Schrauben stehen in `NONFOOD_TERMS` und
+    /// bleiben dort — ein Begriff macht sie **auf der Liste** auffindbar,
+    /// holt sie aber nicht in den Angebotsvergleich zurück. Genau die
+    /// Trennung, die ich für unmöglich gehalten hatte.
+    #[test]
+    fn artikelzeichen_tranche_9() {
+        // Auf der Liste auffindbar …
+        assert_eq!(keys("Gartenschere Bypass"), vec!["gartenwerkzeug"]);
+        // Katzenstreu bleibt `nonfood` — „klumpstreu" steht in NONFOOD_TERMS,
+        // und der Riegel greift **vor** dem Wörterbuch. Das ist genau die
+        // gewünschte Arbeitsteilung, nur an einem Beispiel, das ich falsch
+        // gewählt hatte.
+        assert_eq!(keys("Katzenfutter Adult 400 g"), vec!["katzenfutter"]);
+
+        // … und trotzdem nicht im Vergleich: Der Riegel greift vor dem
+        // Wörterbuch, wo die Kategorie ihn ruft.
+        assert_eq!(match_keys("Rasenmäher 1400 W", None, Some("Baumarkt")), vec![NONFOOD_KEY]);
+    }
+
     /// **Tranche 8: Haushalt und Pflege** (2026-08-07).
     ///
     /// 28 Begriffe — und damit fällt der Riegel, an dem Non-Food seit dem

@@ -4006,6 +4006,312 @@
    "suffix": [],
    "prefix": [],
    "block": []
+  },
+  "toilettenpapier": {
+   "exact": [
+    "toilettenpapier",
+    "klopapier",
+    "küchenrolle",
+    "küchentücher",
+    "taschentücher",
+    "feuchttücher"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "waschmittel": {
+   "exact": [
+    "waschmittel",
+    "weichspüler",
+    "fleckenentferner",
+    "colorwaschmittel",
+    "vollwaschmittel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "spülmittel": {
+   "exact": [
+    "spülmittel",
+    "handspülmittel",
+    "geschirrspülmittel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "besteck": {
+   "exact": [
+    "besteck",
+    "gabel",
+    "messer set",
+    "löffel set",
+    "einweggeschirr"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "pfanne": {
+   "exact": [
+    "pfanne",
+    "bratpfanne",
+    "topf",
+    "kochtopf",
+    "schüssel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "backform": {
+   "exact": [
+    "backform",
+    "kuchenform",
+    "ausstechformen",
+    "muffinform",
+    "springform"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "küchenhelfer": {
+   "exact": [
+    "schneebesen",
+    "schöpfkelle",
+    "pfannenwender",
+    "saftpresse",
+    "backpinsel",
+    "backpalette"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "schere": {
+   "exact": [
+    "schere",
+    "küchenschere",
+    "pinzette",
+    "nagelschere"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "handschuhe": {
+   "exact": [
+    "handschuhe",
+    "putzhandschuhe",
+    "gartenhandschuhe",
+    "einweghandschuhe"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "luftballon": {
+   "exact": [
+    "luftballon",
+    "luftballons",
+    "ballon",
+    "partydeko",
+    "lametta",
+    "girlande"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "taschenlampe": {
+   "exact": [
+    "taschenlampe",
+    "stirnlampe",
+    "handleuchte"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "büroklammern": {
+   "exact": [
+    "büroklammern",
+    "locher",
+    "tacker",
+    "tintenpatronen",
+    "klebeband"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "hundefutter": {
+   "exact": [
+    "hundefutter",
+    "hundesnack",
+    "hundeleckerli",
+    "nassfutter hund"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "katzenfutter": {
+   "exact": [
+    "katzenfutter",
+    "katzensnack",
+    "katzenstreu",
+    "nassfutter katze"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "vogelfutter": {
+   "exact": [
+    "vogelfutter",
+    "fischfutter",
+    "meisenknödel",
+    "nagerfutter"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "blumenerde": {
+   "exact": [
+    "blumenerde",
+    "pflanzerde",
+    "substrat",
+    "setzholz",
+    "setzlinge",
+    "sämereien",
+    "saatgut"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "blumentopf": {
+   "exact": [
+    "blumentopf",
+    "übertöpfe",
+    "übertopf",
+    "pflanzkübel",
+    "gießkanne"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "zimmerpflanze": {
+   "exact": [
+    "zimmerpflanze",
+    "zimmerpflanzen",
+    "grünpflanze",
+    "topfpflanze",
+    "schnittblumen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "gartenwerkzeug": {
+   "exact": [
+    "schaufel",
+    "hacke",
+    "harke",
+    "rechen",
+    "gartenschere",
+    "heckenschere",
+    "rasenmäher"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "schrauben": {
+   "exact": [
+    "schrauben",
+    "nägel",
+    "dübel",
+    "muttern",
+    "unterlegscheiben"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "pinsel": {
+   "exact": [
+    "pinsel",
+    "malerpinsel",
+    "farbrolle",
+    "malerrolle"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "streusalz": {
+   "exact": [
+    "streusalz",
+    "auftausalz",
+    "schneeketten",
+    "splitt"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "holzkohle": {
+   "exact": [
+    "holzkohle",
+    "grillkohle",
+    "briketts",
+    "propangas",
+    "grillanzünder holz"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "grillzubehör": {
+   "exact": [
+    "grillzange",
+    "grillrost",
+    "grillspieße",
+    "alugrillschale"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "sonnenschirm": {
+   "exact": [
+    "sonnenschirm",
+    "sonnensegel",
+    "schirmständer"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "socken": {
+   "exact": [
+    "socken",
+    "wollsocken",
+    "strümpfe",
+    "mütze",
+    "schal",
+    "handschuhe wolle"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
   }
  },
  "marken": {
