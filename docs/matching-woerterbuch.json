@@ -2561,6 +2561,275 @@
     "steakhouse",
     "hacksteaks"
    ]
+  },
+  "cornflakes": {
+   "exact": [
+    "cornflakes",
+    "corn flakes",
+    "frühstücksflocken",
+    "knusperflakes"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "couscous": {
+   "exact": [
+    "couscous",
+    "bulgur"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "grieß": {
+   "exact": [
+    "grieß",
+    "griess",
+    "hartweizengrieß",
+    "polenta"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "grießbrei"
+   ]
+  },
+  "glasnudeln": {
+   "exact": [
+    "glasnudeln",
+    "reisnudeln",
+    "mie nudeln",
+    "udon"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "spätzle": {
+   "exact": [
+    "spätzle",
+    "spaetzle",
+    "knöpfli",
+    "schupfnudeln"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "lasagneblätter": {
+   "exact": [
+    "lasagneblätter",
+    "lasagnenblätter",
+    "lasagneplatten"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "chiasamen": {
+   "exact": [
+    "chiasamen",
+    "chia",
+    "leinsamen",
+    "flohsamen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "reispapier": {
+   "exact": [
+    "reispapier"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "tempeh": {
+   "exact": [
+    "tempeh",
+    "seitan"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "bonbons": {
+   "exact": [
+    "bonbon",
+    "bonbons",
+    "lutschbonbons",
+    "karamellen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "sahnebonbon"
+   ]
+  },
+  "kaugummi": {
+   "exact": [
+    "kaugummi",
+    "kaugummis"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "lollis": {
+   "exact": [
+    "lolli",
+    "lollis",
+    "lutscher"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "plätzchen": {
+   "exact": [
+    "plätzchen",
+    "lebkuchen",
+    "spekulatius",
+    "printen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "popcorn": {
+   "exact": [
+    "popcorn",
+    "pop corn",
+    "puffmais"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "nougatcreme": {
+   "exact": [
+    "nougatcreme",
+    "nussnougatcreme",
+    "schokoaufstrich"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "dörrobst": {
+   "exact": [
+    "dörrobst",
+    "trockenobst",
+    "backpflaumen",
+    "rosinen",
+    "datteln getrocknet"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "gelee": {
+   "exact": [
+    "gelee",
+    "fruchtgelee",
+    "gelierzucker"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kuvertüre": {
+   "exact": [
+    "kuvertüre",
+    "kovertüre",
+    "schokoladenglasur"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "glühwein": {
+   "exact": [
+    "glühwein",
+    "punsch",
+    "feuerzangenbowle"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "sirup": {
+   "exact": [
+    "sirup",
+    "fruchtsirup",
+    "holunderblütensirup",
+    "grenadine"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "zuckerrübensirup",
+    "ahornsirup"
+   ]
+  },
+  "smoothie": {
+   "exact": [
+    "smoothie",
+    "smoothies"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "tonicwater": {
+   "exact": [
+    "tonic water",
+    "tonicwater",
+    "tonic",
+    "bitter lemon"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kaffeepads": {
+   "exact": [
+    "kaffeepads",
+    "senseo pads",
+    "kaffeekapseln",
+    "padmaschine kapseln"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "schnaps": {
+   "exact": [
+    "schnaps",
+    "obstler",
+    "korn",
+    "wodka",
+    "gin",
+    "rum",
+    "whisky",
+    "likör"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "sportgetränk": {
+   "exact": [
+    "sportgetränk",
+    "isodrink",
+    "isotonisch",
+    "elektrolytgetränk"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
   }
  },
  "marken": {

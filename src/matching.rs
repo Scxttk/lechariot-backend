@@ -363,7 +363,10 @@ mod tests {
         assert_eq!(keys_cat("Kreatinpulver", "Sportnahrung"), vec!["protein/fitness"]);
         assert_eq!(keys_cat("Grissotti 200 g, Sesam", "Chips & Knabbereien"), vec!["chips"]);
         assert_eq!(keys_cat("Fruchtgummi 175 g, Quaxi", "Lakritz & Fruchtgummi"), vec!["schokolade"]);
-        assert_eq!(keys_cat("Lasagneblätter 500 g", "Nudeln & Pasta"), vec!["nudeln"]);
+        // Bis Tranche 4 war „nudeln" die feinste Antwort — und sie kam über
+        // die Kategorie, nicht über den Titel. Jetzt trägt der Titel selbst
+        // einen Begriff, und der Fall sagt, was er immer meinte.
+        assert_eq!(keys_cat("Lasagneblätter 500 g", "Nudeln & Pasta"), vec!["lasagneblätter"]);
         assert_eq!(keys_cat("Getrocknete Cranberries 200 g", "Nüsse & Trockenfrüchte"), vec!["nüsse"]);
         assert_eq!(keys_cat("Rind Hamburger 400 g", "Rindfleisch"), vec!["rind"]);
 
@@ -935,6 +938,22 @@ mod tests {
         assert_eq!(keys("Kerrygold Original Irische Butter"), vec!["butter"]);
         assert_eq!(keys("Speisekartoffeln festkochend"), vec!["kartoffeln"]);
         assert_eq!(match_keys("Basics für die Schule", None, Some("Büro")), vec![NONFOOD_KEY]);
+    }
+
+    /// **Tranche 4: Getränke, Süßwaren, Getreide** (2026-08-07).
+    ///
+    /// 25 Begriffe, Abdeckung 98,1 % → **98,3 %**. Wieder überwiegend feiner
+    /// statt mehr: Kaffeekapseln waren „kaffee", Gin war „spirituosen",
+    /// Mie-Nudeln waren „nudeln".
+    #[test]
+    fn artikelzeichen_tranche_4() {
+        assert_eq!(keys("NESCAFÉ Farmers Origins Kaffeekapseln*"), vec!["kaffee", "kaffeepads"]);
+        assert_eq!(keys("GORDON'S London Dry Gin*"), vec!["spirituosen", "schnaps"]);
+        assert_eq!(keys("NATURGUT Bio Mie-Nudeln*"), vec!["nudeln", "glasnudeln"]);
+
+        // Gegenproben: die groben Begriffe bleiben, wo nichts Feineres passt.
+        assert_eq!(keys("Barilla Spaghetti No. 5"), vec!["nudeln"]);
+        assert_eq!(keys("Dallmayr prodomo gemahlen"), vec!["kaffee"]);
     }
 
     /// **Tranche 3: Brot, Milchprodukte, Fleisch & Fisch** (2026-08-07).

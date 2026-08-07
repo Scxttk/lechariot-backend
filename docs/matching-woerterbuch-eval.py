@@ -182,6 +182,33 @@ V = {
  "schoten/hülsen":(["kaiserschoten","zuckerschoten","edamame","bohnen grün"],["schoten"],[]),
  "protein/fitness":(["proteinriegel","high protein","proteindrink","proteinpulver","whey","trinkmahlzeiten","trinkmahlzeit"],[],[]),
 
+ # --- Tranche 4: Getränke, Süßwaren, Getreide (2026-08-07) -----------------
+ "cornflakes":(["cornflakes","corn flakes","frühstücksflocken","knusperflakes"],[],[]),
+ "couscous":(["couscous","bulgur"],[],[]),
+ "grieß":(["grieß","griess","hartweizengrieß","polenta"],[],["grießbrei"]),
+ "glasnudeln":(["glasnudeln","reisnudeln","mie nudeln","udon"],[],[]),
+ "spätzle":(["spätzle","spaetzle","knöpfli","schupfnudeln"],[],[]),
+ "lasagneblätter":(["lasagneblätter","lasagnenblätter","lasagneplatten"],[],[]),
+ "chiasamen":(["chiasamen","chia","leinsamen","flohsamen"],[],[]),
+ "reispapier":(["reispapier"],[],[]),
+ "tempeh":(["tempeh","seitan"],[],[]),
+ "bonbons":(["bonbon","bonbons","lutschbonbons","karamellen"],[],["sahnebonbon"]),
+ "kaugummi":(["kaugummi","kaugummis"],[],[]),
+ "lollis":(["lolli","lollis","lutscher"],[],[]),
+ "plätzchen":(["plätzchen","lebkuchen","spekulatius","printen"],[],[]),
+ "popcorn":(["popcorn","pop corn","puffmais"],[],[]),
+ "nougatcreme":(["nougatcreme","nussnougatcreme","schokoaufstrich"],[],[]),
+ "dörrobst":(["dörrobst","trockenobst","backpflaumen","rosinen","datteln getrocknet"],[],[]),
+ "gelee":(["gelee","fruchtgelee","gelierzucker"],[],[]),
+ "kuvertüre":(["kuvertüre","kovertüre","schokoladenglasur"],[],[]),
+ "glühwein":(["glühwein","punsch","feuerzangenbowle"],[],[]),
+ "sirup":(["sirup","fruchtsirup","holunderblütensirup","grenadine"],[],["zuckerrübensirup","ahornsirup"]),
+ "smoothie":(["smoothie","smoothies"],[],[]),
+ "tonicwater":(["tonic water","tonicwater","tonic","bitter lemon"],[],[]),
+ "kaffeepads":(["kaffeepads","senseo pads","kaffeekapseln","padmaschine kapseln"],[],[]),
+ "schnaps":(["schnaps","obstler","korn","wodka","gin","rum","whisky","likör"],[],[]),
+ "sportgetränk":(["sportgetränk","isodrink","isotonisch","elektrolytgetränk"],[],[]),
+
  # --- Tranche 3: Brot, Milchprodukte, Fleisch & Fisch (2026-08-07) ---------
  #
  # Konkrete Gegenstände — die zeichnen sich am sichersten. Aus Bring!s
