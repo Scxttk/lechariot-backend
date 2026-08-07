@@ -413,7 +413,7 @@ V = {
  "grillkäse":(["grillkäse","ofenkäse","backcamembert"],[],[]),
  "sojajoghurt":(["sojajoghurt","pflanzenjoghurt","kokosjoghurt"],[],[]),
  "kaffeerahm":(["kaffeerahm","kaffeesahne","kondensmilch"],[],[]),
- "bacon":(["bacon","frühstücksspeck","speck","pancetta"],[],[]),
+ "bacon":(["bacon","frühstücksspeck","speck","pancetta"],[],["twister"]),
  "fleischwurst":(["fleischwurst","lyoner","bierschinken","mortadella","jagdwurst"],[],[]),
  "kassler":(["kassler","kasseler","kasslernacken"],[],[]),
  "schinken":(["schinken","kochschinken","rohschinken","serranoschinken","parmaschinken","lachsschinken"],[],["schinkenwurst","bierschinken"]),
