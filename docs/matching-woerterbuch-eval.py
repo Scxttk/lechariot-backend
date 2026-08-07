@@ -182,6 +182,45 @@ V = {
  "schoten/hülsen":(["kaiserschoten","zuckerschoten","edamame","bohnen grün"],["schoten"],[]),
  "protein/fitness":(["proteinriegel","high protein","proteindrink","proteinpulver","whey","trinkmahlzeiten","trinkmahlzeit"],[],[]),
 
+ # --- Tranche 2: Obst, Gemüse, Kräuter (2026-08-07) ------------------------
+ #
+ # Aus Bring!s Kategorie „Obst & Gemüse", die von 153 Artikeln 68 trug, die
+ # unser Wörterbuch nicht kannte. Hier die vierundzwanzig, die sich als
+ # Zeichnung **unterscheiden** lassen — bei sechs weiteren Kräutern wäre
+ # jedes Bild dasselbe Büschel, und fünf gleiche Büschel sind der Fehler,
+ # gegen den das ganze Vorhaben läuft.
+ #
+ # `suffix` bleibt leer, `block` nur wo gemessen nötig.
+ "birnen":(["birne","birnen","williams christ"],[],["birnenkompott"]),
+ # Gemessen: „Couronne Feigen-Walnuss" ist ein Brot mit Feigen darin und
+ # muss „brot" bleiben.
+ "feigen":(["feige","feigen"],[],["feigen walnuss","feigen-walnuss","feigensenf"]),
+ "granatapfel":(["granatapfel","granatäpfel","granatapfelkerne"],[],[]),
+ "kaki":(["kaki","kakis","sharonfrucht","persimone"],[],[]),
+ "litschi":(["litschi","litschis","lychee"],[],[]),
+ "papaya":(["papaya","papayas"],[],[]),
+ "rhabarber":(["rhabarber"],[],[]),
+ "stachelbeeren":(["stachelbeere","stachelbeeren"],[],[]),
+ "quitten":(["quitte","quitten"],[],[]),
+ "fenchel":(["fenchel","fenchelknolle"],[],["fencheltee"]),
+ "kohl":(["kohl","weißkohl","weisskohl","rotkohl","rotkraut","spitzkohl","wirsing","wirz","chinakohl"],[],["kohlrabi","grünkohl","rosenkohl","blumenkohl"]),
+ "kürbis":(["kürbis","kuerbis","hokkaido","butternut","muskatkürbis"],[],["kürbiskerne","kürbissuppe"]),
+ "lauchzwiebeln":(["lauchzwiebel","lauchzwiebeln","frühlingszwiebel","frühlingszwiebeln","schnittzwiebeln"],[],[]),
+ "pastinaken":(["pastinake","pastinaken","petersilienwurzel"],[],[]),
+ # „chili" gehört bewusst **nicht** dazu: „Plus Pack 156 g, Chili Paprika"
+ # ist ein Käse, und mit dem Wort im Begriff trug er plötzlich zwei Tags.
+ # Chili bekommt später einen eigenen Begriff mit eigenen Sperren.
+ "peperoni":(["peperoni","pfefferoni","pepperoni"],[],[]),
+ "rettich":(["rettich","radi","daikon"],[],[]),
+ "rosenkohl":(["rosenkohl"],[],[]),
+ "sellerie":(["sellerie","staudensellerie","stangensellerie","knollensellerie"],[],["selleriesalz"]),
+ "grünkohl":(["grünkohl","gruenkohl","kale"],[],[]),
+ "basilikum":(["basilikum","basil"],[],[]),
+ "minze":(["minze","pfefferminze","pfefferminz"],[],["minztee","pfefferminztee"]),
+ "schnittlauch":(["schnittlauch"],[],[]),
+ "dill":(["dill"],[],[]),
+ "petersilie":(["petersilie"],[],["petersilienwurzel"]),
+
  # --- Tranche 1 zum Artikelzeichen-Vorhaben (2026-08-07) -------------------
  #
  # **Alle Wörter hier standen bisher auf einer Blockliste und gehörten keinem

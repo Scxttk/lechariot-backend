@@ -2038,6 +2038,265 @@
    "suffix": [],
    "prefix": [],
    "block": []
+  },
+  "birnen": {
+   "exact": [
+    "birne",
+    "birnen",
+    "williams christ"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "birnenkompott"
+   ]
+  },
+  "feigen": {
+   "exact": [
+    "feige",
+    "feigen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "feigen walnuss",
+    "feigen-walnuss",
+    "feigensenf"
+   ]
+  },
+  "granatapfel": {
+   "exact": [
+    "granatapfel",
+    "granatäpfel",
+    "granatapfelkerne"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kaki": {
+   "exact": [
+    "kaki",
+    "kakis",
+    "sharonfrucht",
+    "persimone"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "litschi": {
+   "exact": [
+    "litschi",
+    "litschis",
+    "lychee"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "papaya": {
+   "exact": [
+    "papaya",
+    "papayas"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "rhabarber": {
+   "exact": [
+    "rhabarber"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "stachelbeeren": {
+   "exact": [
+    "stachelbeere",
+    "stachelbeeren"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "quitten": {
+   "exact": [
+    "quitte",
+    "quitten"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "fenchel": {
+   "exact": [
+    "fenchel",
+    "fenchelknolle"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "fencheltee"
+   ]
+  },
+  "kohl": {
+   "exact": [
+    "kohl",
+    "weißkohl",
+    "weisskohl",
+    "rotkohl",
+    "rotkraut",
+    "spitzkohl",
+    "wirsing",
+    "wirz",
+    "chinakohl"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "kohlrabi",
+    "grünkohl",
+    "rosenkohl",
+    "blumenkohl"
+   ]
+  },
+  "kürbis": {
+   "exact": [
+    "kürbis",
+    "kuerbis",
+    "hokkaido",
+    "butternut",
+    "muskatkürbis"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "kürbiskerne",
+    "kürbissuppe"
+   ]
+  },
+  "lauchzwiebeln": {
+   "exact": [
+    "lauchzwiebel",
+    "lauchzwiebeln",
+    "frühlingszwiebel",
+    "frühlingszwiebeln",
+    "schnittzwiebeln"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "pastinaken": {
+   "exact": [
+    "pastinake",
+    "pastinaken",
+    "petersilienwurzel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "peperoni": {
+   "exact": [
+    "peperoni",
+    "pfefferoni",
+    "pepperoni"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "rettich": {
+   "exact": [
+    "rettich",
+    "radi",
+    "daikon"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "rosenkohl": {
+   "exact": [
+    "rosenkohl"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "sellerie": {
+   "exact": [
+    "sellerie",
+    "staudensellerie",
+    "stangensellerie",
+    "knollensellerie"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "selleriesalz"
+   ]
+  },
+  "grünkohl": {
+   "exact": [
+    "grünkohl",
+    "gruenkohl",
+    "kale"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "basilikum": {
+   "exact": [
+    "basilikum",
+    "basil"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "minze": {
+   "exact": [
+    "minze",
+    "pfefferminze",
+    "pfefferminz"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "minztee",
+    "pfefferminztee"
+   ]
+  },
+  "schnittlauch": {
+   "exact": [
+    "schnittlauch"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "dill": {
+   "exact": [
+    "dill"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "petersilie": {
+   "exact": [
+    "petersilie"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "petersilienwurzel"
+   ]
   }
  },
  "marken": {

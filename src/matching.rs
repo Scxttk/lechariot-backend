@@ -328,7 +328,12 @@ mod tests {
         // Fehler: ein falsches Tag legt jemandem das falsche Produkt in den
         // Einkauf.
         assert!(keys_cat("Not Milk", "Veganes").is_empty());          // Haferdrink, kein Tofu
-        assert!(keys_cat("Spitzkohl", "Brokkoli und Kohl").is_empty()); // Kohl, kein Brokkoli
+        // Spitzkohl stand hier bis zum 07.08. als „bewusst nicht zugeordnet",
+        // weil es keinen Begriff für Kohl gab und die Kategorie „Brokkoli und
+        // Kohl" ihn sonst zu Brokkoli gemacht hätte. Seit Tranche 2 gibt es
+        // `kohl`, und damit lässt sich die Absicht des Falls — **Kohl, kein
+        // Brokkoli** — endlich positiv hinschreiben.
+        assert_eq!(keys_cat("Spitzkohl", "Brokkoli und Kohl"), vec!["kohl"]);
         assert!(keys_cat("Ganzes Kaninchen", "Geflügel").is_empty());   // Kaninchen ist kein Geflügel
 
         // Ein Titel-Treffer wird nie überstimmt, und eine Blockliste auch
@@ -926,6 +931,35 @@ mod tests {
         assert_eq!(keys("Kerrygold Original Irische Butter"), vec!["butter"]);
         assert_eq!(keys("Speisekartoffeln festkochend"), vec!["kartoffeln"]);
         assert_eq!(match_keys("Basics für die Schule", None, Some("Büro")), vec![NONFOOD_KEY]);
+    }
+
+    /// **Tranche 2: Obst, Gemüse, Kräuter** (2026-08-07).
+    ///
+    /// 24 Begriffe aus Bring!s größter Kategorie. **Der erste Zug, der die
+    /// Abdeckung hebt** — 97,8 % → 98,1 %, weil „Spitzkohl" vorher durch alle
+    /// Raster fiel. Acht Titel wechseln die Zuordnung; die drei, die etwas
+    /// über die neuen Begriffe aussagen, stehen hier.
+    #[test]
+    fn artikelzeichen_tranche_2() {
+        // Der Gewinn: Kohl war eine Lücke, keine Entscheidung.
+        assert_eq!(keys_cat("Spitzkohl", "Brokkoli und Kohl"), vec!["kohl"]);
+        // Feiner statt gröber: eine Birne ist nicht mehr nur „obst".
+        assert_eq!(keys("Birnen*"), vec!["birnen"]);
+        assert_eq!(keys("XXL-Basilikum"), vec!["basilikum"]);
+
+        // **Zwei Sperren, die Messungen erzwungen haben.**
+        // Ein Brot mit Feigen darin darf nicht „feigen" heißen. Der Titel
+        // allein trägt gar keinen Begriff — sein „brot" kommt aus der
+        // Kategorie, und genau die soll er behalten.
+        assert!(!keys("Couronne Feigen-Walnuss").contains(&"feigen".to_string()));
+        // (Welche Kategorie ihn trägt, hängt am Prospekt; geprüft wird hier
+        // nur, dass die Sperre greift.)
+        // Und „chili" gehört nicht in `peperoni`: Damit trug ein Käse
+        // plötzlich zwei Tags.
+        assert_eq!(keys_cat("Plus Pack 156 g, Chili Paprika", "Schnittkäse"), vec!["paprika"]);
+
+        // Gegenproben: die groben Begriffe bleiben, wo nichts Feineres passt.
+        assert_eq!(keys("Obst der Saison"), vec!["obst"]);
     }
 
     /// **Tranche 1 zum Artikelzeichen-Vorhaben** (2026-08-07).
