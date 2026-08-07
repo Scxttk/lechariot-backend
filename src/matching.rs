@@ -967,11 +967,13 @@ mod tests {
     fn artikelzeichen_tranche_9() {
         // Auf der Liste auffindbar …
         assert_eq!(keys("Gartenschere Bypass"), vec!["gartenwerkzeug"]);
-        // Katzenstreu bleibt `nonfood` — „klumpstreu" steht in NONFOOD_TERMS,
-        // und der Riegel greift **vor** dem Wörterbuch. Das ist genau die
-        // gewünschte Arbeitsteilung, nur an einem Beispiel, das ich falsch
-        // gewählt hatte.
-        assert_eq!(keys("Katzenfutter Adult 400 g"), vec!["katzenfutter"]);
+        // **Tierfutter bleibt vollständig `nonfood`** — „katzen" und „hunde"
+        // stehen in `NONFOOD_TERMS`, und der Riegel greift **vor** dem
+        // Wörterbuch. Der Begriff `katzenfutter` arbeitet trotzdem: Er wird
+        // für die **Liste** gebraucht (`ItemGlyphTerm` fragt das Wörterbuch
+        // direkt), nicht für den Angebotsvergleich. Genau diese Arbeitsteilung
+        // war die Frage, und hier steht sie als Fall.
+        assert_eq!(keys("Katzenfutter Adult 400 g"), vec![NONFOOD_KEY]);
 
         // … und trotzdem nicht im Vergleich: Der Riegel greift vor dem
         // Wörterbuch, wo die Kategorie ihn ruft.
