@@ -1361,7 +1361,12 @@
     "spinat",
     "erbsen",
     "gemüsemix",
-    "kaidergemüse"
+    "kaidergemüse",
+    "kaisergemüse",
+    "buttergemüse",
+    "gemüse gefroren",
+    "tiefkühl brokoli",
+    "tk gemüse"
    ],
    "suffix": [
     "gemüse"
@@ -2217,7 +2222,8 @@
     "sellerie",
     "staudensellerie",
     "stangensellerie",
-    "knollensellerie"
+    "knollensellerie",
+    "stangenselerie"
    ],
    "suffix": [],
    "prefix": [],
@@ -2320,7 +2326,9 @@
     "blätterteig",
     "hefeteig",
     "kuchenteig",
-    "mürbeteig"
+    "mürbeteig",
+    "mini pizzen",
+    "mini pizza"
    ],
    "suffix": [],
    "prefix": [],
@@ -3052,7 +3060,10 @@
     "bratensoße",
     "rahmsoße",
     "rahmsauce",
-    "preiselbeersauce"
+    "preiselbeersauce",
+    "preiselbeer sauce",
+    "pasta sauce",
+    "vanille sauce"
    ],
    "suffix": [],
    "prefix": [],
@@ -3455,7 +3466,9 @@
     "bbq sauce",
     "barbecuesauce",
     "grillsauce",
-    "steaksauce"
+    "steaksauce",
+    "dip",
+    "dips"
    ],
    "suffix": [],
    "prefix": [],
@@ -3587,7 +3600,8 @@
    "exact": [
     "kräuterfrischkäse",
     "frischkäse",
-    "doppelrahmstufe"
+    "doppelrahmstufe",
+    "kochcreme"
    ],
    "suffix": [],
    "prefix": [],
