@@ -940,6 +940,24 @@ mod tests {
         assert_eq!(match_keys("Basics für die Schule", None, Some("Büro")), vec![NONFOOD_KEY]);
     }
 
+    /// **Tranche 5: Zutaten, Gewürze, Tiefkühl** (2026-08-07).
+    ///
+    /// 28 Begriffe. Die Abdeckung bleibt bei 98,3 % — Gewürze und Backzutaten
+    /// stehen selten im Prospekt, aber oft auf einer Einkaufsliste. **Das ist
+    /// der Teil des Wortschatzes, den nur die Liste braucht und der Vergleich
+    /// nicht**, und damit der erste Vorgriff auf die Trennung, die für
+    /// Non-Food ohnehin kommen muss.
+    #[test]
+    fn artikelzeichen_tranche_5() {
+        assert_eq!(keys("Dr. Oetker Backpulver 10er"), vec!["backpulver"]);
+        assert_eq!(keys("Bourbon Vanilleschote"), vec!["vanille"]);
+
+        // Die Sperren, die die feineren Begriffe von ihren Verwandten trennen:
+        // Vanillezucker ist nicht Vanille, Zimtschnecken sind nicht Zimt.
+        assert!(!keys("Dr. Oetker Vanillezucker 10er").contains(&"vanille".to_string()));
+        assert!(!keys("Zimtschnecken 4 Stück").contains(&"zimt".to_string()));
+    }
+
     /// **Tranche 4: Getränke, Süßwaren, Getreide** (2026-08-07).
     ///
     /// 25 Begriffe, Abdeckung 98,1 % → **98,3 %**. Wieder überwiegend feiner

@@ -1913,8 +1913,7 @@
   "vanillezucker": {
    "exact": [
     "vanillezucker",
-    "vanillinzucker",
-    "vanilleschote"
+    "vanillinzucker"
    ],
    "suffix": [],
    "prefix": [],
@@ -2826,6 +2825,322 @@
     "isodrink",
     "isotonisch",
     "elektrolytgetränk"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "ahornsirup": {
+   "exact": [
+    "ahornsirup",
+    "agavendicksaft",
+    "zuckerrübensirup"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "backpulver": {
+   "exact": [
+    "backpulver",
+    "natron",
+    "weinstein backpulver"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "hefe": {
+   "exact": [
+    "hefe",
+    "frischhefe",
+    "trockenhefe",
+    "hefeflocken"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "hefeteig",
+    "hefezopf"
+   ]
+  },
+  "speisestärke": {
+   "exact": [
+    "speisestärke",
+    "stärke",
+    "maisstärke",
+    "soßenbinder",
+    "sossenbinder"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "semmelbrösel": {
+   "exact": [
+    "semmelbrösel",
+    "paniermehl",
+    "semmelmehl"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "vanille": {
+   "exact": [
+    "vanille",
+    "vanilleschote",
+    "vanilleextrakt",
+    "bourbon vanille",
+    "vanillearoma"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "vanillezucker",
+    "vanillesoße",
+    "vanillepudding"
+   ]
+  },
+  "zimt": {
+   "exact": [
+    "zimt",
+    "zimtstange",
+    "zimtpulver"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "zimtschnecke",
+    "zimtschnecken",
+    "zimtsterne"
+   ]
+  },
+  "muskatnuss": {
+   "exact": [
+    "muskatnuss",
+    "muskat",
+    "nelken",
+    "lorbeer",
+    "lorbeerblätter",
+    "piment"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kurkuma": {
+   "exact": [
+    "kurkuma",
+    "ingwerpulver",
+    "currypulver",
+    "curry paste",
+    "currypaste"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "safran": {
+   "exact": [
+    "safran",
+    "anis",
+    "sternanis",
+    "kardamom"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "oregano": {
+   "exact": [
+    "oregano",
+    "rosmarin",
+    "thymian",
+    "majoran",
+    "salbei",
+    "estragon",
+    "kräutermischung"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "pfefferkörner": {
+   "exact": [
+    "pfefferkörner",
+    "pfeffermühle",
+    "bunter pfeffer"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kapern": {
+   "exact": [
+    "kapern",
+    "kapernäpfel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "pinienkerne": {
+   "exact": [
+    "pinienkerne",
+    "kürbiskerne",
+    "sonnenblumenkerne",
+    "hanfsamen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kokosflocken": {
+   "exact": [
+    "kokosflocken",
+    "kokosraspeln",
+    "kokoschips"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "mandelmus": {
+   "exact": [
+    "mandelmus",
+    "tahini",
+    "sesammus",
+    "nussmus"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "marzipan": {
+   "exact": [
+    "marzipan",
+    "marzipanrohmasse",
+    "persipan"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "schokodrops": {
+   "exact": [
+    "schokodrops",
+    "schokotropfen",
+    "backschokolade",
+    "streusel",
+    "zuckerstreusel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "lebensmittelfarbe": {
+   "exact": [
+    "lebensmittelfarbe",
+    "speisefarbe",
+    "zuckerguss"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "dosentomaten": {
+   "exact": [
+    "dosentomaten",
+    "gehackte tomaten",
+    "pizzatomaten",
+    "dosenobst"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "bratensauce": {
+   "exact": [
+    "bratensauce",
+    "bratensoße",
+    "rahmsoße",
+    "rahmsauce",
+    "preiselbeersauce"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "fischsauce": {
+   "exact": [
+    "fischsauce",
+    "austernsauce",
+    "tamarindenpaste",
+    "sojasauce"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "marinade": {
+   "exact": [
+    "marinade",
+    "grillmarinade",
+    "fleischgewürz",
+    "gewürzmischung"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "tütensuppe": {
+   "exact": [
+    "tütensuppe",
+    "instantsuppe",
+    "suppenpulver"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kartoffelpüree": {
+   "exact": [
+    "kartoffelpüree",
+    "kartoffelstock",
+    "püreepulver"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "knödel": {
+   "exact": [
+    "knödel",
+    "klöße",
+    "kloßteig",
+    "semmelknödel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "kartoffelknödel"
+   ]
+  },
+  "kohlrouladen": {
+   "exact": [
+    "kohlrouladen",
+    "krautwickel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "hühnerfrikassee": {
+   "exact": [
+    "hühnerfrikassee",
+    "frikassee",
+    "geschnetzeltes"
    ],
    "suffix": [],
    "prefix": [],
