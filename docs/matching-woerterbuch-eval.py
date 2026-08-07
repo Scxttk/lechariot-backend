@@ -182,6 +182,29 @@ V = {
  "schoten/hülsen":(["kaiserschoten","zuckerschoten","edamame","bohnen grün"],["schoten"],[]),
  "protein/fitness":(["proteinriegel","high protein","proteindrink","proteinpulver","whey","trinkmahlzeiten","trinkmahlzeit"],[],[]),
 
+ # --- Tranche 10: der Rest (2026-08-07) ------------------------------------
+ "haargel":(["haargel","haarspray","haaröl","haarwachs","haarschaum","bartöl"],[],[]),
+ "gesichtsmaske":(["gesichtsmaske","peeling","scrub","gesichtswasser","serum"],[],[]),
+ "nagelfeile":(["nagelfeile","nagelknipser","nagelschere","nagelzange"],[],[]),
+ "parfüm":(["parfüm","eau de toilette","duftwasser","bodyspray"],[],[]),
+ "mückenschutz":(["mückenschutz","insektenschutz","mückenspray","zeckenschutz"],[],[]),
+ "muskelcreme":(["muskelcreme","kühlgel","wärmesalbe","sportsalbe","nasensalbe"],[],[]),
+ "kohletabletten":(["kohletabletten","kohlekompretten","elektrolytpulver"],[],[]),
+ "kondome":(["kondom","kondome","gleitgel"],[],[]),
+ "kontaktlinsen":(["kontaktlinsen","linsenmittel","kontaktlinsenflüssigkeit"],[],[]),
+ "klobürste":(["klobürste","toilettenbürste","wc-bürste","wc-stein"],[],[]),
+ "möbelpolitur":(["möbelpolitur","holzpflege","lederpflege","politur"],[],[]),
+ "aufbackbrötchen":(["aufbackbrötchen","aufbackbaguette","kräuterbaguette","knoblauchbaguette"],[],[]),
+ "schokobrötchen":(["schokobrötchen","milchbrötchen","rosinenbrötchen"],[],[]),
+ "knoblauchpulver":(["knoblauchpulver","zwiebelpulver","knoblauchgranulat"],[],[]),
+ "mandelaroma":(["mandelaroma","rumaroma","backaroma","zitronenaroma"],[],[]),
+ "vanillesoße":(["vanillesoße","vanillesauce","vanillepudding"],[],[]),
+ "krabbenchips":(["krabbenchips","reischips","gemüsechips"],[],[]),
+ "geschenk":(["geschenk","geschenkkarte","gutschein","tischbombe deko"],[],[]),
+ "kostüme":(["kostüm","kostüme","kinderschminke","faschingsartikel"],[],[]),
+ "reflektoren":(["reflektor","reflektoren","warnweste","fahrradlicht"],[],[]),
+ "pestizide":(["pestizide","schneckenkorn","unkrautvernichter","insektizid"],[],[]),
+
  # --- Tranche 9: Baumarkt, Garten, Tierbedarf (2026-08-07) -----------------
  #
  # Der Rest von Bring!s Katalog. Hier steht der NONFOOD-Riegel besonders dicht

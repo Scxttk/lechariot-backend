@@ -4312,6 +4312,234 @@
    "suffix": [],
    "prefix": [],
    "block": []
+  },
+  "haargel": {
+   "exact": [
+    "haargel",
+    "haarspray",
+    "haaröl",
+    "haarwachs",
+    "haarschaum",
+    "bartöl"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "gesichtsmaske": {
+   "exact": [
+    "gesichtsmaske",
+    "peeling",
+    "scrub",
+    "gesichtswasser",
+    "serum"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "nagelfeile": {
+   "exact": [
+    "nagelfeile",
+    "nagelknipser",
+    "nagelschere",
+    "nagelzange"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "parfüm": {
+   "exact": [
+    "parfüm",
+    "eau de toilette",
+    "duftwasser",
+    "bodyspray"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "mückenschutz": {
+   "exact": [
+    "mückenschutz",
+    "insektenschutz",
+    "mückenspray",
+    "zeckenschutz"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "muskelcreme": {
+   "exact": [
+    "muskelcreme",
+    "kühlgel",
+    "wärmesalbe",
+    "sportsalbe",
+    "nasensalbe"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kohletabletten": {
+   "exact": [
+    "kohletabletten",
+    "kohlekompretten",
+    "elektrolytpulver"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kondome": {
+   "exact": [
+    "kondom",
+    "kondome",
+    "gleitgel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kontaktlinsen": {
+   "exact": [
+    "kontaktlinsen",
+    "linsenmittel",
+    "kontaktlinsenflüssigkeit"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "klobürste": {
+   "exact": [
+    "klobürste",
+    "toilettenbürste",
+    "wc-bürste",
+    "wc-stein"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "möbelpolitur": {
+   "exact": [
+    "möbelpolitur",
+    "holzpflege",
+    "lederpflege",
+    "politur"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "aufbackbrötchen": {
+   "exact": [
+    "aufbackbrötchen",
+    "aufbackbaguette",
+    "kräuterbaguette",
+    "knoblauchbaguette"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "schokobrötchen": {
+   "exact": [
+    "schokobrötchen",
+    "milchbrötchen",
+    "rosinenbrötchen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "knoblauchpulver": {
+   "exact": [
+    "knoblauchpulver",
+    "zwiebelpulver",
+    "knoblauchgranulat"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "mandelaroma": {
+   "exact": [
+    "mandelaroma",
+    "rumaroma",
+    "backaroma",
+    "zitronenaroma"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "vanillesoße": {
+   "exact": [
+    "vanillesoße",
+    "vanillesauce",
+    "vanillepudding"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "krabbenchips": {
+   "exact": [
+    "krabbenchips",
+    "reischips",
+    "gemüsechips"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "geschenk": {
+   "exact": [
+    "geschenk",
+    "geschenkkarte",
+    "gutschein",
+    "tischbombe deko"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kostüme": {
+   "exact": [
+    "kostüm",
+    "kostüme",
+    "kinderschminke",
+    "faschingsartikel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "reflektoren": {
+   "exact": [
+    "reflektor",
+    "reflektoren",
+    "warnweste",
+    "fahrradlicht"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "pestizide": {
+   "exact": [
+    "pestizide",
+    "schneckenkorn",
+    "unkrautvernichter",
+    "insektizid"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
   }
  },
  "marken": {
