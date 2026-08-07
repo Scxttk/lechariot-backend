@@ -1796,6 +1796,248 @@
    "suffix": [],
    "prefix": [],
    "block": []
+  },
+  "süßkartoffeln": {
+   "exact": [
+    "süßkartoffel",
+    "süßkartoffeln",
+    "suesskartoffeln",
+    "süsskartoffeln"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "süßkartoffel chips",
+    "süsskartoffel chips",
+    "suesskartoffel chips",
+    "süßkartoffelchips"
+   ]
+  },
+  "essiggurken": {
+   "exact": [
+    "essiggurken",
+    "essiggurke",
+    "gewürzgurken",
+    "gewürzgurke",
+    "cornichons",
+    "silberzwiebeln"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kartoffelsalat": {
+   "exact": [
+    "kartoffelsalat"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "nudelsalat": {
+   "exact": [
+    "nudelsalat"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "krautsalat": {
+   "exact": [
+    "krautsalat",
+    "coleslaw",
+    "weinsauerkraut",
+    "sauerkraut"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "fleischsalat": {
+   "exact": [
+    "fleischsalat",
+    "wurstsalat"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "röstzwiebeln": {
+   "exact": [
+    "röstzwiebeln",
+    "roestzwiebeln"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "tomatensauce": {
+   "exact": [
+    "tomatensauce",
+    "tomatensoße",
+    "tomatensosse",
+    "tomatensuppe",
+    "passata",
+    "pizzasauce",
+    "pizzasoße"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "traubensaft": {
+   "exact": [
+    "traubensaft"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "zitronensaft": {
+   "exact": [
+    "zitronensaft",
+    "limettensaft"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "tomatensaft": {
+   "exact": [
+    "tomatensaft"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "vanillezucker": {
+   "exact": [
+    "vanillezucker",
+    "vanillinzucker",
+    "vanilleschote"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "traubenzucker": {
+   "exact": [
+    "traubenzucker",
+    "dextrose"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "brühe": {
+   "exact": [
+    "gemüsebrühe",
+    "gemuesebruehe",
+    "hühnerbrühe",
+    "rinderbrühe",
+    "brühwürfel",
+    "bouillon"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "salatdressing": {
+   "exact": [
+    "salatdressing",
+    "salatsoße",
+    "salatsauce",
+    "salatcreme",
+    "salatmayonnaise",
+    "dressing"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "eiswürfel": {
+   "exact": [
+    "eiswürfel",
+    "eiswuerfel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kartoffelchips": {
+   "exact": [
+    "kartoffelchips",
+    "paprikachips",
+    "kartoffelsnacks"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kartoffelknödel": {
+   "exact": [
+    "kartoffelknödel",
+    "kartoffelkloß",
+    "kartoffelklöße",
+    "semmelknödel",
+    "kartoffelpuffer",
+    "kartoffelecken"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "müsliriegel": {
+   "exact": [
+    "müsliriegel",
+    "muesliriegel",
+    "haferriegel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "salzbrezeln": {
+   "exact": [
+    "salzbrezeln",
+    "salzstangen",
+    "laugenbrezel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "maiswaffeln": {
+   "exact": [
+    "maiswaffeln"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "milcheis": {
+   "exact": [
+    "milcheis",
+    "wassereis",
+    "speiseeis"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kuchen": {
+   "exact": [
+    "käsekuchen",
+    "apfelkuchen",
+    "zwiebelkuchen",
+    "sahnetorte",
+    "quarktasche",
+    "kuchen",
+    "torte"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
   }
  },
  "marken": {

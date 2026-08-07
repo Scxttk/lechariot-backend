@@ -181,6 +181,48 @@ V = {
  "knäckebrot":(["knäckebrot","knusperbrot","zwieback","wasa","reiswaffeln"],[],[]),
  "schoten/hülsen":(["kaiserschoten","zuckerschoten","edamame","bohnen grün"],["schoten"],[]),
  "protein/fitness":(["proteinriegel","high protein","proteindrink","proteinpulver","whey","trinkmahlzeiten","trinkmahlzeit"],[],[]),
+
+ # --- Tranche 1 zum Artikelzeichen-Vorhaben (2026-08-07) -------------------
+ #
+ # **Alle Wörter hier standen bisher auf einer Blockliste und gehörten keinem
+ # Begriff.** Sie trafen also nichts: Wer „Kartoffelsalat" tippte, bekam weder
+ # Treffer noch Kategorie noch Zeichen. Ihnen einen eigenen Begriff zu geben
+ # ist **additiv** — es kann keinem bestehenden Begriff Treffer wegnehmen,
+ # weil die Sperre genau das schon verhindert hat. Deshalb ist das die erste
+ # und sicherste Tranche; siehe `lechariot-app/docs/ARTIKELZEICHEN.md`.
+ #
+ # Die Sperren bleiben stehen: „Kartoffelsalat" ist weiter keine Kartoffel.
+ #
+ # `suffix` bleibt überall leer. Suffixe grasen Produkttitel ab und greifen
+ # bei so spezifischen Wörtern zu weit — dieselbe Zurückhaltung wie bei
+ # `margarine` oder `knäckebrot`.
+ # Die Sperre ist gemessen, nicht vorsorglich: Ohne sie holte sich
+ # „NATURGUT Bio Süßkartoffel Chips" den Begriff, und wer Süßkartoffeln
+ # aufschreibt, bekäme eine Tüte Chips vorgeschlagen.
+ "süßkartoffeln":(["süßkartoffel","süßkartoffeln","suesskartoffeln","süsskartoffeln"],[],
+                  ["süßkartoffel chips","süsskartoffel chips","suesskartoffel chips","süßkartoffelchips"]),
+ "essiggurken":(["essiggurken","essiggurke","gewürzgurken","gewürzgurke","cornichons","silberzwiebeln"],[],[]),
+ "kartoffelsalat":(["kartoffelsalat"],[],[]),
+ "nudelsalat":(["nudelsalat"],[],[]),
+ "krautsalat":(["krautsalat","coleslaw","weinsauerkraut","sauerkraut"],[],[]),
+ "fleischsalat":(["fleischsalat","wurstsalat"],[],[]),
+ "röstzwiebeln":(["röstzwiebeln","roestzwiebeln"],[],[]),
+ "tomatensauce":(["tomatensauce","tomatensoße","tomatensosse","tomatensuppe","passata","pizzasauce","pizzasoße"],[],[]),
+ "traubensaft":(["traubensaft"],[],[]),
+ "zitronensaft":(["zitronensaft","limettensaft"],[],[]),
+ "tomatensaft":(["tomatensaft"],[],[]),
+ "vanillezucker":(["vanillezucker","vanillinzucker","vanilleschote"],[],[]),
+ "traubenzucker":(["traubenzucker","dextrose"],[],[]),
+ "brühe":(["gemüsebrühe","gemuesebruehe","hühnerbrühe","rinderbrühe","brühwürfel","bouillon"],[],[]),
+ "salatdressing":(["salatdressing","salatsoße","salatsauce","salatcreme","salatmayonnaise","dressing"],[],[]),
+ "eiswürfel":(["eiswürfel","eiswuerfel"],[],[]),
+ "kartoffelchips":(["kartoffelchips","paprikachips","kartoffelsnacks"],[],[]),
+ "kartoffelknödel":(["kartoffelknödel","kartoffelkloß","kartoffelklöße","semmelknödel","kartoffelpuffer","kartoffelecken"],[],[]),
+ "müsliriegel":(["müsliriegel","muesliriegel","haferriegel"],[],[]),
+ "salzbrezeln":(["salzbrezeln","salzstangen","laugenbrezel"],[],[]),
+ "maiswaffeln":(["maiswaffeln"],[],[]),
+ "milcheis":(["milcheis","wassereis","speiseeis"],[],[]),
+ "kuchen":(["käsekuchen","apfelkuchen","zwiebelkuchen","sahnetorte","quarktasche","kuchen","torte"],[],[]),
 }
 
 # Marke → Kategorie (Fallback, wenn Wörterbuch nichts trifft). "NONFOOD" = aussortieren.

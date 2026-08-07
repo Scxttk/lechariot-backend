@@ -928,6 +928,34 @@ mod tests {
         assert_eq!(match_keys("Basics für die Schule", None, Some("Büro")), vec![NONFOOD_KEY]);
     }
 
+    /// **Tranche 1 zum Artikelzeichen-Vorhaben** (2026-08-07).
+    ///
+    /// 23 Begriffe für Wörter, die bisher auf einer Blockliste standen und
+    /// keinem Begriff gehörten — sie trafen also nichts. Der Zug ist additiv;
+    /// gemessen an der letzten vollen Woche (669 Angebote) blieb die Abdeckung
+    /// bei 97,8 %, und genau **vier** Titel wechselten ihre Zuordnung. Alle
+    /// vier stehen hier, damit sie nicht unbemerkt zurückkippen.
+    #[test]
+    fn artikelzeichen_tranche_1() {
+        // Ein Riegel ist kein Müsli, und eine Brühe kein Eintopf.
+        assert_eq!(keys("CORNY Müsliriegel*"), vec!["müsliriegel"]);
+        assert_eq!(keys("NATURGUT Bio Gemüsebrühe*"), vec!["brühe"]);
+        // Kuchen kommt zum groben „backwaren" dazu, ohne es zu verdrängen.
+        assert_eq!(keys("JOMO Kuchen*"), vec!["backwaren", "kuchen"]);
+
+        // Gegenproben: Was die neuen Begriffe **nicht** anfassen dürfen.
+        assert_eq!(keys("Bio Müsli Knusper"), vec!["müsli"]);
+        assert_eq!(keys("Gulaschsuppe im Glas"), vec!["eintopf"]);
+
+        // **Die Sperre, die eine Messung erzwungen hat.** Ohne sie holte sich
+        // „Süßkartoffel Chips" den Begriff `süßkartoffeln`, und wer
+        // Süßkartoffeln aufschreibt, bekäme eine Tüte Chips vorgeschlagen.
+        assert_eq!(keys("NATURGUT Bio Süßkartoffel Chips*"), vec!["chips"]);
+
+        // Und die Gegenprobe dazu: die echte Knolle behält ihren Begriff.
+        assert_eq!(keys("Süßkartoffeln lose"), vec!["süßkartoffeln"]);
+    }
+
     #[test]
     fn marken_fallback() {
         assert_eq!(keys("Fruchtzwerge"), vec!["joghurt"]);
