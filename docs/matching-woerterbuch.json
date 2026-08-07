@@ -3145,6 +3145,256 @@
    "suffix": [],
    "prefix": [],
    "block": []
+  },
+  "blutorangen": {
+   "exact": [
+    "blutorange",
+    "blutorangen",
+    "moro"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "chicorée": {
+   "exact": [
+    "chicorée",
+    "chicoree",
+    "radicchio",
+    "endivien"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "drachenfrucht": {
+   "exact": [
+    "drachenfrucht",
+    "pitaya",
+    "pitahaya"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kiwi": {
+   "exact": [
+    "kiwi",
+    "kiwis",
+    "goldkiwi",
+    "kiwibeeren"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "guave": {
+   "exact": [
+    "guave",
+    "guaven",
+    "maracuja",
+    "passionsfrucht"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "haselnüsse": {
+   "exact": [
+    "haselnuss",
+    "haselnüsse",
+    "haselnusskerne"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "haselnusscreme"
+   ]
+  },
+  "kastanien": {
+   "exact": [
+    "kastanie",
+    "kastanien",
+    "maronen",
+    "marroni",
+    "esskastanien"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kokosnuss": {
+   "exact": [
+    "kokosnuss",
+    "kokosnüsse",
+    "kokos"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "kokosmilch",
+    "kokosflocken",
+    "kokoswasser",
+    "kokosjoghurt",
+    "kokosöl"
+   ]
+  },
+  "kresse": {
+   "exact": [
+    "kresse",
+    "gartenkresse",
+    "brunnenkresse"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "maiskolben": {
+   "exact": [
+    "maiskolben",
+    "zuckermais",
+    "mais am stück"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "mangold": {
+   "exact": [
+    "mangold",
+    "stielmangold"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "preiselbeeren": {
+   "exact": [
+    "preiselbeere",
+    "preiselbeeren",
+    "cranberries",
+    "cranberry"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "preiselbeersauce"
+   ]
+  },
+  "quinoa": {
+   "exact": [
+    "quinoa",
+    "amaranth",
+    "hirse",
+    "buchweizen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "römersalat": {
+   "exact": [
+    "römersalat",
+    "romasalat",
+    "romana",
+    "kopfsalat",
+    "eisbergsalat",
+    "feldsalat",
+    "rucola"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "schwarzwurzel": {
+   "exact": [
+    "schwarzwurzel",
+    "schwarzwurzeln"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "snacktomaten": {
+   "exact": [
+    "snacktomaten",
+    "cocktailtomaten",
+    "datteltomaten"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "weizengras": {
+   "exact": [
+    "weizengras",
+    "spirulina",
+    "chlorella",
+    "gerstengras"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "zitronengras": {
+   "exact": [
+    "zitronengras",
+    "lemongras"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "portulak": {
+   "exact": [
+    "portulak",
+    "postelein"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "artischocken": {
+   "exact": [
+    "artischocke",
+    "artischocken",
+    "artischockenherzen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "spargel": {
+   "exact": [
+    "spargel",
+    "spargeln",
+    "grüner spargel",
+    "bleichspargel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "lauch": {
+   "exact": [
+    "lauch",
+    "porree",
+    "stangenlauch"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "lauchzwiebel",
+    "lauchzwiebeln"
+   ]
+  },
+  "kohlrabi": {
+   "exact": [
+    "kohlrabi"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
   }
  },
  "marken": {

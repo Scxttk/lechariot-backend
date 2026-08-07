@@ -367,7 +367,10 @@ mod tests {
         // die Kategorie, nicht über den Titel. Jetzt trägt der Titel selbst
         // einen Begriff, und der Fall sagt, was er immer meinte.
         assert_eq!(keys_cat("Lasagneblätter 500 g", "Nudeln & Pasta"), vec!["lasagneblätter"]);
-        assert_eq!(keys_cat("Getrocknete Cranberries 200 g", "Nüsse & Trockenfrüchte"), vec!["nüsse"]);
+        // Bis Tranche 6 gab es keinen Begriff für Preiselbeeren, und die
+        // Kategorie „Nüsse & Trockenfrüchte" war die feinste Antwort. Eine
+        // Cranberry ist keine Nuss — jetzt sagt der Fall das auch.
+        assert_eq!(keys_cat("Getrocknete Cranberries 200 g", "Nüsse & Trockenfrüchte"), vec!["preiselbeeren"]);
         assert_eq!(keys_cat("Rind Hamburger 400 g", "Rindfleisch"), vec!["rind"]);
 
         // Gegenprobe 1: die Kategorie bleibt der LETZTE Ausweg. „Plus Pack
@@ -938,6 +941,26 @@ mod tests {
         assert_eq!(keys("Kerrygold Original Irische Butter"), vec!["butter"]);
         assert_eq!(keys("Speisekartoffeln festkochend"), vec!["kartoffeln"]);
         assert_eq!(match_keys("Basics für die Schule", None, Some("Büro")), vec![NONFOOD_KEY]);
+    }
+
+    /// **Tranche 6: der Rest aus Obst & Gemüse** (2026-08-07).
+    ///
+    /// 23 Begriffe. Ein gepinnter Fall wird dabei **richtiger, nicht nur
+    /// feiner**: „Getrocknete Cranberries" hieß über die Kategorie „nüsse",
+    /// weil es keinen Begriff für Preiselbeeren gab. Eine Cranberry ist keine
+    /// Nuss.
+    #[test]
+    fn artikelzeichen_tranche_6() {
+        assert_eq!(keys_cat("Getrocknete Cranberries 200 g", "Nüsse & Trockenfrüchte"),
+                   vec!["preiselbeeren"]);
+        // Gegenprobe: echte Nüsse bleiben Nüsse.
+        // Der grobe Begriff bleibt daneben stehen — „nüsse" trägt das Suffix
+        // „nüsse" und trifft die Haselnuss zu Recht mit.
+        assert_eq!(keys("Ganze Haselnusskerne 200 g"), vec!["nüsse", "haselnüsse"]);
+        assert_eq!(keys("Cashewkerne geröstet 150 g"), vec!["nüsse"]);
+
+        // Die Sperre: Kokosmilch ist keine Kokosnuss.
+        assert!(!keys("Kokosmilch 400 ml").contains(&"kokosnuss".to_string()));
     }
 
     /// **Tranche 5: Zutaten, Gewürze, Tiefkühl** (2026-08-07).
