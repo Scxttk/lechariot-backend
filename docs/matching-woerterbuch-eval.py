@@ -182,6 +182,35 @@ V = {
  "schoten/hülsen":(["kaiserschoten","zuckerschoten","edamame","bohnen grün"],["schoten"],[]),
  "protein/fitness":(["proteinriegel","high protein","proteindrink","proteinpulver","whey","trinkmahlzeiten","trinkmahlzeit"],[],[]),
 
+ # --- Tranche 3: Brot, Milchprodukte, Fleisch & Fisch (2026-08-07) ---------
+ #
+ # Konkrete Gegenstände — die zeichnen sich am sichersten. Aus Bring!s
+ # Kategorien mit 14, 25 und 24 unbekannten Artikeln die dreiundzwanzig, die
+ # weder OCR-Rauschen noch Marke sind und sich als Bild trennen lassen.
+ "bagel":(["bagel","bagels"],[],[]),
+ "burgerbrötchen":(["burgerbrötchen","burgerbuns","hamburgerbrötchen","brioche buns"],[],[]),
+ "croissant":(["croissant","croissants","buttercroissant","buttercroissants"],[],[]),
+ "pizzateig":(["pizzateig","blätterteig","hefeteig","kuchenteig","mürbeteig"],[],[]),
+ "roggenbrot":(["roggenbrot","vollkornbrot","körnerbrot","schwarzbrot","pumpernickel"],[],[]),
+ "zimtschnecken":(["zimtschnecke","zimtschnecken","franzbrötchen","zimtrolle"],[],[]),
+ "pflanzendrink":(["hafermilch","mandelmilch","sojamilch","reismilch","kokosdrink","erbsendrink"],[],[]),
+ "hüttenkäse":(["hüttenkäse","huettenkaese","körniger frischkäse","cottage cheese"],[],[]),
+ "magerquark":(["magerquark","speisequark"],[],[]),
+ "raclettekäse":(["raclettekäse","raclette"],[],[]),
+ "reibekäse":(["reibekäse","reibkäse","geriebener käse","pizzakäse","gratinkäse"],[],[]),
+ "ricotta":(["ricotta","mascarpone"],[],["mascarpone joghurt"]),
+ "grillkäse":(["grillkäse","ofenkäse","backcamembert"],[],[]),
+ "sojajoghurt":(["sojajoghurt","pflanzenjoghurt","kokosjoghurt"],[],[]),
+ "kaffeerahm":(["kaffeerahm","kaffeesahne","kondensmilch"],[],[]),
+ "bacon":(["bacon","frühstücksspeck","speck","pancetta"],[],[]),
+ "fleischwurst":(["fleischwurst","lyoner","bierschinken","mortadella","jagdwurst"],[],[]),
+ "kassler":(["kassler","kasseler","kasslernacken"],[],[]),
+ "schinken":(["schinken","kochschinken","rohschinken","serranoschinken","parmaschinken","lachsschinken"],[],["schinkenwurst","bierschinken"]),
+ "muscheln":(["muschel","muscheln","miesmuscheln","jakobsmuscheln"],[],["nudeln muscheln"]),
+ "sardellen":(["sardelle","sardellen","anchovis","sardinen"],[],[]),
+ "schnitzel":(["schnitzel","wiener schnitzel","putenschnitzel","schweineschnitzel"],[],["vegan schnitzel","veganes schnitzel"]),
+ "steak":(["steak","steaks","rumpsteak","hüftsteak","entrecote","filetsteak"],[],["steakhouse","hacksteaks"]),
+
  # --- Tranche 2: Obst, Gemüse, Kräuter (2026-08-07) ------------------------
  #
  # Aus Bring!s Kategorie „Obst & Gemüse", die von 153 Artikeln 68 trug, die

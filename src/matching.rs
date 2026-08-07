@@ -356,7 +356,9 @@ mod tests {
         assert_eq!(keys_cat("Flusskrebssalat", "Fisch"), vec!["fisch"]);
         assert_eq!(keys_cat("Plus Pack 156 g, Würzig", "Schnittkäse"), vec!["käse"]);
         assert_eq!(keys_cat("Crema e Aroma 1 kg", "Kaffee"), vec!["kaffee"]);
-        assert_eq!(keys_cat("Bacon 150 g", "Schinken"), vec!["wurst"]);
+        // Bis Tranche 3 war „wurst" die feinste Antwort, die es gab. Jetzt
+        // gibt es `bacon`, und der Fall sagt, was er immer meinte.
+        assert_eq!(keys_cat("Bacon 150 g", "Schinken"), vec!["bacon"]);
         assert_eq!(keys_cat("Dinkel-Bürli", "Bäckerei"), vec!["backwaren"]);
         assert_eq!(keys_cat("Kreatinpulver", "Sportnahrung"), vec!["protein/fitness"]);
         assert_eq!(keys_cat("Grissotti 200 g, Sesam", "Chips & Knabbereien"), vec!["chips"]);
@@ -822,7 +824,9 @@ mod tests {
 
         // Gegenproben: echte Butter und echtes Brot bleiben unberührt.
         assert_eq!(keys("Kerrygold Original Irische Butter"), vec!["butter"]);
-        assert_eq!(keys("HARRY Vollkornbrot"), vec!["brot"]);
+        // Vollkornbrot ist seit Tranche 3 zusätzlich `roggenbrot` — das grobe
+        // „brot" bleibt daneben stehen, es wird nicht verdrängt.
+        assert_eq!(keys("HARRY Vollkornbrot"), vec!["brot", "roggenbrot"]);
         assert_eq!(keys("GOLDEN TOAST Toastbrot*"), vec!["brot"]);
     }
 
@@ -931,6 +935,27 @@ mod tests {
         assert_eq!(keys("Kerrygold Original Irische Butter"), vec!["butter"]);
         assert_eq!(keys("Speisekartoffeln festkochend"), vec!["kartoffeln"]);
         assert_eq!(match_keys("Basics für die Schule", None, Some("Büro")), vec![NONFOOD_KEY]);
+    }
+
+    /// **Tranche 3: Brot, Milchprodukte, Fleisch & Fisch** (2026-08-07).
+    ///
+    /// 23 Begriffe. Die Abdeckung bleibt bei 98,1 % — hier geht es nicht um
+    /// mehr Treffer, sondern um **feinere**: 18 Titel bekommen zusätzlich zum
+    /// groben Begriff einen genauen. Ein Hüftsteak war „rind", ein Reibekäse
+    /// „käse", ein Serrano „wurst".
+    #[test]
+    fn artikelzeichen_tranche_3() {
+        // Feiner **neben** dem groben, nicht statt seiner.
+        assert_eq!(keys("BUTCHER'S Frisches Hüftsteak*"), vec!["rind", "steak"]);
+        assert_eq!(keys("KERRYGOLD Reibekäse*"), vec!["käse", "reibekäse"]);
+        assert_eq!(keys("Croissant XXL"), vec!["backwaren", "croissant"]);
+
+        // **Die Sperre, die eine Messung gefordert hat:** „vegan Schnitzel"
+        // ist der Fall vom 21.07. und gehört zu `tofu`, nicht zu `schnitzel`.
+        assert!(!keys("Vegan Schnitzel").contains(&"schnitzel".to_string()));
+
+        // Gegenprobe: ein echtes Schnitzel behält seinen Begriff.
+        assert_eq!(keys("MÜHLENHOF Frische Puten-Schnitzel*"), vec!["pute", "schnitzel"]);
     }
 
     /// **Tranche 2: Obst, Gemüse, Kräuter** (2026-08-07).

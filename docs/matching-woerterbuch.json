@@ -2297,6 +2297,270 @@
    "block": [
     "petersilienwurzel"
    ]
+  },
+  "bagel": {
+   "exact": [
+    "bagel",
+    "bagels"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "burgerbrötchen": {
+   "exact": [
+    "burgerbrötchen",
+    "burgerbuns",
+    "hamburgerbrötchen",
+    "brioche buns"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "croissant": {
+   "exact": [
+    "croissant",
+    "croissants",
+    "buttercroissant",
+    "buttercroissants"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "pizzateig": {
+   "exact": [
+    "pizzateig",
+    "blätterteig",
+    "hefeteig",
+    "kuchenteig",
+    "mürbeteig"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "roggenbrot": {
+   "exact": [
+    "roggenbrot",
+    "vollkornbrot",
+    "körnerbrot",
+    "schwarzbrot",
+    "pumpernickel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "zimtschnecken": {
+   "exact": [
+    "zimtschnecke",
+    "zimtschnecken",
+    "franzbrötchen",
+    "zimtrolle"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "pflanzendrink": {
+   "exact": [
+    "hafermilch",
+    "mandelmilch",
+    "sojamilch",
+    "reismilch",
+    "kokosdrink",
+    "erbsendrink"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "hüttenkäse": {
+   "exact": [
+    "hüttenkäse",
+    "huettenkaese",
+    "körniger frischkäse",
+    "cottage cheese"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "magerquark": {
+   "exact": [
+    "magerquark",
+    "speisequark"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "raclettekäse": {
+   "exact": [
+    "raclettekäse",
+    "raclette"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "reibekäse": {
+   "exact": [
+    "reibekäse",
+    "reibkäse",
+    "geriebener käse",
+    "pizzakäse",
+    "gratinkäse"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "ricotta": {
+   "exact": [
+    "ricotta",
+    "mascarpone"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "mascarpone joghurt"
+   ]
+  },
+  "grillkäse": {
+   "exact": [
+    "grillkäse",
+    "ofenkäse",
+    "backcamembert"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "sojajoghurt": {
+   "exact": [
+    "sojajoghurt",
+    "pflanzenjoghurt",
+    "kokosjoghurt"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kaffeerahm": {
+   "exact": [
+    "kaffeerahm",
+    "kaffeesahne",
+    "kondensmilch"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "bacon": {
+   "exact": [
+    "bacon",
+    "frühstücksspeck",
+    "speck",
+    "pancetta"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "fleischwurst": {
+   "exact": [
+    "fleischwurst",
+    "lyoner",
+    "bierschinken",
+    "mortadella",
+    "jagdwurst"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "kassler": {
+   "exact": [
+    "kassler",
+    "kasseler",
+    "kasslernacken"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "schinken": {
+   "exact": [
+    "schinken",
+    "kochschinken",
+    "rohschinken",
+    "serranoschinken",
+    "parmaschinken",
+    "lachsschinken"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "schinkenwurst",
+    "bierschinken"
+   ]
+  },
+  "muscheln": {
+   "exact": [
+    "muschel",
+    "muscheln",
+    "miesmuscheln",
+    "jakobsmuscheln"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "nudeln muscheln"
+   ]
+  },
+  "sardellen": {
+   "exact": [
+    "sardelle",
+    "sardellen",
+    "anchovis",
+    "sardinen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "schnitzel": {
+   "exact": [
+    "schnitzel",
+    "wiener schnitzel",
+    "putenschnitzel",
+    "schweineschnitzel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "vegan schnitzel",
+    "veganes schnitzel"
+   ]
+  },
+  "steak": {
+   "exact": [
+    "steak",
+    "steaks",
+    "rumpsteak",
+    "hüftsteak",
+    "entrecote",
+    "filetsteak"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "steakhouse",
+    "hacksteaks"
+   ]
   }
  },
  "marken": {
