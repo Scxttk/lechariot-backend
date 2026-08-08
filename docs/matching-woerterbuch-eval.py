@@ -96,7 +96,7 @@ V = {
  "knäckebrot":(["knäckebrot","knäckebrote","knäcke","reiswaffeln"],[],[]),
  "milch":(["milch","frischmilch","vollmilch","buttermilch","mandeldrink","haferdrink","sojadrink"],["milch"],["milchreis","milchschnitte","milchbrötchen","kokosmilch","milcheis","milchschokolade","kondensmilch","sonnenmilch","kokosnussmilch","milka","knoppers","milch schnitte","bergkäse","käsescheiben","quark","camembert"]),
  "butter":(["butter","süßrahmbutter","weidebutter","markenbutter","kærgården","kaergarden"],[],["butterkäse","buttergemüse","erdnussbutter","buttermilch","butterkeks","nut butter"]),
- "käse":(["käse","kaese","käsescheiben","käsesnack","cheestrings","cottage","gouda","emmentaler","edamer","maasdamer","bergkäse","butterkäse","cheddar","parmesan","grana","halloumi","finello","obazda"],["käse","kaese"],["käsekuchen","frischkäse","croissant","leberkäse","laugenstange","laugengebäck","brezel","käsebrötchen","käsestange","käsegebäck","fleischkäse","twister"]),
+ "käse":(["käse","kaese","käsescheiben","käsesnack","cheestrings","cottage","gouda","emmentaler","edamer","maasdamer","bergkäse","butterkäse","cheddar","parmesan","grana","halloumi","finello","obazda"],["käse","kaese"],["käsekuchen","frischkäse","croissant","leberkäse","laugenstange","laugengebäck","brezel","käsebrötchen","käsestange","käsegebäck","fleischkäse","twister","käselaugenstange","käseschnecke"]),
  "frischkäse":(["frischkäse","frischkaese"],[],[]),
  "mozzarella":(["mozzarella"],["mozzarella"],[]),
  "feta":(["feta","hirtenkäse","schafskäse"],[],[]),
@@ -767,7 +767,11 @@ PRAEFIX = {
  "hackfleisch":["hackfleisch"],  # NICHT „hack" — das fängt HACKER-PSCHORR
  "beeren":["beeren"],        # Beerenmischung
  "frischkäse":["frischkäse"],
- "käse":["schmelzkäse"],
+ # „käse" selbst kam erst am 08.08. dazu: „ALPENHAIN Grill-Käsegenuss" trug
+ # kein Tag, weil „käsegenuss" weder exact noch Suffix noch Präfix war. Die
+ # Blockliste fängt Käsekuchen, Käsebrötchen, Käsestange und Käsegebäck
+ # schon — der Präfix erbt sie.
+ "käse":["schmelzkäse","käse"],
  "mozzarella":["mozzarella"],
  "nudeln":["teigwaren"],
  "bratwurst":["bratwurst"],
@@ -939,6 +943,13 @@ for _t,_ex in _ADD_BRING.items():
 
 NONFOOD_KEY = "nonfood"
 
+# Dieselbe Reihenfolge wie `dict()` in src/matching.rs: längste Marke zuerst,
+# bei Gleichstand alphabetisch. Einmal gebaut, nicht je Angebot.
+MARKEN_SORTIERT = sorted(
+    ((norm(m), t) for m, t in MARKEN.items() if norm(m)),
+    key=lambda mt: (-len(mt[0]), mt[0]),
+)
+
 
 def match_keys(title, sub="", cat=""):
     """Tags eines Angebots — die Python-Seite von `src/matching.rs::match_keys`.
@@ -959,10 +970,17 @@ def match_keys(title, sub="", cat=""):
     hits = term_hits(text)
     if hits:
         return hits, "titel"
-    # Marken-Fallback: die erste passende Marke in Wörterbuch-Reihenfolge.
-    for marke, term in MARKEN.items():
-        nmarke = norm(marke)
-        if nmarke and enthaelt_als_wort(ntext, nmarke):
+    # Marken-Fallback: die LÄNGSTE passende Marke gewinnt, bei Gleichstand
+    # die alphabetisch erste. Diese Reihenfolge kam am 01.08. in die
+    # Rust-Seite („MILKANA" enthält „milka" und bekam Schokolade statt Käse)
+    # und stand seither nur dort — Python nahm weiter die erste Marke in
+    # Wörterbuch-Reihenfolge. Gefunden am 08.08., als der Paritätstest zum
+    # ersten Mal Angebotszeilen sah: „PENNY READY Ayran Natur" bekam hier
+    # `milch` (ayran steht früher) und in Rust `fertiggericht` (penny ready
+    # ist länger). Eine von 4224 Zeilen — und die Sorte Abweichung, die
+    # Summen nicht sehen können.
+    for nmarke, term in MARKEN_SORTIERT:
+        if enthaelt_als_wort(ntext, nmarke):
             return [NONFOOD_KEY if term == "NONFOOD" else term], "marke"
     # Letzter Ausweg: die gepflegte Kategorie-Zuordnung. Nur exakte Gleichheit
     # der normalisierten Kategorie, nur wenn Titel und Untertitel nichts

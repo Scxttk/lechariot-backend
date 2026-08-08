@@ -128,3 +128,101 @@ fn das_woerterbuch_entscheidet_was_essen_ist() {
     assert_eq!(kat("K-CLASSIC Sonnenblumenöl", "1 l", ""), "Vorräte & Kochen");
     assert_eq!(kat("Wilkinson Hydro 5 Rasierklingen", "4 Stück", "drogerie"), "Drogerie");
 }
+
+/// **Neun Zeilen Essen standen unter „Sonstiges"** (gemessen in der
+/// Backend-Runde vom 08.08., behoben am selben Tag).
+///
+/// Seit [#64] holt `enrich` das Regal über den Wörterbuch-Begriff. Kennt die
+/// `RULES`-Tabelle den Begriff nicht, bleibt die Zeile im Sonstiges-Topf —
+/// dem Fach, das sich das Unsortierbare mit der Aktionsware teilt.
+///
+/// Der teuerste Fall war nicht ein *fehlender*, sondern ein *falscher*
+/// Eintrag: `tofu` stand bei den Non-Food-Zeilen und zeigte auf „Sonstiges".
+/// Das ist für die Suche nach dem Regal ein gültiges Ergebnis, kein
+/// fehlendes — der Begriff verdeckte damit jeden feineren Begriff derselben
+/// Zeile (`hummus`, `krautsalat`), weil die Suche beim ersten Treffer endet.
+///
+/// `cargo run --example regal_audit` misst es nach: vorher 9, jetzt 0.
+#[test]
+fn essen_faellt_nicht_in_den_sonstiges_topf() {
+    let kat = |t: &str, s: &str, c: &str| {
+        enrich::enrich(t, Some(s).filter(|x| !x.is_empty()), Some(c).filter(|x| !x.is_empty()))
+            .category
+    };
+
+    // Die fünf `tofu`-Zeilen des Korpus — alle über das Wort „vegan", denn
+    // ein Produkt namens Tofu stand in keiner der Wochen.
+    assert_eq!(kat("Bougatsa  Vegan", "", "Veganes"), "Vorräte & Kochen");
+    assert_eq!(kat("Peanuts vegan", "", "Veganes"), "Vorräte & Kochen");
+    assert_eq!(kat("Krautsalat griechischer Art vegan", "", "Veganes"), "Vorräte & Kochen");
+    assert_eq!(kat("REWE Bio + vegan Hummus Natur", "je 200-g-Schale", ""), "Vorräte & Kochen");
+    assert_eq!(kat("Bio-Tempeh 200 g, Natur", "0,2 kg", "Bio-Produkte"), "Vorräte & Kochen");
+    assert_eq!(kat("Feine Speisestärke", "0.4 kg", "Backzutaten & -mischungen"), "Vorräte & Kochen");
+    assert_eq!(kat("NATURGUT Bio Kapern Surfines", "je 100 g", "naturgut"), "Vorräte & Kochen");
+    assert_eq!(kat("NATURGUT Bio Edamame", "", "naturgut"), "Obst & Gemüse");
+
+    // Gegenprobe 1: Non-Food bleibt im Sonstiges-Topf. Der Weg über den
+    // Begriff darf nur für Essen laufen.
+    assert_eq!(kat("PARKSIDE Akku-Bohrschrauber", "", "werkzeug"), "Sonstiges");
+    assert_eq!(kat("ESMARA Damen-Shirt", "", "bekleidung"), "Sonstiges");
+    // Gegenprobe 2: Wer schon ein Regal hatte, behält es — der Eingriff gilt
+    // der Tabelle, nicht dem Vorrang.
+    assert_eq!(kat("Vegane Frikadellen", "", "Veganes"), "Fleisch & Wurst");
+    // Der Haferdrink trägt `milch` und stand schon vorher in der Molkerei —
+    // nachgesehen, nicht erwartet: „vegan" und „drink" sind gleich lang, bei
+    // Gleichstand entscheidet die Tabellenreihenfolge, und die Zeile kommt
+    // deshalb über den Begriff und nicht über das Keyword.
+    assert_eq!(kat("Veganer Bio Haferdrink", "", "Veganes"), "Molkerei & Eier");
+    assert_eq!(kat("Soja-Sauce", "0.5 l", ""), "Vorräte & Kochen");
+    // Gegenprobe 3: „schoten" ist der kürzere Eintrag und darf die
+    // Vanilleschote nicht aus den Backzutaten ziehen.
+    assert_eq!(kat("Bourbon-Vanilleschoten", "2 Stück", ""), "Vorräte & Kochen");
+    assert_eq!(kat("Kaiserschoten", "je 200-g-Pckg.", ""), "Obst & Gemüse");
+}
+
+/// Welche Begriffe die `RULES`-Tabelle in den Sonstiges-Topf schickt — als
+/// Liste, damit sie nicht still wächst.
+///
+/// Der Test ist aus dem `tofu`-Fund entstanden und hat ihn beim ersten Lauf
+/// gleich um sieben Geschwister erweitert. Bei diesen sieben ist „Sonstiges"
+/// **richtig**: Handschuhe und Blumenerde sind kein Essen. Falsch war nur
+/// `tofu`, und die Kosten trug nicht er selbst, sondern die feineren
+/// Begriffe, die er verdeckte.
+///
+/// Seit `enrich` „Sonstiges" nicht mehr als Antwort zählt, ist die Liste
+/// folgenlos — sie steht hier, weil ein **Essens**begriff darin ein Fehler
+/// wäre, den sonst wieder nur eine Messung findet.
+#[test]
+fn welche_begriffe_kein_regal_haben() {
+    let dict: serde_json::Value =
+        serde_json::from_str(include_str!("../docs/matching-woerterbuch.json")).unwrap();
+    let mut ohne_regal: Vec<String> = dict["begriffe"]
+        .as_object()
+        .unwrap()
+        .keys()
+        // Non-Food ist kein Begriff, sondern das Gegenteil davon.
+        .filter(|b| *b != "nonfood")
+        .filter(|b| {
+            // Genauso gefragt wie in `enrich`: über einen Titel, der nur aus
+            // dem Begriff besteht. `emoji_is_fallback` trennt „die Tabelle
+            // sagt Sonstiges" von „die Tabelle kennt das Wort nicht".
+            let e = enrich::enrich(b, None, None);
+            e.category == FALLBACK_CATEGORY && !e.emoji_is_fallback
+        })
+        .cloned()
+        .collect();
+    ohne_regal.sort();
+    assert_eq!(
+        ohne_regal,
+        [
+            "blumenerde",
+            "blumentopf",
+            "gartenwerkzeug",
+            "handschuhe",
+            "socken",
+            "taschenlampe",
+            "zimmerpflanze",
+        ],
+        "Neuer Begriff ohne Regal — ist es Essen, gehört er in die RULES-Tabelle"
+    );
+}
