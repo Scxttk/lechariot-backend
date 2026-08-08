@@ -1026,4 +1026,43 @@ mod tests {
             assert!(!is_blocked_ip(ip.parse().unwrap()), "sollte erlaubt sein: {ip}");
         }
     }
+
+    // Was die Bild-Probe als „das Telefon sieht ein Bild" gelten lässt. Der
+    // Lauf vom 2026-08-08 fand alle neun Ketten gesund — die Fälle, für die
+    // die Probe überhaupt gebaut ist, sind ihr live also nie begegnet und
+    // gehören deshalb hierher. Der zweite ist der unangenehmste: Ein CDN, das
+    // seine Fehlerseite mit HTTP 200 ausliefert, sähe an jeder Prüfung
+    // vorbei, die nur auf den Status schaut — auf dem Telefon steht dann das
+    // Emoji.
+    #[test]
+    fn only_a_real_image_counts_as_alive() {
+        let probe = |status: Option<u16>, ct: &str, bytes: usize| ImageProbe {
+            status,
+            content_type: ct.to_string(),
+            bytes,
+            via: "test",
+            error: None,
+        };
+
+        assert!(probe(Some(200), "image/webp", 4096).is_image());
+        assert!(probe(Some(200), "image/jpeg; charset=binary", 4096).is_image());
+
+        assert!(!probe(Some(403), "text/html", 512).is_image(), "der Netto-Fall");
+        assert!(!probe(Some(200), "text/html", 512).is_image(), "Fehlerseite mit 200");
+        assert!(!probe(Some(200), "image/webp", 0).is_image(), "leerer Körper");
+        assert!(!probe(Some(301), "", 0).is_image(), "Redirect ist kein Bild");
+        assert!(!probe(None, "", 0).is_image(), "gar kein Abruf");
+    }
+
+    #[test]
+    fn a_failed_fetch_describes_itself_instead_of_pretending_a_status() {
+        let p = ImageProbe {
+            status: None,
+            content_type: String::new(),
+            bytes: 0,
+            via: "curl",
+            error: Some("Zeitüberschreitung".to_string()),
+        };
+        assert_eq!(p.describe(), "kein Abruf (Zeitüberschreitung)");
+    }
 }
