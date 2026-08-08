@@ -1278,6 +1278,11 @@ mod tests {
         // --- milch zog Quark und Käse mit -----------------------------------
         ohne("SCHWARZWALDMILCH Protein-Quark-Creme", "milch");
         ohne("BAUERNMILCH Demeter Camembert Rahmstufe", "milch");
+        // LÄTTA stand in keiner Liste — die Roadmap führt die Marke seit dem
+        // 01.08. als Beispiel, eingetragen war sie nie. Ohne Eintrag bleibt
+        // die Zeile ungetaggt und fällt im Import in den Sonstiges-Topf.
+        assert_eq!(keys("Lätta"), vec!["margarine"]);
+
         // Gegenprobe: die Milch bleibt Milch.
         hat("Frische Vollmilch 1 l", "milch");
         hat("MILBONA Haltbare Milch 3,5 %", "milch");
