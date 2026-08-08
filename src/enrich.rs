@@ -27,6 +27,22 @@ pub const CATEGORIES: [&str; 15] = [
 
 pub const FALLBACK_CATEGORY: &str = "Sonstiges";
 
+/// Die Regale, in denen Essen steht. `Sonstiges` gehört nicht dazu — es ist
+/// der Topf für alles, was der Import nicht einsortieren konnte, und teilt
+/// sich das Fach mit der Aktionsware.
+const FOOD_CATEGORIES: [&str; 10] = [
+    "Obst & Gemüse",
+    "Molkerei & Eier",
+    "Fleisch & Wurst",
+    "Fisch",
+    "Backwaren",
+    "Tiefkühl",
+    "Süßes & Snacks",
+    "Getränke",
+    "Alkohol",
+    "Vorräte & Kochen",
+];
+
 /// Standard-Emoji pro Kategorie — greift, wenn kein Keyword passt.
 const CATEGORY_EMOJI: [(&str, &str); 15] = [
     ("Obst & Gemüse", "🥬"),
@@ -800,7 +816,47 @@ pub struct Enrichment {
     pub emoji_is_fallback: bool,
 }
 
+/// Kategorie, die die Keyword-Tabelle einem einzelnen Wort gibt.
+///
+/// Eigene Funktion, weil hier nicht ein Titel gefragt wird, sondern ein
+/// **Wörterbuch-Begriff** — `käse`, `bier`, `tiefkühlgemüse`. Das ist die
+/// sauberere Sonde: Der Begriff ist bereits das Ergebnis aller Sperr- und
+/// Kompositaregeln, während der rohe Titel sie noch vor sich hat.
+///
+/// Kennt die Tabelle das Wort nicht, heißt der Begriff manchmal einfach schon
+/// wie das Regal (`backwaren`, `obst`) — dann entscheidet der Name.
+fn kategorie_fuer_begriff(begriff: &str) -> Option<&'static str> {
+    RULES
+        .iter()
+        .filter(|(kw, _, _)| keyword_matches(begriff, kw))
+        .max_by_key(|(kw, _, _)| kw.len())
+        .map(|(_, _, c)| *c)
+        .or_else(|| {
+            CATEGORIES
+                .iter()
+                .find(|c| c.to_lowercase().starts_with(begriff))
+                .copied()
+        })
+}
+
 /// Titel/Untertitel/Rohkategorie → Kategorie + Emoji.
+///
+/// **Was Essen ist, entscheidet das Wörterbuch** und nicht diese Datei. Bis
+/// zum 2026-08-08 wusste `matching.rs` es (über `NONFOOD_CAT`,
+/// `NONFOOD_TERMS` und die Markenliste, auf der RUSSELL HOBBS längst stand)
+/// und `enrich` wusste es noch einmal, an seiner eigenen Keyword-Tabelle —
+/// zwei Stellen, die nichts voneinander wussten. Der Fehler kam aus beiden
+/// Richtungen und wurde am 06.08. beim Entschlacken der Top-Deals gefunden:
+///
+/// * `GOURMETMAXX Ölsprüher` und `RUSSELL HOBBS Food Processor` standen unter
+///   **Vorräte & Kochen**, weil die Rohkategorie der Kette „Kochen und
+///   Grillen" heißt. Das ist ihr Regal, nicht die Beschaffenheit der Ware.
+/// * `MAGGI Fix` und `Lätta` standen unter **Sonstiges**, weil kein Keyword
+///   passte — im selben Topf wie die Aktionsware.
+///
+/// Jetzt fragt `enrich` einmal das Wörterbuch und lässt dessen Urteil in
+/// beide Richtungen gelten: Non-Food kommt in kein Essensregal, und Essen
+/// fällt nicht in den Sonstiges-Topf, solange sein Begriff ein Regal kennt.
 pub fn enrich(title: &str, subtitle: Option<&str>, raw_category: Option<&str>) -> Enrichment {
     // Weiches Trennzeichen (U+00AD) entfernen — Scraper-Titel wie
     // "Fertig­gericht" enthalten es mitten im Wort und brechen sonst den Match.
@@ -822,10 +878,30 @@ pub fn enrich(title: &str, subtitle: Option<&str>, raw_category: Option<&str>) -
         raw_category.and_then(|raw| find_best(&raw.to_lowercase().replace('-', " ")))
     });
 
-    let category = raw_category
+    let mut category = raw_category
         .and_then(map_raw_category)
         .or(best.map(|(_, _, c)| *c))
         .unwrap_or(FALLBACK_CATEGORY);
+
+    let tags = crate::matching::match_keys(title, subtitle, raw_category);
+    if tags == [crate::matching::NONFOOD_KEY] {
+        // Non-Food gehört in kein Essensregal. Die Rohkategorie der Kette
+        // darf hier nicht mitreden — „kochen-und-grillen" ist ein Gang im
+        // Markt und sagt nichts darüber, ob man das Ding essen kann.
+        if FOOD_CATEGORIES.contains(&category) {
+            category = best
+                .map(|(_, _, c)| *c)
+                .filter(|c| !FOOD_CATEGORIES.contains(c))
+                .unwrap_or(FALLBACK_CATEGORY);
+        }
+    } else if category == FALLBACK_CATEGORY {
+        // Umgekehrt: Was das Wörterbuch als Essen erkannt hat, gehört nicht
+        // in den Topf für das Unsortierbare. Der Begriff weiß, in welches
+        // Regal es gehört.
+        if let Some(c) = tags.iter().find_map(|t| kategorie_fuer_begriff(t)) {
+            category = c;
+        }
+    }
 
     match best {
         Some((_, emoji, _)) => Enrichment { category, emoji, emoji_is_fallback: false },
