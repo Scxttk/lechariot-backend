@@ -63,6 +63,50 @@ fn netto_fixture_parses_tiles_with_period() {
     assert_eq!(kirschen.subtitle.as_deref(), Some("100 g"));
 }
 
+// Nettos Bilder MÜSSEN gespiegelt werden — die App kann sie nie selbst laden
+// (403 für jeden schlichten Client, gemessen 2026-07-31). Ob gespiegelt wird,
+// entscheidet allein der Host: `push::scope_of` schickt eine URL nur dann in
+// den Pflicht-Durchgang (`UnfetchableRemotes`), wenn
+// `storage::is_client_blocked_url` sie erkennt. Alles andere landet im
+// Kür-Durchgang, und der ist seit dem 27.07. abgeschaltet.
+//
+// Das ist die stille Bruchstelle dieser Kette: Zieht Netto seine Bilder auf
+// einen anderen Host um, fällt die URL lautlos aus der Pflicht in die Kür, der
+// Spiegel hört auf, und in der Datenbank sieht weiter alles gesund aus. Genau
+// so sah der Fehler vom 31.07. aus. Der Test hält den Host deshalb an der
+// Quelle fest — beim Aktualisieren der Fixture wird er rot und sagt, warum.
+#[test]
+fn netto_image_urls_stay_on_a_host_the_mirror_treats_as_mandatory() {
+    let mut offers = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    lechariot::scrapers::netto::parse_page(
+        include_str!("fixtures/netto/filialangebote_1.html"),
+        "4816",
+        &mut offers,
+        &mut seen,
+    );
+
+    let bilder: Vec<&String> = offers.iter().flat_map(|o| &o.images).collect();
+    assert_eq!(bilder.len(), 4, "die Fixture trägt vier Produktbilder");
+    for url in bilder {
+        assert!(
+            lechariot::storage::is_client_blocked_url(url),
+            "Netto-Bild-URL wird nicht mehr als spiegelpflichtig erkannt — \
+             CLIENT_BLOCKED_HOST_SUFFIXES in storage.rs ergänzen, sonst hört \
+             der Spiegel still auf und die App zeigt wieder Emojis: {url}"
+        );
+    }
+
+    // Gegenprobe, sonst prüft die Schleife oben nur, dass die Funktion „ja"
+    // sagt: Ein Umzug auf einen anderen Host wäre wirklich unerkannt.
+    assert!(
+        !lechariot::storage::is_client_blocked_url(
+            "https://cdn.netto.example/media/1-450x450-Eis.webp"
+        ),
+        "der Wächter muss den Umzug bemerken können, sonst bewacht er nichts"
+    );
+}
+
 // ---------------------------------------------------------------- ALDI Nord
 
 #[test]
