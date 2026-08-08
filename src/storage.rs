@@ -365,6 +365,21 @@ pub fn mirror(
 /// statt auf stdout, damit sich Binärdaten nicht mit dem `-w`-Statusreport
 /// mischen.
 fn curl_download(url: &str) -> Result<(Vec<u8>, String)> {
+    let (status, content_type, bytes) = curl_fetch(url)?;
+    if status != 200 {
+        bail!("Bild-Download {url}: HTTP {status} (curl)");
+    }
+    if bytes.is_empty() {
+        bail!("Bild-Download {url}: leerer Body (curl)");
+    }
+    Ok((bytes, content_type))
+}
+
+/// Der eigentliche curl-Aufruf: liefert (Status, Content-Type, Bytes), **ohne**
+/// über den Status zu urteilen. Getrennt von [`curl_download`], damit die
+/// Bild-Probe (`audit`) einen 403 als Messwert bekommt statt als Fehlermeldung
+/// — sie will die Zahl, nicht den Abbruch.
+fn curl_fetch(url: &str) -> Result<(u16, String, Vec<u8>)> {
     // Präzedenzfall `scrapers::util::curl_get` — inklusive der höflichen
     // Pause zwischen Requests an denselben Host.
     crate::scrapers::util::polite_pause(url);
@@ -400,13 +415,91 @@ fn curl_download(url: &str) -> Result<(Vec<u8>, String)> {
     let (status, content_type) = report.trim().split_once('\t').unwrap_or((report.trim(), ""));
     let bytes = std::fs::read(&tmp).unwrap_or_default();
     let _ = std::fs::remove_file(&tmp);
-    if status != "200" {
-        bail!("Bild-Download {url}: HTTP {status} (curl)");
+    let status: u16 = status
+        .parse()
+        .with_context(|| format!("curl lieferte keinen Status für {url}: '{status}'"))?;
+    Ok((status, content_type.to_string(), bytes))
+}
+
+/// Was eine Bild-URL antwortet, wenn man sie **so** abruft, wie der Spiegel es
+/// täte: System-curl für die Hosts aus [`CLIENT_BLOCKED_HOST_SUFFIXES`],
+/// reqwest für alle anderen. Kein Urteil, nur der Messwert.
+///
+/// Das ist die Frage, die in dieser Kette bis zum 2026-08-08 niemand gestellt
+/// hat: ob die gerade geschriebene `image_url` überhaupt abrufbar ist. Ein
+/// Netzwerkfehler ist selbst ein Ergebnis (`status: None`) und bricht die Probe
+/// nicht ab — eine Probe, die beim ersten toten Bild aufhört, misst nichts.
+pub fn probe(client: &reqwest::blocking::Client, url: &str) -> ImageProbe {
+    if is_client_blocked_url(url) {
+        return match curl_fetch(url) {
+            Ok((status, content_type, bytes)) => ImageProbe {
+                status: Some(status),
+                content_type,
+                bytes: bytes.len(),
+                via: "curl",
+                error: None,
+            },
+            Err(e) => ImageProbe {
+                status: None,
+                content_type: String::new(),
+                bytes: 0,
+                via: "curl",
+                error: Some(format!("{e:#}")),
+            },
+        };
     }
-    if bytes.is_empty() {
-        bail!("Bild-Download {url}: leerer Body (curl)");
+    match client.get(url).send() {
+        Ok(resp) => {
+            let status = resp.status().as_u16();
+            let content_type = resp
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_string();
+            let bytes = resp.bytes().map(|b| b.len()).unwrap_or(0);
+            ImageProbe { status: Some(status), content_type, bytes, via: "reqwest", error: None }
+        }
+        Err(e) => ImageProbe {
+            status: None,
+            content_type: String::new(),
+            bytes: 0,
+            via: "reqwest",
+            error: Some(e.to_string()),
+        },
     }
-    Ok((bytes, content_type.to_string()))
+}
+
+/// Ergebnis eines [`probe`]-Abrufs.
+pub struct ImageProbe {
+    /// HTTP-Status; `None`, wenn der Abruf gar nicht zustande kam.
+    pub status: Option<u16>,
+    pub content_type: String,
+    pub bytes: usize,
+    /// Welcher Weg gemessen hat — „curl" oder „reqwest".
+    pub via: &'static str,
+    pub error: Option<String>,
+}
+
+impl ImageProbe {
+    /// Nur ein 200 mit erlaubtem Bild-Content-Type und nicht-leerem Körper gilt
+    /// als „das Telefon sieht ein Bild". Ein 200 mit `text/html` ist die
+    /// Fehlerseite eines CDNs und wäre in der App wieder das Emoji.
+    pub fn is_image(&self) -> bool {
+        self.status == Some(200)
+            && self.bytes > 0
+            && allowed_image_content_type(&self.content_type).is_some()
+    }
+
+    /// Kurzfassung für Protokoll und Zusammenfassung.
+    pub fn describe(&self) -> String {
+        match (self.status, &self.error) {
+            (Some(s), _) if self.is_image() => format!("{s} {}", self.content_type),
+            (Some(s), _) => format!("{s} {}", if self.content_type.is_empty() { "ohne Content-Type" } else { &self.content_type }),
+            (None, Some(e)) => format!("kein Abruf ({e})"),
+            (None, None) => "kein Abruf".to_string(),
+        }
+    }
 }
 
 /// `file://`-Quelle in einen Pfad auflösen, aber **nur** innerhalb des

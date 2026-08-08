@@ -421,6 +421,54 @@ jobs:
             exit 1
           fi
 
+      # Bild-Wächter: Trägt eine Kette Bild-URLs, die niemand abrufen kann?
+      #
+      # Der Ketten-Wächter oben prüft, ob Angebote ankommen — über ihre Bilder
+      # sagt er nichts. Genau dort saß der Netto-Fehler: 1.722 Angebote, jede
+      # Zeile mit `image_url`, und auf dem Telefon durchweg das Emoji, weil
+      # Nettos CDN jedem schlichten Client mit 403 antwortet. In der Datenbank
+      # sah das gesund aus; gemerkt hat es vier Tage später ein Tester.
+      #
+      # `always()`: Ein roter Ketten-Wächter (eine stumme Kette) darf den
+      # Bildbefund nicht verschlucken — die beiden Fragen sind unabhängig.
+      # Nur bei einer **komplett** toten Kette schlägt der Schritt fehl; ein
+      # einzelnes verschwundenes Produktfoto bleibt eine Warnung.
+      - name: Bilder abrufbar? (Stichprobe je Kette)
+        if: always() && inputs.market_id == ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          set -o pipefail
+          # `always()` läuft auch, wenn der Build oben gescheitert ist — dann
+          # gibt es kein Binary und der Schritt hätte nichts zu sagen.
+          [ -x ./target/release/lechariot ] || {
+            echo "::warning title=Bild-Probe::Kein Binary — Bild-Probe übersprungen."
+            exit 0
+          }
+          ./target/release/lechariot audit-images --sample 8 --fail-on-dead-chain \
+            2>&1 | tee bild-probe.log || AUDIT_FAILED=1
+          {
+            echo ""
+            echo "### Bilder"
+            echo ""
+            echo "| Kette | Angebote | mit Bild | Spiegel | Händler | file:// | geprüft | lebt | Urteil |"
+            echo "|---|---:|---:|---:|---:|---:|---:|---:|---|"
+            awk -F'\t' '$1 == "BILD-PROBE" {
+              urteil = $10
+              if (urteil == "TOT") urteil = "❌ **TOT**"
+              else if (urteil == "angeschlagen") urteil = "⚠️ angeschlagen"
+              printf "| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n", $2,$3,$4,$5,$6,$7,$8,$9,urteil
+            }' bild-probe.log 2>/dev/null || true
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r zeile; do
+            echo "::warning title=Bild-Probe::${zeile#WARNUNG }"
+          done < <(grep "^WARNUNG" bild-probe.log 2>/dev/null || true)
+          if [ "${AUDIT_FAILED:-0}" = "1" ]; then
+            echo "::error title=Kette ohne abrufbare Bilder::Eine Kette trägt Bild-URLs, von denen keine einzige geladen werden kann. Die App zeigt dort nur Emojis, obwohl die Datenbank gesund aussieht."
+            exit 1
+          fi
+
       # Verwaiste Bucket-Bilder aufräumen: der Push löscht veraltete offer-Zeilen
       # (push.rs), aber nie ihre gespiegelten Bilder — der offer-images-Bucket
       # wuchs so über das Free-Limit. Nur beim vollen
