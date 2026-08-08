@@ -1300,6 +1300,17 @@ mod tests {
             hat(titel, tag);
             ohne(titel, NONFOOD_KEY);
         }
+        // Derselbe Fund noch einmal am Grill: „grill\\b" nahm den Grill-Käse
+        // mit und ließ die Grillzange durch (zwischen „grill" und „zange"
+        // steht keine Wortgrenze). Jetzt stehen die Geräte einzeln da.
+        // Der Käsegenuss ist danach ungetaggt statt Non-Food — er landet auf
+        // der Review-Liste statt im Baumarkt. Dass ihm `käse` fehlt, ist eine
+        // eigene Lücke (kein Präfix `käse`) und steht im Backlog.
+        ohne("ALPENHAIN Grill-Käsegenuss*", NONFOOD_KEY);
+        hat("Grill-Rosenbrötchen", "brot");
+        assert_eq!(keys("Grillzange* je Stück"), vec![NONFOOD_KEY]);
+        assert_eq!(keys("Kitchen Tools Kontaktgrill SKGE 2000 D3"), vec![NONFOOD_KEY]);
+
         // Gegenprobe: Topf, Blume, Axe und Pflanze bleiben Non-Food.
         for titel in ["Aluguss-Kochtopf 28cm", "Schnellkochtopf Secure Click",
                       "Bunter Blumenstrauß", "Axe Bodyspray", "Salatpflanzen im Topf",
