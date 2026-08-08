@@ -5,8 +5,6 @@
     "brot",
     "broetchen",
     "brötchen",
-    "toast",
-    "baguette",
     "ciabatta",
     "croutons",
     "buns",
@@ -15,16 +13,48 @@
    "suffix": [
     "brot",
     "broetchen",
-    "brötchen",
-    "toast",
-    "baguette"
+    "brötchen"
    ],
    "prefix": [],
    "block": [
     "brotaufstrich",
     "aufbackbrötchen?",
-    "russisch brot"
+    "russisch brot",
+    "knäckebrot",
+    "knäckebrote"
    ]
+  },
+  "toast": {
+   "exact": [
+    "toast",
+    "toasties"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "baguette": {
+   "exact": [
+    "baguette",
+    "baguettes"
+   ],
+   "suffix": [
+    "baguette"
+   ],
+   "prefix": [],
+   "block": []
+  },
+  "knäckebrot": {
+   "exact": [
+    "knäckebrot",
+    "knusperbrot",
+    "zwieback",
+    "wasa",
+    "reiswaffeln"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
   },
   "milch": {
    "exact": [
@@ -54,7 +84,9 @@
     "knoppers",
     "milch schnitte",
     "bergkäse",
-    "käsescheiben"
+    "käsescheiben",
+    "quark",
+    "camembert"
    ]
   },
   "butter": {
@@ -458,13 +490,8 @@
   },
   "beeren": {
    "exact": [
-    "erdbeeren",
-    "himbeeren",
-    "blaubeeren",
-    "heidelbeeren",
-    "brombeeren",
-    "johannisbeeren",
-    "beerenmix"
+    "beerenmix",
+    "beerenmischung"
    ],
    "suffix": [
     "beeren"
@@ -476,6 +503,51 @@
     "erdbeermarmelade",
     "erdbeerjoghurt"
    ]
+  },
+  "erdbeeren": {
+   "exact": [
+    "erdbeeren"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "erdbeermarmelade",
+    "erdbeerjoghurt",
+    "erdbeerkonfitüre"
+   ]
+  },
+  "himbeeren": {
+   "exact": [
+    "himbeeren"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "heidelbeeren": {
+   "exact": [
+    "heidelbeeren",
+    "blaubeeren"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "brombeeren": {
+   "exact": [
+    "brombeeren"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
+  },
+  "johannisbeeren": {
+   "exact": [
+    "johannisbeeren"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": []
   },
   "trauben": {
    "exact": [
@@ -921,7 +993,10 @@
    ],
    "block": [
     "nudelsalat",
-    "nudelsuppe"
+    "nudelsuppe",
+    "pasta sauce",
+    "pastasauce",
+    "pizza pasta"
    ]
   },
   "reis": {
@@ -1691,18 +1766,6 @@
     "tortilla"
    ]
   },
-  "knäckebrot": {
-   "exact": [
-    "knäckebrot",
-    "knusperbrot",
-    "zwieback",
-    "wasa",
-    "reiswaffeln"
-   ],
-   "suffix": [],
-   "prefix": [],
-   "block": []
-  },
   "schoten/hülsen": {
    "exact": [
     "kaiserschoten",
@@ -2329,7 +2392,10 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [
+    "schale",
+    "schalen"
+   ]
   },
   "müllbeutel": {
    "exact": [
@@ -5075,6 +5141,6 @@
   "rindfleisch": "rind"
  },
  "nonfood_cat": "mode|style|heim|haus|garten|haustier|tierbedarf|tiernahrung|pflanzen|angeln|elektro|medien|kinderzimmer|wäschepflege|schulstart|alles für die schule|kochen-und-grillen|drogerie|spielzeug|alltagshelfer|technik|spielwaren|baumarkt|multimedia|bekleidung|schuhe|camping|auto|buero|non.?food|onlineshop|e-bikes?|fahrrad|trolley|koffer|unterhemd|\\btops\\b|\\bteller\\b|sch[üu]sseln?|staubsauger|wischroboter|k[üu]chenmasch|n[äa]hmasch|batterien|\\bfarben\\b|kleber|zahngesundheit|glasartikel|aufbewahr|essgeschirr|reinigungsger|k[üu]chenger|k[üu]chengro|k[üu]chenzubeh|grillzubeh|backzubeh|damen|herren|w[äa]sche\\b|leuchten|m[öo]bel|werkzeug|haartrockner|rasierer|zahnpflege|fernseh|led ?& ?lcd|kapsel|padmasch|\\bk[üu]che\\b|blumen|strauß|kochen-und-backen|reinigen|waschmittel|büro",
- "nonfood_terms": "lichterkette|lampion|wäschest|wäscheklammer|wäschekorb|kettensäge|akku|werkzeug|kinderbuch|spielzeug|\\blego\\b|rosen\\b|blumen|pflanze|socken|shorts|shirt|cap\\b|hose|schuhe|handtuch|bettwäsche|pfannen?\\b|topf\\b|löffel|messer|grill\\b|kohle|batterie|lampe|leuchte|katzen|hunde|tiernahrung|nassfutter|trockenfutter|snack für|rasenkanten|solar|deko|kissen|matratze|drucker|kopfhörer|wc-|reiniger|megaperls|oxi action|waschpulver|schreibwaren|mikrofon|duschregal|sonnensegel|wäscheparf|karaoke|trinkzubehör|wäschetrockner|weißer riese|sonnenspray|duftspüler|sonnencreme|feuchttücher|servietten|haushaltstücher|klumpstreu|geschirrtücher|platzset|schlafsack|fusselrolle|bügeleisen|glasschüssel|lautsprecher|geräusche-box|fliegengitter|kajak|husarenknöpfchen|lavendel|bilderbuch|wecker|hairstyler|bastelkoffer|kochgeschirr|grillplatte|boombox|fliegenfalle|mottenabwehr|badvorleger|schrubber|kosmetikspiegel|shorty|plaid|fototafel|komfort-bh|pantoletten|spannbetttuch|küchentücher|sneaker|hoodie|bodyspray|deospray|haarspray|rasierkling|sonnenschutz|dutch oven|gläsersortiment|sonnenschirm|tischdecke|fleece|wellnessbürste|maniküre|pediküre|teppich|taillenslip|haftcreme|wasserballon|doppelwandig|kollagenpulver|pokémon|pokemon|plüsch|spielfigur|sammelkarten|tiptoi|autorennbahn|gesellschaftsspiel|kreuzworträtsel|rätselbuch|pixi|bastel|schüleretui|sticker|puzzle|holzperlen|magnet-bausatz|wasserbahn|kinderbesteck|steckdose|usb|ladegerät|smart-tv|wasserkocher|toaster|standmixer|espressomaschine|kaffeemaschine|kaffeevollautomat|kapselmaschine|waffeleisen|reiskocher|luftkühler|ventilator|wetterstation|vakuumiergerät|hamburger-maker|hamburger maker|inspektionskamera|range extender|mini-led-tv|qled|e-bike|faltrad|mountainbike|fahrradträger|mähroboter|heckenschere|bohrhammer|abbruchhammer|bohrer|winkelschleifer|meißel|werkstatt|rohrzange|bolzenschneider|kabelbinder|elektrohobel|feinbohrschleifer|spannzwingen|zwingen-set|rasendünger|gartenspritze|gartenhocker|sanitär|montageschlüssel|sekundenkleber|buntlack|abdeckplane|duschtürdichtung|badewannenmatte|duschhocker|steppbett|spannbettlaken|tagesdecke|daunendecke|luftbett|matratze|kleiderschrank|drehtürenschrank|büroschrank|bürostuhl|beistelltisch|wohnzimmertisch|tischgruppe|schuhregal|metallregal|kunststoffregal|regalwürfel|polsterbank|schlafsessel|schminktisch|nischenwagen|akustikpaneel|bilderrahmen|sofa |brotkasten|kartoffelstampfer|schneebesen|kleid|tunika|slips|pyjama|leggings|unterhemden|retroboxer|sandalen|bademantel|freizeitanzug|loungewear|trikot-set|tops |ripptops|jersey|boardcase|reisetasche|rucksack|einkaufstrolley|packbänder|kuppelzelt|autodachzelt|zelt |trampolin|nestschaukel|rutsche|sandkasten|whirlpool|sup |sup-|campingstuhl|spieltipi|matschküche|super soaker|großfahrzeug|mini-fahrzeug|rennboot|inkontinenz|rollator|blutdruckmess|pulsoximeter|lesehilfe|spezialbrille|erste-hilfe|massagematte|haltungstrainer|beintrainer|rückenstütz|körperanalyse|waschhilfe|slipeinlagen|mighty patch|orchidee|phalaenopsis|chrysanthem|alpenveilchen|hortensie|glockenblume|dahlie|aster|eustoma|feigenkaktus|bogenhanf|celosia|zauberglöckchen|prärieenzian|rosenstrauß|bunter strauß|alufolie|frischhaltefolie|netflix|wertkarte|löschdecke|trinkflasche|zitronensäure|insektenschutz|corega|axe |all-in-1-pods|allzwecktücher|badebombe|beschriftungsgerät|beschäftigungsbuch|gaming|haushaltsartikel|hipster|kaffeebecher|kaltwachsstreifen|klebestift|nachtwäsche|nutri mixer|shaping-short|silikonform|sprühflasche|treteimer|vorlesebuch|wäschesammler|zitruspresse",
+ "nonfood_terms": "lichterkette|lampion|wäschest|wäscheklammer|wäschekorb|kettensäge|akku|werkzeug|kinderbuch|spielzeug|\\blego\\b|rosen\\b|blumenstrauß|blumenerde|blumenvase|schnittblumen|\\bblumen\\b|pflanzenkörbe|pflanzenkorb|pflanzen?\\b|socken|shorts|shirt|cap\\b|hose|schuhe|handtuch|bettwäsche|pfannen?\\b|kochtopf|kräutertopf|energiespartopf|pflanztopf|\\btopf\\b|löffel|messer|grill\\b|kohle|batterie|lampe|leuchte|katzen|hunde|tiernahrung|nassfutter|trockenfutter|snack für|rasenkanten|solar|deko|kissen|matratze|drucker|kopfhörer|wc-|reiniger|megaperls|oxi action|waschpulver|schreibwaren|mikrofon|duschregal|sonnensegel|wäscheparf|karaoke|trinkzubehör|wäschetrockner|weißer riese|sonnenspray|duftspüler|sonnencreme|feuchttücher|servietten|haushaltstücher|klumpstreu|geschirrtücher|platzset|schlafsack|fusselrolle|bügeleisen|glasschüssel|lautsprecher|geräusche-box|fliegengitter|kajak|husarenknöpfchen|lavendel|bilderbuch|wecker|hairstyler|bastelkoffer|kochgeschirr|grillplatte|boombox|fliegenfalle|mottenabwehr|badvorleger|schrubber|kosmetikspiegel|shorty|plaid|fototafel|komfort-bh|pantoletten|spannbetttuch|küchentücher|sneaker|hoodie|bodyspray|deospray|haarspray|rasierkling|sonnenschutz|dutch oven|gläsersortiment|sonnenschirm|tischdecke|fleece|wellnessbürste|maniküre|pediküre|teppich|taillenslip|haftcreme|wasserballon|doppelwandig|kollagenpulver|pokémon|pokemon|plüsch|spielfigur|sammelkarten|tiptoi|autorennbahn|gesellschaftsspiel|kreuzworträtsel|rätselbuch|pixi|bastel|schüleretui|sticker|puzzle|holzperlen|magnet-bausatz|wasserbahn|kinderbesteck|steckdose|usb|ladegerät|smart-tv|wasserkocher|toaster|standmixer|espressomaschine|kaffeemaschine|kaffeevollautomat|kapselmaschine|waffeleisen|reiskocher|luftkühler|ventilator|wetterstation|vakuumiergerät|hamburger-maker|hamburger maker|inspektionskamera|range extender|mini-led-tv|qled|e-bike|faltrad|mountainbike|fahrradträger|mähroboter|heckenschere|bohrhammer|abbruchhammer|bohrer|winkelschleifer|meißel|werkstatt|rohrzange|bolzenschneider|kabelbinder|elektrohobel|feinbohrschleifer|spannzwingen|zwingen-set|rasendünger|gartenspritze|gartenhocker|sanitär|montageschlüssel|sekundenkleber|buntlack|abdeckplane|duschtürdichtung|badewannenmatte|duschhocker|steppbett|spannbettlaken|tagesdecke|daunendecke|luftbett|matratze|kleiderschrank|drehtürenschrank|büroschrank|bürostuhl|beistelltisch|wohnzimmertisch|tischgruppe|schuhregal|metallregal|kunststoffregal|regalwürfel|polsterbank|schlafsessel|schminktisch|nischenwagen|akustikpaneel|bilderrahmen|sofa |brotkasten|kartoffelstampfer|schneebesen|kleid|tunika|slips|pyjama|leggings|unterhemden|retroboxer|sandalen|bademantel|freizeitanzug|loungewear|trikot-set|tops |ripptops|jersey|boardcase|reisetasche|rucksack|einkaufstrolley|packbänder|kuppelzelt|autodachzelt|zelt |trampolin|nestschaukel|rutsche|sandkasten|whirlpool|sup |sup-|campingstuhl|spieltipi|matschküche|super soaker|großfahrzeug|mini-fahrzeug|rennboot|inkontinenz|rollator|blutdruckmess|pulsoximeter|lesehilfe|spezialbrille|erste-hilfe|massagematte|haltungstrainer|beintrainer|rückenstütz|körperanalyse|waschhilfe|slipeinlagen|mighty patch|orchidee|phalaenopsis|chrysanthem|alpenveilchen|hortensie|glockenblume|dahlie|aster|eustoma|feigenkaktus|bogenhanf|celosia|zauberglöckchen|prärieenzian|rosenstrauß|bunter strauß|alufolie|frischhaltefolie|netflix|wertkarte|löschdecke|trinkflasche|zitronensäure|insektenschutz|corega|\\baxe |all-in-1-pods|allzwecktücher|badebombe|beschriftungsgerät|beschäftigungsbuch|gaming|haushaltsartikel|hipster|kaffeebecher|kaltwachsstreifen|klebestift|nachtwäsche|nutri mixer|shaping-short|silikonform|sprühflasche|treteimer|vorlesebuch|wäschesammler|zitruspresse",
  "food_cat": "obst|gemüse|fleisch|geflügel|wurst|molkerei|fette|getränke|feinkost|konserven|kaffee\\b|tee|süßwaren|knabber|grundnahrung|fisch|bäckerei|backwaren|tiefkühl"
 }

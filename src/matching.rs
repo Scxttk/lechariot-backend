@@ -537,10 +537,12 @@ mod tests {
             let k = keys(titel);
             assert!(k.contains(&tag.to_string()), "{titel:?} -> {k:?}, erwartet {tag}");
         };
-        // Suffix: das bekannte Wort steht hinten.
-        hat("Steinofenbaguette", "brot");
-        hat("Laugenbaguette", "brot");
-        hat("Mehrkornbaguette", "brot");
+        // Suffix: das bekannte Wort steht hinten. Seit der Pflegerunde vom
+        // 08.08. ist das Baguette ein eigener Begriff und nicht mehr `brot` —
+        // vier Meldungen von Testern, die einen Laib meinten.
+        hat("Steinofenbaguette", "baguette");
+        hat("Laugenbaguette", "baguette");
+        hat("Mehrkornbaguette", "baguette");
         hat("Linzergebäck", "backwaren");
         hat("Apfelrotkohl", "konserven");
         hat("Karamellwaffeln XXL", "kekse");
@@ -876,7 +878,10 @@ mod tests {
         // Vollkornbrot ist seit Tranche 3 zusätzlich `roggenbrot` — das grobe
         // „brot" bleibt daneben stehen, es wird nicht verdrängt.
         assert_eq!(keys("HARRY Vollkornbrot"), vec!["brot", "roggenbrot"]);
-        assert_eq!(keys("GOLDEN TOAST Toastbrot*"), vec!["brot"]);
+        // Toastbrot trägt beides, und das ist die Absicht: Über das Suffix
+        // „brot" bleibt es Brot (es heißt so), über den neuen Begriff ist es
+        // auch Toast.
+        assert_eq!(keys("GOLDEN TOAST Toastbrot*"), vec!["brot", "toast"]);
     }
 
     /// Fünf Lücken im Non-Food-Filter, gemessen am 11-Regionen-Korpus
@@ -1214,6 +1219,93 @@ mod tests {
         assert_eq!(keys("MILKANA Tolle Rolle!"), vec!["käse"]);
         // Und die kurze Marke behält, was ihr gehört.
         assert_eq!(keys("Milka Alpenmilch"), vec!["schokolade"]);
+    }
+
+    /// **Pflegerunde 2026-08-08**, Feedback-Runde vom 05.08. plus das
+    /// proaktive Audit. Jeder Fall mit Gegenprobe: das gemeldete Produkt
+    /// verliert den Begriff, ein echter Treffer behält ihn.
+    #[test]
+    fn pflegerunde_2026_08_08() {
+        let hat = |titel: &str, tag: &str| {
+            assert!(keys(titel).contains(&tag.to_string()), "{titel:?} sollte {tag} tragen");
+        };
+        let ohne = |titel: &str, tag: &str| {
+            assert!(!keys(titel).contains(&tag.to_string()), "{titel:?} trägt {tag} noch");
+        };
+
+        // --- Der beeren-Schirm war zu grob (6 Meldungen) --------------------
+        // Die App bildet ein Suchwort über die exact-Listen auf Begriffe ab.
+        // Solange „heidelbeeren" im exact von `beeren` stand, meinte die
+        // Anfrage den ganzen Schirm — und der trägt jede Erdbeere.
+        for (titel, fein) in [
+            ("Dtsch. Erdbeeren", "erdbeeren"),
+            ("Portug. Brombeeren", "brombeeren"),
+            ("Deutsche Bio-Heidelbeeren", "heidelbeeren"),
+            ("Rote Johannisbeeren", "johannisbeeren"),
+        ] {
+            hat(titel, fein);
+            // Der Schirm bleibt daneben stehen: „Beeren" findet weiter alle.
+            hat(titel, "beeren");
+        }
+        ohne("Dtsch. Erdbeeren", "heidelbeeren");
+        ohne("Deutsche Bio-Heidelbeeren", "erdbeeren");
+        // Nur der Plural: Die Einzahl fängt über die Plural-Regel das Aroma
+        // statt die Frucht.
+        ohne("Tafelschokolade 100 g, Erdbeere", "erdbeeren");
+        ohne("Müller Grießpudding Himbeere", "himbeeren");
+
+        // --- brot war zu grob (4 Meldungen, alle wrong_variant) -------------
+        hat("HARRY Toast", "toast");
+        ohne("HARRY Toast", "brot");
+        hat("DR. OETKER Bistro Baguette*", "baguette");
+        ohne("DR. OETKER Bistro Baguette*", "brot");
+        hat("WASA Knäckebrot", "knäckebrot");
+        ohne("WASA Knäckebrot", "brot");
+        // Gegenprobe: der Laib bleibt Brot.
+        hat("HARRY Vollkornbrot", "brot");
+        hat("Bauernbrot 1000 g", "brot");
+        hat("Sonntagsbrötchen 6 Stück", "brot");
+
+        // --- nudeln zog die Saucen mit (4 Meldungen) ------------------------
+        ohne("MIRÁCOLI Pasta-Sauce XXL", "nudeln");
+        ohne("BARILLA Pasta-Sauce", "nudeln");
+        ohne("Reibekäse Pizza / Pasta", "nudeln");
+        ohne("LEERDAMMER Pizza- & Pasta- oder Auflauf-Genuss", "nudeln");
+        // Gegenprobe: die Nudel selbst bleibt eine.
+        hat("BARILLA Spaghetti No. 5", "nudeln");
+        hat("K-CLASSIC Pasta 500 g", "nudeln");
+
+        // --- milch zog Quark und Käse mit -----------------------------------
+        ohne("SCHWARZWALDMILCH Protein-Quark-Creme", "milch");
+        ohne("BAUERNMILCH Demeter Camembert Rahmstufe", "milch");
+        // Gegenprobe: die Milch bleibt Milch.
+        hat("Frische Vollmilch 1 l", "milch");
+        hat("MILBONA Haltbare Milch 3,5 %", "milch");
+
+        // --- Audit: „schal" fing jede Obstschale (28 Zeilen) ----------------
+        // `schal` wird über die Plural-Regel aus „Schale" gebildet.
+        ohne("Heidelbeeren je 500-g-Schale", "socken");
+        ohne("Kiwi Gold je 3-Stück-Schale", "socken");
+        // Gegenprobe: der Schal bleibt ein Schal.
+        assert_eq!(keys("Herren-Schal gestrickt"), vec!["socken"]);
+
+        // --- Audit: der Non-Food-Riegel traf mitten im Wort (9 Zeilen) ------
+        for (titel, tag) in [
+            ("ERASCO Eintopf", "eintopf"),
+            ("Reines Sonnenblumenöl 1 l", "öl"),
+            ("Blumenkohl Stück", "brokkoli"),
+            ("Meica Bratmaxe", "bratwurst"),
+            ("SOLVEL Pflanzenmargarine", "margarine"),
+        ] {
+            hat(titel, tag);
+            ohne(titel, NONFOOD_KEY);
+        }
+        // Gegenprobe: Topf, Blume, Axe und Pflanze bleiben Non-Food.
+        for titel in ["Aluguss-Kochtopf 28cm", "Schnellkochtopf Secure Click",
+                      "Bunter Blumenstrauß", "Axe Bodyspray", "Salatpflanzen im Topf",
+                      "Hängende Pflanzenkörbe im Set"] {
+            assert_eq!(keys(titel), vec![NONFOOD_KEY], "{titel:?} sollte Non-Food bleiben");
+        }
     }
 
     /// **Die Marke muss ein ganzes Wort sein.** Dieselbe Falle wie oben, nur

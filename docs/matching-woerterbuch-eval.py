@@ -84,8 +84,17 @@ KAT_ROH = {
 
 # Wörterbuch: begriff -> (exakte tokens, komposita-suffixe, blockliste)
 V = {
- "brot":(["brot","broetchen","brötchen","toast","baguette","ciabatta"],["brot","broetchen","brötchen","toast"],["brotaufstrich","aufbackbrötchen?","russisch brot"]),
- "milch":(["milch","frischmilch","vollmilch","buttermilch","mandeldrink","haferdrink","sojadrink"],["milch"],["milchreis","milchschnitte","milchbrötchen","kokosmilch","milcheis","milchschokolade","kondensmilch","sonnenmilch","kokosnussmilch","milka","knoppers","milch schnitte","bergkäse","käsescheiben"]),
+ # „toast" und „baguette" sind hier heraus und haben eigene Begriffe: Vier
+ # Meldungen der Runde vom 05.08. sind `wrong_variant` — wer „Brot" schreibt,
+ # meint einen Laib und bekam Toast, Baguette und Knäckebrot. Der Beschluss
+ # dazu steht seit dem 31.07. in der Roadmap: ein feinerer Begriff, kein
+ # Sperreintrag. Das Suffix „brot" fängt „Toastbrot" weiterhin — ein Brot,
+ # das so heißt, ist eines.
+ "brot":(["brot","broetchen","brötchen","ciabatta"],["brot","broetchen","brötchen"],["brotaufstrich","aufbackbrötchen?","russisch brot","knäckebrot","knäckebrote"]),
+ "toast":(["toast","toasties"],[],[]),
+ "baguette":(["baguette","baguettes"],["baguette"],[]),
+ "knäckebrot":(["knäckebrot","knäckebrote","knäcke","reiswaffeln"],[],[]),
+ "milch":(["milch","frischmilch","vollmilch","buttermilch","mandeldrink","haferdrink","sojadrink"],["milch"],["milchreis","milchschnitte","milchbrötchen","kokosmilch","milcheis","milchschokolade","kondensmilch","sonnenmilch","kokosnussmilch","milka","knoppers","milch schnitte","bergkäse","käsescheiben","quark","camembert"]),
  "butter":(["butter","süßrahmbutter","weidebutter","markenbutter","kærgården","kaergarden"],[],["butterkäse","buttergemüse","erdnussbutter","buttermilch","butterkeks","nut butter"]),
  "käse":(["käse","kaese","käsescheiben","käsesnack","cheestrings","cottage","gouda","emmentaler","edamer","maasdamer","bergkäse","butterkäse","cheddar","parmesan","grana","halloumi","finello","obazda"],["käse","kaese"],["käsekuchen","frischkäse","croissant","leberkäse","laugenstange","laugengebäck","brezel","käsebrötchen","käsestange","käsegebäck","fleischkäse","twister"]),
  "frischkäse":(["frischkäse","frischkaese"],[],[]),
@@ -107,7 +116,24 @@ V = {
  "bananen":(["banane","bananen"],[],["bananenmilch"]),
  "zitronen":(["zitrone","zitronen","limetten"],[],["zitronensaft","zitronenlimonade"]),
  "orangen":(["orange","orangen","mandarinen","clementinen"],[],["orangensaft","orangenlimonade"]),
- "beeren":(["erdbeeren","himbeeren","blaubeeren","heidelbeeren","brombeeren","johannisbeeren","beerenmix"],["beeren"],["erdbeermarmelade","erdbeerjoghurt"]),
+ # `beeren` ist der Schirm und bleibt einer: Das Suffix „beeren" fängt jede
+ # Sorte, deshalb braucht das exact die Sortennamen nicht. Sie standen dort
+ # aber, und daran hing der Fehler der Runde vom 05.08. — die App bildet ein
+ # Suchwort über die exact-Listen auf Begriffe ab, „heidelbeeren" landete so
+ # auf `beeren`, und `beeren` trägt jede Erdbeere. Sechs Meldungen.
+ "beeren":(["beerenmix","beerenmischung"],["beeren"],["erdbeermarmelade","erdbeerjoghurt"]),
+ # Die Sorten. Jede trägt zusätzlich `beeren` über das Suffix — wer „Beeren"
+ # schreibt, bekommt weiter alle.
+ # Nur der Plural, und das ist gemessen: Die Einzahl fängt über die
+ # Plural-Regel („Erdbeere" wird auch als „erdbeer" geprüft) den Geschmack
+ # statt die Frucht — „Tafelschokolade, Erdbeere" und „Grießpudding,
+ # Himbeere" bekamen so die Frucht-Begriffe. Wer die Frucht sucht, tippt
+ # den Plural; das Aroma bleibt draußen.
+ "erdbeeren":(["erdbeeren"],[],["erdbeermarmelade","erdbeerjoghurt","erdbeerkonfitüre"]),
+ "himbeeren":(["himbeeren"],[],[]),
+ "heidelbeeren":(["heidelbeeren","blaubeeren"],[],[]),
+ "brombeeren":(["brombeeren"],[],[]),
+ "johannisbeeren":(["johannisbeeren"],[],[]),
  "trauben":(["trauben","tafeltrauben","weintrauben"],["trauben"],["traubensaft","traubenzucker"]),
  "melone":(["melone","wassermelone","honigmelone","galiamelone","cantaloupe"],["melone"],[]),
  # `pfirsich` fasst Steinobst bewusst zusammen (Pflaumen, Zwetschgen, …). Die
@@ -133,7 +159,7 @@ V = {
  "bratwurst":(["bratwurst","rostbratwurst","grillwurst","bratwürste"],["bratwurst","bratwürste"],[]),
  "wurst":(["wurst","salami","schinken","mortadella","lyoner","leberwurst","mettwurst","wiener","würstchen","aufschnitt","mett","edelsalami","cabanossi","chipolata","sülze","serrano","schinkenwürfel","currywurst","currykrakauer","leberkäse","hackepeter","knacker","landjäger","markenspeck","räucherlendchen","schinkenspeck","schinkenkrakauer"],["wurst","würstchen","schinken","salami","aufschnitt"],[]),
  "fisch":(["lachs","lachsfilet","forelle","kabeljau","seelachs","garnelen","garnele","shrimps","fischstäbchen","matjes","hering","thunfisch","räucherlachs","lachsseite","dorade","doraden","kabeljauloin","wildlachs"],["fisch","filet"],["fischsauce","schwein","schweine","lamm","lammfilets","kasseler","hähnchen","brustfilet","innenfilet","putenbrustfilet"]),
- "nudeln":(["nudeln","spaghetti","penne","fusilli","tagliatelle","tortellini","cappelletti","gnocchi","pasta","lasagne","ramen","ramyun","teigwaren","eierspätzle","kritharaki"],["nudeln"],["nudelsalat","nudelsuppe"]),
+ "nudeln":(["nudeln","spaghetti","penne","fusilli","tagliatelle","tortellini","cappelletti","gnocchi","pasta","lasagne","ramen","ramyun","teigwaren","eierspätzle","kritharaki"],["nudeln"],["nudelsalat","nudelsuppe","pasta sauce","pastasauce","pizza pasta"]),
  "reis":(["reis","basmati","basmatireis","langkornreis","jasminreis","risottoreis"],["reis"],["milchreis","reiswaffeln","reisdrink","puffreis","wassereis"]),
  "mehl":(["mehl","weizenmehl","dinkelmehl","panko","tempura","paniermehl"],["mehl"],[]),
  "zucker":(["zucker","rohrzucker","puderzucker"],["zucker"],["traubenzucker","vanillezucker","zuckerrübensirup"]),
@@ -248,7 +274,11 @@ V = {
  "holzkohle":(["holzkohle","grillkohle","briketts","propangas","grillanzünder holz"],[],[]),
  "grillzubehör":(["grillzange","grillrost","grillspieße","alugrillschale"],[],[]),
  "sonnenschirm":(["sonnenschirm","sonnensegel","schirmständer"],[],[]),
- "socken":(["socken","wollsocken","strümpfe","mütze","schal","handschuhe wolle"],[],[]),
+ # `schal` wird über die Plural-Regel aus „Schale" gebildet (Tokens über vier
+ # Zeichen verlieren ihr End-e), und Obst wird in Schalen verkauft: 28 Zeilen
+ # des Korpus trugen `socken`, darunter Heidelbeeren, Nektarinen und
+ # Obstsalat. Gefunden im Audit vom 08.08.
+ "socken":(["socken","wollsocken","strümpfe","mütze","schal","handschuhe wolle"],[],["schale","schalen"]),
 
  # --- Tranche 8: Haushalt und Pflege (2026-08-07) --------------------------
  #
@@ -699,7 +729,6 @@ for _t,_bl in _BLOCK3.items():
 _ADD4_SUFFIX = {
  # Sieben Baguettes im Korpus, keines mit dem Wort „Brot": Laugen-, Mehrkorn-,
  # Weizen-, Dinkel-, Steinofenbaguette.
- "brot":["baguette"],
  # Linzergebäck, Vitalgebäck. Bewusst bei `backwaren` und nicht bei `kekse` —
  # „Laugengebäck" wäre dort falsch einsortiert.
  "backwaren":["gebäck"],
@@ -789,7 +818,21 @@ for _t,_bl in _BLOCK4.items():
     V[_t] = (V[_t][0], V[_t][1], V[_t][2]+_bl)
 
 # Non-Food-Begriffe im Titel (fängt Non-Food in Food-Kategorien wie „Wochenangebote")
-NONFOOD_TERMS = re.compile(r"lichterkette|lampion|wäschest|wäscheklammer|wäschekorb|kettensäge|akku|werkzeug|kinderbuch|spielzeug|\blego\b|rosen\b|blumen|pflanze|socken|shorts|shirt|cap\b|hose|schuhe|handtuch|bettwäsche|pfannen?\b|topf\b|löffel|messer|grill\b|kohle|batterie|lampe|leuchte|katzen|hunde|tiernahrung|nassfutter|trockenfutter|snack für|rasenkanten|solar|deko|kissen|matratze|drucker|kopfhörer|wc-|reiniger|megaperls|oxi action|waschpulver|schreibwaren|mikrofon|duschregal|sonnensegel|wäscheparf|karaoke|trinkzubehör|wäschetrockner|weißer riese|sonnenspray|duftspüler|sonnencreme|feuchttücher|servietten|haushaltstücher|klumpstreu|geschirrtücher|platzset|schlafsack|fusselrolle|bügeleisen|glasschüssel|lautsprecher|geräusche-box|fliegengitter|kajak|husarenknöpfchen|lavendel|bilderbuch|wecker|hairstyler|bastelkoffer|kochgeschirr|grillplatte|boombox|fliegenfalle|mottenabwehr|badvorleger|schrubber|kosmetikspiegel|shorty|plaid|fototafel|komfort-bh|pantoletten|spannbetttuch|küchentücher|sneaker|hoodie|bodyspray|deospray|haarspray|rasierkling|sonnenschutz|dutch oven|gläsersortiment|sonnenschirm|tischdecke|fleece|wellnessbürste|maniküre|pediküre|teppich|taillenslip|haftcreme|wasserballon|doppelwandig|kollagenpulver|pokémon|pokemon|plüsch|spielfigur|sammelkarten|tiptoi|autorennbahn|gesellschaftsspiel|kreuzworträtsel|rätselbuch|pixi|bastel|schüleretui|sticker|puzzle|holzperlen|magnet-bausatz|wasserbahn|kinderbesteck|steckdose|usb|ladegerät|smart-tv|wasserkocher|toaster|standmixer|espressomaschine|kaffeemaschine|kaffeevollautomat|kapselmaschine|waffeleisen|reiskocher|luftkühler|ventilator|wetterstation|vakuumiergerät|hamburger-maker|hamburger maker|inspektionskamera|range extender|mini-led-tv|qled|e-bike|faltrad|mountainbike|fahrradträger|mähroboter|heckenschere|bohrhammer|abbruchhammer|bohrer|winkelschleifer|meißel|werkstatt|rohrzange|bolzenschneider|kabelbinder|elektrohobel|feinbohrschleifer|spannzwingen|zwingen-set|rasendünger|gartenspritze|gartenhocker|sanitär|montageschlüssel|sekundenkleber|buntlack|abdeckplane|duschtürdichtung|badewannenmatte|duschhocker|steppbett|spannbettlaken|tagesdecke|daunendecke|luftbett|matratze|kleiderschrank|drehtürenschrank|büroschrank|bürostuhl|beistelltisch|wohnzimmertisch|tischgruppe|schuhregal|metallregal|kunststoffregal|regalwürfel|polsterbank|schlafsessel|schminktisch|nischenwagen|akustikpaneel|bilderrahmen|sofa |brotkasten|kartoffelstampfer|schneebesen|kleid|tunika|slips|pyjama|leggings|unterhemden|retroboxer|sandalen|bademantel|freizeitanzug|loungewear|trikot-set|tops |ripptops|jersey|boardcase|reisetasche|rucksack|einkaufstrolley|packbänder|kuppelzelt|autodachzelt|zelt |trampolin|nestschaukel|rutsche|sandkasten|whirlpool|sup |sup-|campingstuhl|spieltipi|matschküche|super soaker|großfahrzeug|mini-fahrzeug|rennboot|inkontinenz|rollator|blutdruckmess|pulsoximeter|lesehilfe|spezialbrille|erste-hilfe|massagematte|haltungstrainer|beintrainer|rückenstütz|körperanalyse|waschhilfe|slipeinlagen|mighty patch|orchidee|phalaenopsis|chrysanthem|alpenveilchen|hortensie|glockenblume|dahlie|aster|eustoma|feigenkaktus|bogenhanf|celosia|zauberglöckchen|prärieenzian|rosenstrauß|bunter strauß|alufolie|frischhaltefolie|netflix|wertkarte|löschdecke|trinkflasche|zitronensäure|insektenschutz|corega|axe |all-in-1-pods|allzwecktücher|badebombe|beschriftungsgerät|beschäftigungsbuch|gaming|haushaltsartikel|hipster|kaffeebecher|kaltwachsstreifen|klebestift|nachtwäsche|nutri mixer|shaping-short|silikonform|sprühflasche|treteimer|vorlesebuch|wäschesammler|zitruspresse", re.I)
+# Vier Teile trafen mitten im Wort und warfen Essen aus dem Katalog. Jede
+# Klammer ist am ganzen Korpus gemessen (Audit 2026-08-08):
+#   …topf|\btopf\b    Erasco Eintopf (3 Zeilen) fällt raus, Kochtopf,
+#                     Schnellkochtopf, Kräutertopf, Pflanztopf bleiben drin.
+#   …blumen|\bblumen\b Sonnenblumenöl, Sonnenblumenbrötchen, Heublumen-Käse,
+#                     Blumenkohl (4) fallen raus, Schnittblumen bleiben.
+#   \baxe             Meica Bratmaxe (1) — Axe Bodyspray bleibt.
+#   pflanzen?\b       Solvel Pflanzenmargarine (1) — Salatpflanzen und
+#                     Pflanzenkörbe bleiben.
+#
+# Ohne Lookaround, und das ist keine Stilfrage: Die JSON ist die Quelle für
+# die regex-Kiste von Rust, und die kennt weder (?<!) noch (?!). Ein Muster
+# mit Lookaround kompiliert hier, lässt aber jeden Test in matching.rs beim
+# Laden des Wörterbuchs sterben.
+NONFOOD_TERMS = re.compile(r"lichterkette|lampion|wäschest|wäscheklammer|wäschekorb|kettensäge|akku|werkzeug|kinderbuch|spielzeug|\blego\b|rosen\b|blumenstrauß|blumenerde|blumenvase|schnittblumen|\bblumen\b|pflanzenkörbe|pflanzenkorb|pflanzen?\b|socken|shorts|shirt|cap\b|hose|schuhe|handtuch|bettwäsche|pfannen?\b|kochtopf|kräutertopf|energiespartopf|pflanztopf|\btopf\b|löffel|messer|grill\b|kohle|batterie|lampe|leuchte|katzen|hunde|tiernahrung|nassfutter|trockenfutter|snack für|rasenkanten|solar|deko|kissen|matratze|drucker|kopfhörer|wc-|reiniger|megaperls|oxi action|waschpulver|schreibwaren|mikrofon|duschregal|sonnensegel|wäscheparf|karaoke|trinkzubehör|wäschetrockner|weißer riese|sonnenspray|duftspüler|sonnencreme|feuchttücher|servietten|haushaltstücher|klumpstreu|geschirrtücher|platzset|schlafsack|fusselrolle|bügeleisen|glasschüssel|lautsprecher|geräusche-box|fliegengitter|kajak|husarenknöpfchen|lavendel|bilderbuch|wecker|hairstyler|bastelkoffer|kochgeschirr|grillplatte|boombox|fliegenfalle|mottenabwehr|badvorleger|schrubber|kosmetikspiegel|shorty|plaid|fototafel|komfort-bh|pantoletten|spannbetttuch|küchentücher|sneaker|hoodie|bodyspray|deospray|haarspray|rasierkling|sonnenschutz|dutch oven|gläsersortiment|sonnenschirm|tischdecke|fleece|wellnessbürste|maniküre|pediküre|teppich|taillenslip|haftcreme|wasserballon|doppelwandig|kollagenpulver|pokémon|pokemon|plüsch|spielfigur|sammelkarten|tiptoi|autorennbahn|gesellschaftsspiel|kreuzworträtsel|rätselbuch|pixi|bastel|schüleretui|sticker|puzzle|holzperlen|magnet-bausatz|wasserbahn|kinderbesteck|steckdose|usb|ladegerät|smart-tv|wasserkocher|toaster|standmixer|espressomaschine|kaffeemaschine|kaffeevollautomat|kapselmaschine|waffeleisen|reiskocher|luftkühler|ventilator|wetterstation|vakuumiergerät|hamburger-maker|hamburger maker|inspektionskamera|range extender|mini-led-tv|qled|e-bike|faltrad|mountainbike|fahrradträger|mähroboter|heckenschere|bohrhammer|abbruchhammer|bohrer|winkelschleifer|meißel|werkstatt|rohrzange|bolzenschneider|kabelbinder|elektrohobel|feinbohrschleifer|spannzwingen|zwingen-set|rasendünger|gartenspritze|gartenhocker|sanitär|montageschlüssel|sekundenkleber|buntlack|abdeckplane|duschtürdichtung|badewannenmatte|duschhocker|steppbett|spannbettlaken|tagesdecke|daunendecke|luftbett|matratze|kleiderschrank|drehtürenschrank|büroschrank|bürostuhl|beistelltisch|wohnzimmertisch|tischgruppe|schuhregal|metallregal|kunststoffregal|regalwürfel|polsterbank|schlafsessel|schminktisch|nischenwagen|akustikpaneel|bilderrahmen|sofa |brotkasten|kartoffelstampfer|schneebesen|kleid|tunika|slips|pyjama|leggings|unterhemden|retroboxer|sandalen|bademantel|freizeitanzug|loungewear|trikot-set|tops |ripptops|jersey|boardcase|reisetasche|rucksack|einkaufstrolley|packbänder|kuppelzelt|autodachzelt|zelt |trampolin|nestschaukel|rutsche|sandkasten|whirlpool|sup |sup-|campingstuhl|spieltipi|matschküche|super soaker|großfahrzeug|mini-fahrzeug|rennboot|inkontinenz|rollator|blutdruckmess|pulsoximeter|lesehilfe|spezialbrille|erste-hilfe|massagematte|haltungstrainer|beintrainer|rückenstütz|körperanalyse|waschhilfe|slipeinlagen|mighty patch|orchidee|phalaenopsis|chrysanthem|alpenveilchen|hortensie|glockenblume|dahlie|aster|eustoma|feigenkaktus|bogenhanf|celosia|zauberglöckchen|prärieenzian|rosenstrauß|bunter strauß|alufolie|frischhaltefolie|netflix|wertkarte|löschdecke|trinkflasche|zitronensäure|insektenschutz|corega|\baxe |all-in-1-pods|allzwecktücher|badebombe|beschriftungsgerät|beschäftigungsbuch|gaming|haushaltsartikel|hipster|kaffeebecher|kaltwachsstreifen|klebestift|nachtwäsche|nutri mixer|shaping-short|silikonform|sprühflasche|treteimer|vorlesebuch|wäschesammler|zitruspresse", re.I)
 
 # Tokens, bei denen Suffix-Matching generell verboten ist (falsche Komposita)
 SUFFIX_STOP = {"reis","preis","schwein","schweine","kreis","eis","wein",
