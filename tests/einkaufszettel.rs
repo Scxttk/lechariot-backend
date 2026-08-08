@@ -22,6 +22,9 @@
 //!   besser geworden ist. Wird ein Wunsch erfüllt, sagt der Test es und will
 //!   die Zeile als `ZETTEL` sehen — sonst verrottet der Fortschritt wieder.
 
+use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
+
 use lechariot::matching::match_keys;
 
 /// Ein erfundenes Angebot aus dem Regal.
@@ -111,21 +114,50 @@ fn findet(wort: &str, angebot: &Angebot) -> bool {
         if titelworte.iter().any(|t| wort_passt(q, t)) {
             return true;
         }
-        // `nonfood` fliegt heraus, und das ist kein Detail: Es ist ein
-        // Ausschluss-Vermerk, kein Begriff, den jemand tippt. Die App kennt
-        // ihn auf der Anfrageseite gar nicht (`MatchDictionary` liest nur die
-        // exact-Listen). Ohne diese Zeile fänden sich alle Non-Food-Zeilen
-        // gegenseitig — „Rasierklingen" holte „Petersilie im Topf", weil
-        // `topf` in der Non-Food-Liste steht.
-        let begriffe: Vec<String> = match_keys(q, None, None)
-            .into_iter()
-            .filter(|b| b != lechariot::matching::NONFOOD_KEY)
-            .collect();
+        let begriffe = suchwort_begriffe(q);
         angebot
             .tags
             .iter()
-            .any(|tag| wort_passt(q, tag) || begriffe.iter().any(|b| b == tag))
+            .any(|tag| wort_passt(q, tag) || begriffe.contains(tag))
     })
+}
+
+/// Suchwort → Begriffe, **wie die App sie bildet** (`MatchDictionary`):
+/// nur die `exact`-Listen plus der Begriffsname selbst, abzüglich der
+/// gesperrten Wörter.
+///
+/// Vorher stand hier `match_keys(q)` — die volle Angebots-Pipeline auf ein
+/// Suchwort losgelassen. Das ist etwas anderes, und der Unterschied ist nicht
+/// theoretisch: Die Suffix-Regeln sind dafür gebaut, Produkt*texte*
+/// abzugrasen, und auf ein Suchwort angewandt greifen sie zu weit. „Heidel-
+/// beeren" endet auf „beeren" und meinte damit hier den ganzen Beeren-Schirm,
+/// während die App längst nur den feinen Begriff sieht. Der Prüfstand hätte
+/// die Pflegerunde vom 08.08. für gescheitert erklärt, obwohl das Produkt sie
+/// besteht.
+fn suchwort_begriffe(wort: &str) -> HashSet<String> {
+    static WOERTER: OnceLock<HashMap<String, HashSet<String>>> = OnceLock::new();
+    let tabelle = WOERTER.get_or_init(|| {
+        let roh = include_str!("../docs/matching-woerterbuch.json");
+        let v: serde_json::Value = serde_json::from_str(roh).expect("Wörterbuch unlesbar");
+        let mut byword: HashMap<String, HashSet<String>> = HashMap::new();
+        for (begriff, def) in v["begriffe"].as_object().expect("Sektion 'begriffe' fehlt") {
+            let liste = |feld: &str| -> Vec<String> {
+                def[feld]
+                    .as_array()
+                    .map(|a| a.iter().filter_map(|x| x.as_str()).map(|x| worte(x).join(" ")).collect())
+                    .unwrap_or_default()
+            };
+            let gesperrt: HashSet<String> = liste("block").into_iter().collect();
+            for wort in liste("exact").into_iter().chain(std::iter::once(worte(begriff).join(" "))) {
+                if wort.is_empty() || wort.contains(' ') || gesperrt.contains(&wort) {
+                    continue;
+                }
+                byword.entry(wort).or_default().insert(begriff.clone());
+            }
+        }
+        byword
+    });
+    tabelle.get(wort).cloned().unwrap_or_default()
 }
 
 fn lade() -> (Vec<Angebot>, Vec<Erwartung>) {

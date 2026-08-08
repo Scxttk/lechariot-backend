@@ -39,6 +39,9 @@ REGAL	Tomatenmark dreifach konzentriert	200 g	Konserven
 REGAL	Bio-Hähnchenbrustfilet	400 g	Geflügel
 REGAL	Rügenwalder Veganes Mühlen-Schnitzel	180 g	Fleischersatz
 REGAL	Frische Makrele	je Stück	Fisch
+REGAL	Dtsch. Erdbeeren	500 g	Obst und Gemüse
+REGAL	Deutsche Bio-Heidelbeeren	250-g-Schale	Obst und Gemüse
+REGAL	Portug. Brombeeren	125 g	Obst und Gemüse
 REGAL	Petersilie im Topf	1 Stück	Obst und Gemüse
 REGAL	KORO Bio-Nut-Butter-Cups	120 g	Süßwaren
 REGAL	BAHLSEN ABC Russisch Brot	100 g	Kekse
@@ -61,11 +64,22 @@ ZETTEL	Petersilie	Petersilie im Topf
 ZETTEL	Kaffee	JACOBS Krönung Filterkaffee
 
 # Das Wort steht NICHT im Titel — dafür ist das Wörterbuch da.
-ZETTEL	Brot	GOLDEN TOAST Buttertoast|HARRY Vollkornbrot
+# „Brot" meint den Laib. Vier Meldungen der Runde vom 05.08. sind
+# `wrong_variant` — Toast, Baguette und Knäckebrot kamen mit, und der
+# Tester wollte sie nicht. Seit der Pflegerunde vom 08.08. sind sie
+# eigene Begriffe; wer Toast will, schreibt Toast.
+ZETTEL	Brot	HARRY Vollkornbrot
+ZETTEL	Toast	GOLDEN TOAST Buttertoast
+NICHT	Brot	GOLDEN TOAST Buttertoast
 ZETTEL	Käse	Bauernkäse am Stück|MILBONA Käsescheiben Gouda
 ZETTEL	Hähnchen	Bio-Hähnchenbrustfilet
 
 ZETTEL	Tomaten	Rispentomaten
+
+# Der Schirm bleibt ein Schirm, die Sorte wird zur Sorte (Runde 08.08.).
+ZETTEL	Beeren	Dtsch. Erdbeeren|Deutsche Bio-Heidelbeeren|Portug. Brombeeren
+ZETTEL	Heidelbeeren	Deutsche Bio-Heidelbeeren
+NICHT	Heidelbeeren	Dtsch. Erdbeeren|Portug. Brombeeren
 
 # ---------------------------------------------------- was nicht kommen darf
 # „Tomaten" holt das Mark nicht — Token-Gleichheit statt Substring, die
