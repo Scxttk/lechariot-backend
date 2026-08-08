@@ -646,10 +646,12 @@ fn mirror_images(
 /// Fertigmeldung.
 fn apply_known_mirror_urls(
     groups: &mut BTreeMap<&'static str, ChainRows>,
+    cfg: &PushConfig,
     db_path: &str,
-) -> Result<usize> {
+    client: &reqwest::blocking::Client,
+) -> Result<(usize, usize)> {
     let conn = db::open(db_path)?;
-    let mut vorab = 0usize;
+    let (mut aus_cache, mut aus_bucket) = (0usize, 0usize);
     for (_chain, g) in groups.iter_mut() {
         for row in g.rows.iter_mut() {
             let Some(src) = row.image_url.clone() else { continue };
@@ -658,11 +660,22 @@ fn apply_known_mirror_urls(
             }
             if let Some(hit) = db::cached_image_url(&conn, &src)? {
                 row.image_url = Some(hit);
-                vorab += 1;
+                aus_cache += 1;
+                continue;
+            }
+            // Cache leer — aber der Objektpfad ist aus der Quell-URL
+            // berechenbar. Ein HEAD auf den eigenen Bucket beantwortet die
+            // Frage, ohne beim Händler zu laden.
+            let path = storage::object_path(&src);
+            if storage::object_exists(client, cfg, &path) {
+                let public = storage::public_url(&cfg.base_url, &path);
+                db::cache_image_url(&conn, &src, &public)?;
+                row.image_url = Some(public);
+                aus_bucket += 1;
             }
         }
     }
-    Ok(vorab)
+    Ok((aus_cache, aus_bucket))
 }
 
 /// Alle gepushten Zeilen zusätzlich in `public.price_history` upserten
@@ -824,9 +837,13 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
     // Bekannte Bucket-URLs für Netto vorziehen, damit die Zeile gar nicht erst
     // mit einem toten Link hinausgeht. Kostet nichts — nur der lokale Cache
     // wird gefragt, kein Netzwerk. Siehe `apply_known_mirror_urls`.
-    let vorab = apply_known_mirror_urls(&mut groups, &opts.db_path)?;
-    if vorab > 0 {
-        println!("Bilder vorab: {vorab} Zeilen tragen die Bucket-URL schon beim Upsert.");
+    let (aus_cache, aus_bucket) =
+        apply_known_mirror_urls(&mut groups, cfg, &opts.db_path, &mirror_client)?;
+    if aus_cache + aus_bucket > 0 {
+        println!(
+            "Bilder vorab: {} Zeilen tragen die Bucket-URL schon beim Upsert ({aus_cache} aus Cache, {aus_bucket} im Bucket gefunden).",
+            aus_cache + aus_bucket
+        );
     }
 
     let offers_url = format!("{}/rest/v1/offers", cfg.base_url);
@@ -1021,7 +1038,13 @@ mod tests {
         }
 
         let mut groups = groups_with(vec![netto_row(quelle)]);
-        let vorab = apply_known_mirror_urls(&mut groups, &db_path).unwrap();
+        let cfg = PushConfig { base_url: "http://127.0.0.1:1".into(), api_key: "k".into() };
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_millis(200))
+            .build()
+            .unwrap();
+        let (vorab, _bucket) =
+            apply_known_mirror_urls(&mut groups, &cfg, &db_path, &client).unwrap();
 
         assert_eq!(vorab, 1);
         assert_eq!(groups["Netto"].rows[0].image_url.as_deref(), Some(bucket));
@@ -1041,7 +1064,13 @@ mod tests {
 
         let quelle = "https://www.netto-online.de/media_nfs/images/2026-32/2-450x450-Kaese.webp";
         let mut groups = groups_with(vec![netto_row(quelle)]);
-        let vorab = apply_known_mirror_urls(&mut groups, &db_path).unwrap();
+        let cfg = PushConfig { base_url: "http://127.0.0.1:1".into(), api_key: "k".into() };
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_millis(200))
+            .build()
+            .unwrap();
+        let (vorab, _bucket) =
+            apply_known_mirror_urls(&mut groups, &cfg, &db_path, &client).unwrap();
 
         assert_eq!(vorab, 0);
         assert_eq!(groups["Netto"].rows[0].image_url.as_deref(), Some(quelle));
@@ -1067,7 +1096,13 @@ mod tests {
         }
 
         let mut groups = groups_with(vec![netto_row(quelle)]);
-        let vorab = apply_known_mirror_urls(&mut groups, &db_path).unwrap();
+        let cfg = PushConfig { base_url: "http://127.0.0.1:1".into(), api_key: "k".into() };
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_millis(200))
+            .build()
+            .unwrap();
+        let (vorab, _bucket) =
+            apply_known_mirror_urls(&mut groups, &cfg, &db_path, &client).unwrap();
 
         assert_eq!(vorab, 0);
         assert_eq!(groups["Netto"].rows[0].image_url.as_deref(), Some(quelle));

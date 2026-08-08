@@ -675,6 +675,61 @@ fn netto_images_are_mirrored_even_when_mirroring_is_off() {
     );
 }
 
+/// Der Fall, den ein Tester auslöst: Filiale neu angefordert, On-Demand-Lauf,
+/// **leerer** Cache — und trotzdem darf keine tote Händler-URL in die Tabelle.
+///
+/// Der Objektpfad im Bucket ist aus der Quell-URL berechenbar, ein HEAD auf den
+/// eigenen Bucket beantwortet die Frage also ohne Download beim Händler.
+/// Gemessen 2026-08-08: 207 ms je HEAD (Median über 20 Objekte), rund 53 s für
+/// die 258 Bilder einer Netto-Filiale — gegen 3 min 56 s, in denen sonst tote
+/// URLs in der Tabelle stehen und die App die Filiale schon „fertig" nennt.
+#[test]
+fn a_netto_image_already_in_the_bucket_needs_no_cache_and_no_download() {
+    let db_path = temp_db("netto-bucket-treffer");
+    let _ = std::fs::remove_file(&db_path);
+    let netto_src = "https://www.netto-online.de/media_nfs/images/2026-32/7-450x450-Rahmspinat-n.webp";
+    {
+        let conn = db::open(&db_path).unwrap();
+        db::upsert_market(&conn, &Market::new("9110", "Netto Marken-Discount Dresden").with_chain("Netto")).unwrap();
+        let mut n = offer("Rahmspinat", Some(0.79));
+        n.market_id = "9110".to_string();
+        n.id = Offer::build_id("9110", "Rahmspinat", Some("2026-07-13"));
+        n.images = vec![netto_src.to_string()];
+        db::upsert_offer(&conn, &n).unwrap();
+    }
+    let (base_url, log) = spawn_mock();
+    let bucket = storage::public_url(&base_url, &storage::object_path(netto_src));
+
+    // Cache bleibt LEER — der Bucket-Treffer allein muss reichen.
+    run_push(&db_path, &base_url).unwrap();
+
+    let reqs = log.lock().unwrap().clone();
+    let offer_posts: Vec<&Req> = reqs
+        .iter()
+        .filter(|r| r.method == "POST" && r.target.starts_with("/rest/v1/offers"))
+        .collect();
+    assert!(
+        offer_posts.first().unwrap().body.contains(&bucket),
+        "Bucket-Treffer gehört in den ersten Upsert: {}",
+        offer_posts.first().unwrap().body
+    );
+    assert!(
+        !offer_posts.first().unwrap().body.contains(netto_src),
+        "die tote Händler-URL darf nie in der Datenbank landen: {}",
+        offer_posts.first().unwrap().body
+    );
+    // Gefragt wurde per HEAD, nicht per Download — der Beleg steht im Log des
+    // Mocks. Ein GET auf den Bucket-Pfad wäre das Gegenteil der Zusage.
+    assert!(
+        reqs.iter().any(|r| r.method == "HEAD" && r.target.contains(&storage::object_path(netto_src))),
+        "der Bucket wurde nicht per HEAD gefragt: {reqs:#?}"
+    );
+    // Und der Treffer landet im Cache, damit die nächste Filiale ihn geschenkt
+    // bekommt — genau das macht das Fenster nach der ersten Filiale zu null.
+    let conn = db::open(&db_path).unwrap();
+    assert_eq!(db::cached_image_url(&conn, netto_src).unwrap().as_deref(), Some(bucket.as_str()));
+}
+
 #[test]
 fn push_batches_deletes_and_upserts() {
     let db_path = temp_db("batch");

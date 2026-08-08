@@ -558,6 +558,29 @@ fn stored_etag(client: &reqwest::blocking::Client, cfg: &PushConfig, path: &str)
     (!tag.is_empty() && !tag.contains('-')).then_some(tag)
 }
 
+/// Liegt zu dieser Quell-URL schon ein Objekt im Bucket? Beantwortet die Frage
+/// **ohne** das Bild beim Händler zu laden: Der Objektpfad ist aus der
+/// Quell-URL berechenbar ([`object_path`]), es bleibt ein HEAD auf unseren
+/// eigenen Bucket.
+///
+/// Dafür gebaut, dass eine Angebotszeile die Bucket-URL schon beim Upsert
+/// tragen kann, auch wenn der lokale Cache leer ist — der Fall jedes
+/// On-Demand-Laufs, mit dem ein Tester eine neue Filiale anfordert. Gemessen
+/// 2026-08-08: 207 ms je HEAD (Median über 20 Objekte), also rund 53 s für die
+/// 258 Bilder einer Netto-Filiale — gegen 3 min 56 s, in denen sonst tote
+/// Händler-URLs in der Tabelle stehen.
+///
+/// Fehler bedeutet „nicht da": Der Aufrufer lässt die Zeile dann im
+/// nachgelagerten Spiegel-Durchgang, statt eine URL zu behaupten, die niemand
+/// geprüft hat.
+pub fn object_exists(client: &reqwest::blocking::Client, cfg: &PushConfig, path: &str) -> bool {
+    let url = public_url(&cfg.base_url, path);
+    client
+        .head(&url)
+        .send()
+        .is_ok_and(|r| r.status().is_success())
+}
+
 /// In den Bucket hochladen (idempotent via x-upsert). Liefert (öffentliche URL,
 /// hochgeladen?).
 ///
