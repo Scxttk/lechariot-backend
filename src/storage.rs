@@ -365,6 +365,21 @@ pub fn mirror(
 /// statt auf stdout, damit sich Binärdaten nicht mit dem `-w`-Statusreport
 /// mischen.
 fn curl_download(url: &str) -> Result<(Vec<u8>, String)> {
+    let (status, content_type, bytes) = curl_fetch(url)?;
+    if status != 200 {
+        bail!("Bild-Download {url}: HTTP {status} (curl)");
+    }
+    if bytes.is_empty() {
+        bail!("Bild-Download {url}: leerer Body (curl)");
+    }
+    Ok((bytes, content_type))
+}
+
+/// Der eigentliche curl-Aufruf: liefert (Status, Content-Type, Bytes), **ohne**
+/// über den Status zu urteilen. Getrennt von [`curl_download`], damit die
+/// Bild-Probe (`audit`) einen 403 als Messwert bekommt statt als Fehlermeldung
+/// — sie will die Zahl, nicht den Abbruch.
+fn curl_fetch(url: &str) -> Result<(u16, String, Vec<u8>)> {
     // Präzedenzfall `scrapers::util::curl_get` — inklusive der höflichen
     // Pause zwischen Requests an denselben Host.
     crate::scrapers::util::polite_pause(url);
@@ -400,13 +415,91 @@ fn curl_download(url: &str) -> Result<(Vec<u8>, String)> {
     let (status, content_type) = report.trim().split_once('\t').unwrap_or((report.trim(), ""));
     let bytes = std::fs::read(&tmp).unwrap_or_default();
     let _ = std::fs::remove_file(&tmp);
-    if status != "200" {
-        bail!("Bild-Download {url}: HTTP {status} (curl)");
+    let status: u16 = status
+        .parse()
+        .with_context(|| format!("curl lieferte keinen Status für {url}: '{status}'"))?;
+    Ok((status, content_type.to_string(), bytes))
+}
+
+/// Was eine Bild-URL antwortet, wenn man sie **so** abruft, wie der Spiegel es
+/// täte: System-curl für die Hosts aus [`CLIENT_BLOCKED_HOST_SUFFIXES`],
+/// reqwest für alle anderen. Kein Urteil, nur der Messwert.
+///
+/// Das ist die Frage, die in dieser Kette bis zum 2026-08-08 niemand gestellt
+/// hat: ob die gerade geschriebene `image_url` überhaupt abrufbar ist. Ein
+/// Netzwerkfehler ist selbst ein Ergebnis (`status: None`) und bricht die Probe
+/// nicht ab — eine Probe, die beim ersten toten Bild aufhört, misst nichts.
+pub fn probe(client: &reqwest::blocking::Client, url: &str) -> ImageProbe {
+    if is_client_blocked_url(url) {
+        return match curl_fetch(url) {
+            Ok((status, content_type, bytes)) => ImageProbe {
+                status: Some(status),
+                content_type,
+                bytes: bytes.len(),
+                via: "curl",
+                error: None,
+            },
+            Err(e) => ImageProbe {
+                status: None,
+                content_type: String::new(),
+                bytes: 0,
+                via: "curl",
+                error: Some(format!("{e:#}")),
+            },
+        };
     }
-    if bytes.is_empty() {
-        bail!("Bild-Download {url}: leerer Body (curl)");
+    match client.get(url).send() {
+        Ok(resp) => {
+            let status = resp.status().as_u16();
+            let content_type = resp
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_string();
+            let bytes = resp.bytes().map(|b| b.len()).unwrap_or(0);
+            ImageProbe { status: Some(status), content_type, bytes, via: "reqwest", error: None }
+        }
+        Err(e) => ImageProbe {
+            status: None,
+            content_type: String::new(),
+            bytes: 0,
+            via: "reqwest",
+            error: Some(e.to_string()),
+        },
     }
-    Ok((bytes, content_type.to_string()))
+}
+
+/// Ergebnis eines [`probe`]-Abrufs.
+pub struct ImageProbe {
+    /// HTTP-Status; `None`, wenn der Abruf gar nicht zustande kam.
+    pub status: Option<u16>,
+    pub content_type: String,
+    pub bytes: usize,
+    /// Welcher Weg gemessen hat — „curl" oder „reqwest".
+    pub via: &'static str,
+    pub error: Option<String>,
+}
+
+impl ImageProbe {
+    /// Nur ein 200 mit erlaubtem Bild-Content-Type und nicht-leerem Körper gilt
+    /// als „das Telefon sieht ein Bild". Ein 200 mit `text/html` ist die
+    /// Fehlerseite eines CDNs und wäre in der App wieder das Emoji.
+    pub fn is_image(&self) -> bool {
+        self.status == Some(200)
+            && self.bytes > 0
+            && allowed_image_content_type(&self.content_type).is_some()
+    }
+
+    /// Kurzfassung für Protokoll und Zusammenfassung.
+    pub fn describe(&self) -> String {
+        match (self.status, &self.error) {
+            (Some(s), _) if self.is_image() => format!("{s} {}", self.content_type),
+            (Some(s), _) => format!("{s} {}", if self.content_type.is_empty() { "ohne Content-Type" } else { &self.content_type }),
+            (None, Some(e)) => format!("kein Abruf ({e})"),
+            (None, None) => "kein Abruf".to_string(),
+        }
+    }
 }
 
 /// `file://`-Quelle in einen Pfad auflösen, aber **nur** innerhalb des
@@ -463,6 +556,29 @@ fn stored_etag(client: &reqwest::blocking::Client, cfg: &PushConfig, path: &str)
         .trim_matches('"')
         .to_ascii_lowercase();
     (!tag.is_empty() && !tag.contains('-')).then_some(tag)
+}
+
+/// Liegt zu dieser Quell-URL schon ein Objekt im Bucket? Beantwortet die Frage
+/// **ohne** das Bild beim Händler zu laden: Der Objektpfad ist aus der
+/// Quell-URL berechenbar ([`object_path`]), es bleibt ein HEAD auf unseren
+/// eigenen Bucket.
+///
+/// Dafür gebaut, dass eine Angebotszeile die Bucket-URL schon beim Upsert
+/// tragen kann, auch wenn der lokale Cache leer ist — der Fall jedes
+/// On-Demand-Laufs, mit dem ein Tester eine neue Filiale anfordert. Gemessen
+/// 2026-08-08: 207 ms je HEAD (Median über 20 Objekte), also rund 53 s für die
+/// 258 Bilder einer Netto-Filiale — gegen 3 min 56 s, in denen sonst tote
+/// Händler-URLs in der Tabelle stehen.
+///
+/// Fehler bedeutet „nicht da": Der Aufrufer lässt die Zeile dann im
+/// nachgelagerten Spiegel-Durchgang, statt eine URL zu behaupten, die niemand
+/// geprüft hat.
+pub fn object_exists(client: &reqwest::blocking::Client, cfg: &PushConfig, path: &str) -> bool {
+    let url = public_url(&cfg.base_url, path);
+    client
+        .head(&url)
+        .send()
+        .is_ok_and(|r| r.status().is_success())
 }
 
 /// In den Bucket hochladen (idempotent via x-upsert). Liefert (öffentliche URL,
@@ -932,5 +1048,44 @@ mod tests {
         for ip in ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"] {
             assert!(!is_blocked_ip(ip.parse().unwrap()), "sollte erlaubt sein: {ip}");
         }
+    }
+
+    // Was die Bild-Probe als „das Telefon sieht ein Bild" gelten lässt. Der
+    // Lauf vom 2026-08-08 fand alle neun Ketten gesund — die Fälle, für die
+    // die Probe überhaupt gebaut ist, sind ihr live also nie begegnet und
+    // gehören deshalb hierher. Der zweite ist der unangenehmste: Ein CDN, das
+    // seine Fehlerseite mit HTTP 200 ausliefert, sähe an jeder Prüfung
+    // vorbei, die nur auf den Status schaut — auf dem Telefon steht dann das
+    // Emoji.
+    #[test]
+    fn only_a_real_image_counts_as_alive() {
+        let probe = |status: Option<u16>, ct: &str, bytes: usize| ImageProbe {
+            status,
+            content_type: ct.to_string(),
+            bytes,
+            via: "test",
+            error: None,
+        };
+
+        assert!(probe(Some(200), "image/webp", 4096).is_image());
+        assert!(probe(Some(200), "image/jpeg; charset=binary", 4096).is_image());
+
+        assert!(!probe(Some(403), "text/html", 512).is_image(), "der Netto-Fall");
+        assert!(!probe(Some(200), "text/html", 512).is_image(), "Fehlerseite mit 200");
+        assert!(!probe(Some(200), "image/webp", 0).is_image(), "leerer Körper");
+        assert!(!probe(Some(301), "", 0).is_image(), "Redirect ist kein Bild");
+        assert!(!probe(None, "", 0).is_image(), "gar kein Abruf");
+    }
+
+    #[test]
+    fn a_failed_fetch_describes_itself_instead_of_pretending_a_status() {
+        let p = ImageProbe {
+            status: None,
+            content_type: String::new(),
+            bytes: 0,
+            via: "curl",
+            error: Some("Zeitüberschreitung".to_string()),
+        };
+        assert_eq!(p.describe(), "kein Abruf (Zeitüberschreitung)");
     }
 }

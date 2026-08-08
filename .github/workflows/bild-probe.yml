@@ -1,0 +1,104 @@
+name: Bild-Probe (nur lesen)
+
+# Fragt nach, ob die in `public.offers.image_url` gespeicherten Bilder
+# überhaupt abrufbar sind — je Kette eine Stichprobe, geholt auf demselben Weg,
+# den der Spiegel nimmt. Rein lesend: kein Schreibzugriff auf Supabase, kein
+# Push, kein Löschen.
+#
+# Warum in CI und nicht auf dem Mac: `netto-online.de` antwortet einem
+# Entwicklungsrechner auf **jede** Anfrage mit 403 (gemessen mehrfach, zuletzt
+# 2026-07-31). Von dort gemessen wäre jedes Ergebnis eine Aussage über den Mac,
+# nicht über die App. Derselbe Grund wie bei der Vorschau-Probe.
+#
+# Der `push`-Auslöser hängt an den Dateien des Spiegels: Wer an `storage.rs`,
+# `push.rs` oder an dieser Probe arbeitet, bekommt die Messung ungefragt — genau
+# die Änderungen können Bilder still töten, ohne dass ein Test rot wird.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sample:
+        description: "Wie viele Bild-URLs je Kette abrufen"
+        required: false
+        default: "8"
+      market:
+        description: "Nur diese Kette prüfen (leer = alle)"
+        required: false
+        default: ""
+  push:
+    paths:
+      - ".github/workflows/bild-probe.yml"
+      - "src/audit.rs"
+      - "src/storage.rs"
+      - "src/push.rs"
+
+concurrency:
+  group: bild-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Preflight (curl)
+        run: |
+          # Netto-Bilder werden über system-curl geholt (Akamai blockt den
+          # reqwest-TLS-Stack) — ohne curl misst die Probe die falsche Sache.
+          command -v curl >/dev/null || { echo "::error::curl fehlt auf dem Runner."; exit 1; }
+          curl --version | head -1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-lechariot
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Bilder abrufen
+        id: probe
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SAMPLE: ${{ inputs.sample || '8' }}
+          MARKET: ${{ inputs.market }}
+        run: |
+          set -o pipefail
+          ARGS=(--sample "$SAMPLE")
+          [ -n "${MARKET:-}" ] && ARGS+=(--market "$MARKET")
+          ./target/release/lechariot audit-images "${ARGS[@]}" 2>&1 | tee probe.log
+
+      - name: Zusammenfassung
+        if: always()
+        run: |
+          {
+            echo "## Bild-Probe"
+            echo ""
+            echo "| Kette | Angebote | mit Bild | Spiegel | Händler | file:// | geprüft | lebt | Urteil |"
+            echo "|---|---:|---:|---:|---:|---:|---:|---:|---|"
+            awk -F'\t' '$1 == "BILD-PROBE" {
+              urteil = $10
+              if (urteil == "TOT") urteil = "❌ **TOT**"
+              else if (urteil == "angeschlagen") urteil = "⚠️ angeschlagen"
+              printf "| %s | %s | %s | %s | %s | %s | %s | %s | %s |\n", $2,$3,$4,$5,$6,$7,$8,$9,urteil
+            }' probe.log 2>/dev/null || true
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Jede WARNUNG-Zeile als Annotation — dieselbe Behandlung wie in
+          # nightly.yml und branches.yml.
+          while IFS= read -r zeile; do
+            echo "::warning title=Bild-Probe::${zeile#WARNUNG }"
+          done < <(grep "^WARNUNG" probe.log 2>/dev/null || true)
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: bild-probe
+          path: probe.log
+          if-no-files-found: ignore
+          retention-days: 7

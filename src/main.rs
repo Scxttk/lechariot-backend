@@ -278,6 +278,28 @@ enum Command {
         #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
+    /// Nachfragen, ob die in `public.offers.image_url` gespeicherten Bilder
+    /// überhaupt abrufbar sind — je Kette eine Stichprobe, geholt auf dem Weg
+    /// des Spiegels. Rein lesend. Braucht SUPABASE_URL und
+    /// SUPABASE_SERVICE_KEY.
+    ///
+    /// Gehört in CI: `netto-online.de` antwortet einem Entwicklungsrechner auf
+    /// jede Anfrage mit 403, von dort gemessen sagt die Probe nichts über die
+    /// App.
+    AuditImages {
+        /// Wie viele verschiedene Bild-URLs je Kette abgerufen werden.
+        #[arg(long, default_value_t = 8)]
+        sample: usize,
+
+        /// Nur diese Kette prüfen (Wert aus `offers.market`).
+        #[arg(long)]
+        market: Option<String>,
+
+        /// Fehlschlagen, wenn eine Kette mit Bildern keine einzige abrufbare
+        /// URL hat. Ein einzelnes totes Bild bleibt auch damit eine Warnung.
+        #[arg(long, default_value_t = false)]
+        fail_on_dead_chain: bool,
+    },
     /// Verwaiste Bilder aus dem Storage-Bucket `offer-images` entfernen.
     /// Standard: Dry-Run (zeigt nur, was gelöscht würde). Braucht
     /// SUPABASE_URL und SUPABASE_SERVICE_KEY in der Umgebung.
@@ -543,6 +565,10 @@ fn main() -> Result<()> {
             lechariot::branches::sync(&cfg, &opts).map(|_| ())
         }
         Command::History { query, db } => history(query, db),
+        Command::AuditImages { sample, market, fail_on_dead_chain } => {
+            let opts = lechariot::audit::AuditOptions { sample, market, fail_on_dead_chain };
+            lechariot::audit::run(&opts, None)
+        }
         Command::PruneImages { execute, min_age_days } => {
             let opts = lechariot::prune::PruneOptions { execute, min_age_days };
             lechariot::prune::run(&opts, None)

@@ -1,6 +1,6 @@
 # CI und Nightly-Lauf auf GitHub Actions
 
-Drei Workflows liegen unter `.github/workflows/`:
+Unter `.github/workflows/` liegen:
 
 - **`ci.yml`** — läuft bei jedem Push und Pull Request: `cargo check` und
   `cargo test`. Die 7 Live-Scraper-Tests sind `#[ignore]` und werden **nicht**
@@ -22,6 +22,21 @@ Drei Workflows liegen unter `.github/workflows/`:
   braucht das, weil sie als einzige Tabelle **nicht** rotiert: Jeder Push
   legt eine weitere Wochen-Zeile je Produkt und Filiale an, und seit
   Migration v13 multipliziert sich das mit jeder angeforderten Filiale.
+  Ganz zuletzt, hinter den Aufräumläufen, steht seit dem 08.08. der
+  **Bild-Wächter**: `audit-images` ruft je Kette eine Stichprobe der
+  wirklich gespeicherten `image_url` ab. Trägt eine Kette Bilder, von denen
+  **keins** abrufbar ist, schlägt der Lauf fehl — genau der Netto-Fall vom
+  31.07., bei dem jede Zeile eine URL trug und das Telefon trotzdem nur
+  Emojis zeigte. Er steht deshalb hinten: Ein Schritt, der fehlschlagen
+  kann, überspringt alles nach ihm, und genau daran hängen die beiden
+  Aufräumläufe schon hinter dem Ketten-Wächter.
+- **`bild-probe.yml`** — dieselbe Messung von Hand (`workflow_dispatch`) und
+  automatisch bei jedem Push, der `storage.rs`, `push.rs` oder `audit.rs`
+  anfasst. Rein lesend. Gehört in CI, weil `netto-online.de` einem
+  Entwicklungsrechner auf jede Anfrage mit 403 antwortet — von dort gemessen
+  wäre jedes Ergebnis eine Aussage über den Mac, nicht über die App.
+- **`vorschau-probe.yml`** — Messgeschirr für die Folgewoche, nur GET, ohne
+  Supabase-Secrets.
 - **`branches.yml`** — frischt das Filialverzeichnis `public.branches` auf
   (`branches-sync --from-regions`), sonntags 03:15 UTC. Bewusst **nicht** in
   der Nightly: Filialen ändern sich in Monaten, Angebote wöchentlich; täglich
