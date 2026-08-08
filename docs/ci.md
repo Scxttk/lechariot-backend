@@ -22,11 +22,14 @@ Unter `.github/workflows/` liegen:
   braucht das, weil sie als einzige Tabelle **nicht** rotiert: Jeder Push
   legt eine weitere Wochen-Zeile je Produkt und Filiale an, und seit
   Migration v13 multipliziert sich das mit jeder angeforderten Filiale.
-  Dazwischen steht seit dem 08.08. der **Bild-Wächter**: `audit-images`
-  ruft je Kette eine Stichprobe der wirklich gespeicherten `image_url`
-  ab. Trägt eine Kette Bilder, von denen **keins** abrufbar ist, schlägt
-  der Lauf fehl — genau der Netto-Fall vom 31.07., bei dem jede Zeile eine
-  URL trug und das Telefon trotzdem nur Emojis zeigte.
+  Ganz zuletzt, hinter den Aufräumläufen, steht seit dem 08.08. der
+  **Bild-Wächter**: `audit-images` ruft je Kette eine Stichprobe der
+  wirklich gespeicherten `image_url` ab. Trägt eine Kette Bilder, von denen
+  **keins** abrufbar ist, schlägt der Lauf fehl — genau der Netto-Fall vom
+  31.07., bei dem jede Zeile eine URL trug und das Telefon trotzdem nur
+  Emojis zeigte. Er steht deshalb hinten: Ein Schritt, der fehlschlagen
+  kann, überspringt alles nach ihm, und genau daran hängen die beiden
+  Aufräumläufe schon hinter dem Ketten-Wächter.
 - **`bild-probe.yml`** — dieselbe Messung von Hand (`workflow_dispatch`) und
   automatisch bei jedem Push, der `storage.rs`, `push.rs` oder `audit.rs`
   anfasst. Rein lesend. Gehört in CI, weil `netto-online.de` einem

@@ -421,6 +421,35 @@ jobs:
             exit 1
           fi
 
+      # Verwaiste Bucket-Bilder aufräumen: der Push löscht veraltete offer-Zeilen
+      # (push.rs), aber nie ihre gespiegelten Bilder — der offer-images-Bucket
+      # wuchs so über das Free-Limit. Nur beim vollen
+      # Nightly-Sync (nicht bei On-Demand-Läufen) und nur Objekte älter als
+      # 1 Tag: das schützt frisch Gespiegeltes gegen parallel laufende
+      # On-Demand-Läufe, die ihre Bilder noch nicht in offers.image_url haben.
+      - name: Prune orphaned bucket images
+        if: inputs.market_id == ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          ./target/release/lechariot prune-images --execute --min-age-days 1 \
+            2>&1 | tee -a "$LOG"
+
+      # Preis-Historie beschneiden: Anders als `offers` rotiert sie nicht —
+      # jeder Push legt eine weitere Wochen-Zeile je Produkt und Filiale an,
+      # gelöscht wurde nie. Mit dem Filial-Schlüssel (v13) multipliziert sich
+      # das zusätzlich mit jeder angeforderten Filiale. Wie beim Bild-Prune
+      # nur im vollen Nightly-Lauf.
+      - name: Prune price history
+        if: inputs.market_id == ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          ./target/release/lechariot prune-history --execute \
+            2>&1 | tee -a "$LOG"
+
       # Bild-Wächter: Trägt eine Kette Bild-URLs, die niemand abrufen kann?
       #
       # Der Ketten-Wächter oben prüft, ob Angebote ankommen — über ihre Bilder
@@ -433,6 +462,11 @@ jobs:
       # Bildbefund nicht verschlucken — die beiden Fragen sind unabhängig.
       # Nur bei einer **komplett** toten Kette schlägt der Schritt fehl; ein
       # einzelnes verschwundenes Produktfoto bleibt eine Warnung.
+      #
+      # Steht bewusst GANZ hinten, hinter den Aufräumläufen. Ein Schritt, der
+      # fehlschlagen kann, überspringt alles, was nach ihm kommt — genau daran
+      # hängen `prune-images` und `prune-history` seit dem 06.08. hinter dem
+      # Ketten-Wächter. Ein zweites Tor davor hätte den Fehler verdoppelt.
       - name: Bilder abrufbar? (Stichprobe je Kette)
         if: always() && inputs.market_id == ''
         env:
@@ -468,35 +502,6 @@ jobs:
             echo "::error title=Kette ohne abrufbare Bilder::Eine Kette trägt Bild-URLs, von denen keine einzige geladen werden kann. Die App zeigt dort nur Emojis, obwohl die Datenbank gesund aussieht."
             exit 1
           fi
-
-      # Verwaiste Bucket-Bilder aufräumen: der Push löscht veraltete offer-Zeilen
-      # (push.rs), aber nie ihre gespiegelten Bilder — der offer-images-Bucket
-      # wuchs so über das Free-Limit. Nur beim vollen
-      # Nightly-Sync (nicht bei On-Demand-Läufen) und nur Objekte älter als
-      # 1 Tag: das schützt frisch Gespiegeltes gegen parallel laufende
-      # On-Demand-Läufe, die ihre Bilder noch nicht in offers.image_url haben.
-      - name: Prune orphaned bucket images
-        if: inputs.market_id == ''
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: |
-          ./target/release/lechariot prune-images --execute --min-age-days 1 \
-            2>&1 | tee -a "$LOG"
-
-      # Preis-Historie beschneiden: Anders als `offers` rotiert sie nicht —
-      # jeder Push legt eine weitere Wochen-Zeile je Produkt und Filiale an,
-      # gelöscht wurde nie. Mit dem Filial-Schlüssel (v13) multipliziert sich
-      # das zusätzlich mit jeder angeforderten Filiale. Wie beim Bild-Prune
-      # nur im vollen Nightly-Lauf.
-      - name: Prune price history
-        if: inputs.market_id == ''
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: |
-          ./target/release/lechariot prune-history --execute \
-            2>&1 | tee -a "$LOG"
 
       - name: Upload run log
         if: always()
