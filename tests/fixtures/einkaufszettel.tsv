@@ -46,6 +46,10 @@ REGAL	L'Oréal Paris Elvital Shampoo	250 ml	Drogerie
 REGAL	Wilkinson Hydro 5 Rasierklingen	4 Stück	Drogerie
 REGAL	Waschpulver Color	18 WL	Drogerie
 REGAL	JACOBS Krönung Filterkaffee	500 g	Kaffee
+REGAL	Sensodyne Zahncreme Sensitiv Fluorid oder Extra Frisch	75 ml	Drogerie
+REGAL	Gutfried Hähnchen-Fleischwurst würzig-frisch	350 g	Wurst
+REGAL	Bettine Ziegenkäse holl. Frisch- oder Weichkäse	100 g	Käse
+REGAL	FUNNY-FRISCH Knuspersnack	150 g	Knabberartikel
 
 # ------------------------------------------------------------ der Zettel
 # Das Selbstverständliche: das Wort steht im Titel.
@@ -87,6 +91,12 @@ NICHT-WUNSCH	Käse	Speck-Käse-Twister
 # — wer Kaffee suchte, bekam Haarspray und Waschpulver angeboten.
 NICHT	Kaffee	Waschpulver Color|L'Oréal Paris Elvital Shampoo
 NICHT	Milch	Waschpulver Color
+# „fisch" holte über die Tippfehler-Toleranz jeden Titel mit „frisch" —
+# neun Fehltreffer in der Feedback-Runde vom 05.08. Ein eingefügter
+# Buchstabe VORN ist kein Tippfehler, sondern ein anderes Wort.
+NICHT	Fisch	Sensodyne Zahncreme Sensitiv Fluorid oder Extra Frisch|Gutfried Hähnchen-Fleischwurst würzig-frisch|Bettine Ziegenkäse holl. Frisch- oder Weichkäse|FUNNY-FRISCH Knuspersnack
+# Gegenprobe: der echte Fisch bleibt findbar.
+ZETTEL	Fisch	Frische Makrele
 
 # ------------------------------------------------------------- die Wünsche
 # Noch nicht erreicht, aber gewollt. Der Test zählt sie, ohne rot zu werden.

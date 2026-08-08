@@ -159,6 +159,42 @@ fn norm(s: &str) -> String {
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// Steht `nadel` als **ganzes Wort** in `ntext`, nicht bloß irgendwo darin?
+///
+/// Der Marken-Rückfall prüfte roh `contains`, und das ist dieselbe
+/// Teilzeichenketten-Falle wie `reis` in „P**reis**", nur eine Ebene höher:
+/// „Quattro For**maggi**" wurde MAGGI und bekam `soßen`, „Pastis de
+/// **Mars**eille" wurde MARS und bekam `schokolade`, „**Zott**arella" wurde
+/// ZOTT und bekam `joghurt`. Gemessen am 2026-08-08 über die ganze Eval-DB:
+/// 213 Zeilen laufen überhaupt in den Rückfall, die Wortgrenze ändert genau
+/// diese drei — und keine einzige richtige.
+///
+/// Verloren gehen kann dabei nur ein *Rückfall*: Die Marke wird erst gefragt,
+/// wenn Titel und Untertitel nichts hergeben. Der Preis eines zu strengen
+/// Wortes ist also „ungetaggt" (Review-Liste), der Preis eines zu lockeren
+/// ist ein falsches Tag im Gesicht des Nutzers.
+///
+/// `ntext` ist normalisiert, enthält also nur a-zäöüß und Leerzeichen —
+/// „Grenze" heißt hier schlicht: davor und dahinter steht kein Buchstabe.
+fn enthaelt_als_wort(ntext: &str, nadel: &str) -> bool {
+    if nadel.is_empty() {
+        return false;
+    }
+    let ist_buchstabe = |c: char| c.is_alphabetic();
+    let mut from = 0;
+    while let Some(pos) = ntext[from..].find(nadel) {
+        let start = from + pos;
+        let end = start + nadel.len();
+        let davor = ntext[..start].chars().next_back();
+        let danach = ntext[end..].chars().next();
+        if !davor.is_some_and(ist_buchstabe) && !danach.is_some_and(ist_buchstabe) {
+            return true;
+        }
+        from = start + nadel.chars().next().map_or(1, char::len_utf8);
+    }
+    false
+}
+
 /// Tokens ab 3 Zeichen, plus Plural-Varianten ohne Endungs-s/-n/-e.
 fn tokens(ntext: &str) -> Vec<String> {
     let base: Vec<String> = ntext.split(' ').filter(|t| t.chars().count() > 2).map(String::from).collect();
@@ -265,7 +301,7 @@ pub fn match_keys(title: &str, subtitle: Option<&str>, category: Option<&str>) -
     if hits.is_empty() {
         // Marken-Fallback: erste passende Marke gewinnt (JSON-Reihenfolge).
         for (brand, key) in &d.brands {
-            if ntext.contains(brand.as_str()) {
+            if enthaelt_als_wort(&ntext, brand) {
                 return vec![key.clone()];
             }
         }
@@ -1178,6 +1214,24 @@ mod tests {
         assert_eq!(keys("MILKANA Tolle Rolle!"), vec!["käse"]);
         // Und die kurze Marke behält, was ihr gehört.
         assert_eq!(keys("Milka Alpenmilch"), vec!["schokolade"]);
+    }
+
+    /// **Die Marke muss ein ganzes Wort sein.** Dieselbe Falle wie oben, nur
+    /// eine Ebene tiefer: Dort gewann die kürzere Marke gegen die längere,
+    /// hier gewann sie gegen ein Wort, das gar keine Marke ist. Alle drei
+    /// Titel sind echte Zeilen der Eval-DB (Stand 2026-08-08).
+    #[test]
+    fn die_marke_muss_ein_ganzes_wort_sein() {
+        assert!(keys("GUSTAVO GUSTO Quattro Formaggi").is_empty(), "MAGGI in Formaggi");
+        assert!(keys("Pastis de Marseille").is_empty(), "MARS in Marseille");
+        assert!(keys("Zottarella Rolle Classic").is_empty(), "ZOTT in Zottarella");
+        // Der teuerste der Funde: die Kaffeemarke L'OR normalisiert zu „lor"
+        // und steckte in **Lor**enz. Fünf Knabber-Zeilen der Eval-DB trugen
+        // deshalb `kaffee`; jetzt gewinnt die Marke, die wirklich dasteht.
+        assert_eq!(keys("LORENZ Saltletts"), vec!["chips"]);
+        // Gegenprobe: als eigenes Wort taggt dieselbe Marke weiter.
+        assert_eq!(keys("MAGGI Fix"), vec!["soßen"]);
+        assert_eq!(keys("ZOTT Sahnejoghurt mild"), vec!["joghurt"]);
     }
 
     /// Die Marke zieht **nur**, wenn Titel und Untertitel nichts ergeben.

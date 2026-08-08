@@ -54,15 +54,23 @@ fn worte(s: &str) -> Vec<String> {
         .collect()
 }
 
-/// Tippfehler-Toleranz wie in der App: erst ab fünf Zeichen und nur bei
-/// **verschiedener** Länge. Gleich lang und ein Buchstabe anders wäre ein
-/// anderes Wort — „Butter" ist nicht „Bitter" (echte Nutzermeldung, 21.07.).
+/// Tippfehler-Toleranz wie in der App: erst ab fünf Zeichen, nur bei
+/// **verschiedener** Länge und nur mit gleichem Wortanfang. Gleich lang und
+/// ein Buchstabe anders wäre ein anderes Wort — „Butter" ist nicht „Bitter"
+/// (echte Nutzermeldung, 21.07.); und ein Buchstabe **vorn** dazu ist
+/// ebenfalls ein anderes Wort — „fisch" ist nicht „frisch" (Feedback-Runde
+/// 05.08., neun Fehltreffer). Zwilling von `OfferMatcher.tokensMatch`.
+const GEMEINSAMER_ANFANG: usize = 3;
+
 fn wort_passt(a: &str, b: &str) -> bool {
     if a == b {
         return true;
     }
     let (la, lb) = (a.chars().count(), b.chars().count());
     if la < 5 || lb < 5 || la == lb {
+        return false;
+    }
+    if a.chars().zip(b.chars()).take_while(|(x, y)| x == y).count() < GEMEINSAMER_ANFANG {
         return false;
     }
     levenshtein(a, b) <= 1

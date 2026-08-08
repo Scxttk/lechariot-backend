@@ -817,6 +817,19 @@ def tokens(s):
     return base + extra
 
 
+def enthaelt_als_wort(ntext, nadel):
+    """Steht `nadel` als ganzes Wort in `ntext`? — Zwilling von
+    `src/matching.rs::enthaelt_als_wort`, die Begründung steht dort.
+
+    `ntext` ist normalisiert (nur a-zäöüß und Leerzeichen), „Grenze" heißt
+    also: davor und dahinter steht kein Buchstabe.
+    """
+    if not nadel:
+        return False
+    return re.search(r"(?<![^\W\d_])" + re.escape(nadel) + r"(?![^\W\d_])",
+                     ntext, re.UNICODE) is not None
+
+
 def term_hits(text):
     """Begriffe des Wörterbuchs, die auf einen Angebotstext passen.
 
@@ -881,7 +894,7 @@ def match_keys(title, sub="", cat=""):
     # Marken-Fallback: die erste passende Marke in Wörterbuch-Reihenfolge.
     for marke, term in MARKEN.items():
         nmarke = norm(marke)
-        if nmarke and nmarke in ntext:
+        if nmarke and enthaelt_als_wort(ntext, nmarke):
             return [NONFOOD_KEY if term == "NONFOOD" else term], "marke"
     # Letzter Ausweg: die gepflegte Kategorie-Zuordnung. Nur exakte Gleichheit
     # der normalisierten Kategorie, nur wenn Titel und Untertitel nichts
