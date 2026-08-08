@@ -527,7 +527,7 @@ fn check_response(what: &str, resp: reqwest::blocking::Response) -> Result<()> {
 /// unbemerkt auch den Upload der Kachelbilder ab. Die haben aber keine
 /// Händler-URL, auf die man zurückfallen könnte — sie liegen als Datei auf
 /// dem Runner, der nach dem Lauf verschwindet.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum MirrorScope {
     /// Nur die selbst aus dem Prospekt geschnittenen Kachelbilder
     /// (`file://`). **Immer**, unabhängig von `mirror_images`.
@@ -620,6 +620,49 @@ fn mirror_images(
         }
     }
     Ok((fresh, unchanged, cached, failed))
+}
+
+/// Schon bekannte Bucket-URLs **vor** dem Upsert einsetzen — nur für die
+/// Hosts, deren Bilder die App nie selbst laden kann (Netto). Rein lokal: ein
+/// Blick in den SQLite-Cache, kein Netzwerk, kein Download, kein Upload.
+/// Liefert die Zahl der so vorab umgeschriebenen Zeilen.
+///
+/// Der Grund steht als Messung im Nightly-Log vom 2026-08-08. Zwischen
+/// „258 Angebote hochgeladen" (05:26:26, Zeilen tragen `netto-online.de`) und
+/// „Bild-Nachtrag: 258 Zeilen" (05:30:23) liegen **3 min 56 s**, und die
+/// Fertigmeldung an die App geht schon bei 05:26:28 raus. In diesem Fenster
+/// sind die Angebote sichtbar, die Filiale gilt als gesynct — und jedes Bild
+/// antwortet mit 403. Genau das sieht ein Tester, der eine Netto-Filiale neu
+/// anfordert.
+///
+/// Bei den Filialen, deren Bilder schon im Cache standen, war das Fenster
+/// reine Verschwendung: Die Bucket-URL war vor dem Upsert bekannt und wurde
+/// trotzdem erst 2,3 s später nachgetragen. Diese Zeilen gehen jetzt gleich
+/// richtig hinaus.
+///
+/// Was **nicht** vorgezogen wird, ist der Download. Die Entscheidung vom
+/// 2026-07-25 gilt weiter: Angebote warten nicht auf Bilder — deshalb bleibt
+/// alles, was wirklich erst geladen werden muss, im Nachtrag hinter der
+/// Fertigmeldung.
+fn apply_known_mirror_urls(
+    groups: &mut BTreeMap<&'static str, ChainRows>,
+    db_path: &str,
+) -> Result<usize> {
+    let conn = db::open(db_path)?;
+    let mut vorab = 0usize;
+    for (_chain, g) in groups.iter_mut() {
+        for row in g.rows.iter_mut() {
+            let Some(src) = row.image_url.clone() else { continue };
+            if scope_of(&src) != MirrorScope::UnfetchableRemotes {
+                continue;
+            }
+            if let Some(hit) = db::cached_image_url(&conn, &src)? {
+                row.image_url = Some(hit);
+                vorab += 1;
+            }
+        }
+    }
+    Ok(vorab)
 }
 
 /// Alle gepushten Zeilen zusätzlich in `public.price_history` upserten
@@ -778,6 +821,14 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
             "Bilder: {fresh} neu gespiegelt, {unchanged} unverändert, {cached} aus Cache, {failed} fehlgeschlagen."
         );
     }
+    // Bekannte Bucket-URLs für Netto vorziehen, damit die Zeile gar nicht erst
+    // mit einem toten Link hinausgeht. Kostet nichts — nur der lokale Cache
+    // wird gefragt, kein Netzwerk. Siehe `apply_known_mirror_urls`.
+    let vorab = apply_known_mirror_urls(&mut groups, &opts.db_path)?;
+    if vorab > 0 {
+        println!("Bilder vorab: {vorab} Zeilen tragen die Bucket-URL schon beim Upsert.");
+    }
+
     let offers_url = format!("{}/rest/v1/offers", cfg.base_url);
     let auth = |req: reqwest::blocking::RequestBuilder| {
         req.header("apikey", &cfg.api_key)
@@ -917,4 +968,109 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
         println!("Bild-Nachtrag: {} Zeilen mit Bucket-URLs aktualisiert.", mirrored.len());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::Offer;
+
+    fn netto_row(image: &str) -> SupabaseRow {
+        let mut o = Offer {
+            id: "x".into(),
+            market_id: "1665".into(),
+            title: "Butter".into(),
+            subtitle: None,
+            overline: None,
+            price: Some(1.99),
+            regular_price: None,
+            category: None,
+            nutri_score: None,
+            valid_from: Some("2026-08-08".into()),
+            valid_until: Some("2026-08-15".into()),
+            images: Vec::new(),
+            biozid: false,
+            flyer_page: None,
+        };
+        o.images = vec![image.to_string()];
+        map_offer(&o, "Netto", false).unwrap()
+    }
+
+    fn groups_with(rows: Vec<SupabaseRow>) -> BTreeMap<&'static str, ChainRows> {
+        let mut g = BTreeMap::new();
+        g.insert("Netto", ChainRows { rows, no_price: 0, no_date: 0 });
+        g
+    }
+
+    // Die Messung, die diesen Vorlauf ausgelöst hat (Nightly 2026-08-08):
+    // Zwischen dem Upsert der 258 Netto-Zeilen und dem Bild-Nachtrag lagen
+    // 3 min 56 s, die Fertigmeldung an die App ging nach 2 s raus. In diesem
+    // Fenster war jedes Bild ein 403. Wo die Bucket-URL schon im Cache steht,
+    // muss sie deshalb VOR dem Upsert in der Zeile stehen.
+    #[test]
+    fn a_known_netto_image_reaches_the_row_before_the_upsert() {
+        let tmp = std::env::temp_dir().join(format!("lechariot-vorab-{}.db", std::process::id()));
+        let db_path = tmp.to_string_lossy().to_string();
+        let _ = std::fs::remove_file(&tmp);
+
+        let quelle = "https://www.netto-online.de/media_nfs/images/2026-32/1-450x450-Butter.webp";
+        let bucket = "https://x.supabase.co/storage/v1/object/public/offer-images/abc.webp";
+        {
+            let conn = db::open(&db_path).unwrap();
+            db::cache_image_url(&conn, quelle, bucket).unwrap();
+        }
+
+        let mut groups = groups_with(vec![netto_row(quelle)]);
+        let vorab = apply_known_mirror_urls(&mut groups, &db_path).unwrap();
+
+        assert_eq!(vorab, 1);
+        assert_eq!(groups["Netto"].rows[0].image_url.as_deref(), Some(bucket));
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    // Gegenprobe: Ein noch nie gespiegeltes Bild darf der Vorlauf NICHT
+    // anfassen. Es muss den Nachtrag durchlaufen, sonst wandert der Download
+    // vor die Fertigmeldung — und genau das war die Entscheidung vom
+    // 2026-07-25: Angebote warten nicht auf Bilder.
+    #[test]
+    fn an_unknown_image_stays_for_the_deferred_pass() {
+        let tmp = std::env::temp_dir().join(format!("lechariot-vorab-neu-{}.db", std::process::id()));
+        let db_path = tmp.to_string_lossy().to_string();
+        let _ = std::fs::remove_file(&tmp);
+        db::open(&db_path).unwrap();
+
+        let quelle = "https://www.netto-online.de/media_nfs/images/2026-32/2-450x450-Kaese.webp";
+        let mut groups = groups_with(vec![netto_row(quelle)]);
+        let vorab = apply_known_mirror_urls(&mut groups, &db_path).unwrap();
+
+        assert_eq!(vorab, 0);
+        assert_eq!(groups["Netto"].rows[0].image_url.as_deref(), Some(quelle));
+        assert_eq!(scope_of(quelle), MirrorScope::UnfetchableRemotes);
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    // Und der Vorlauf gilt NUR für die Hosts, die die App nie laden kann. Eine
+    // Händler-URL, die das Telefon selbst abrufen kann, bleibt stehen — sonst
+    // schriebe der Vorlauf eine Bucket-URL, deren Objekt der nächtliche
+    // prune-images längst weggeräumt haben kann.
+    #[test]
+    fn a_fetchable_merchant_url_is_left_alone() {
+        let tmp = std::env::temp_dir().join(format!("lechariot-vorab-fremd-{}.db", std::process::id()));
+        let db_path = tmp.to_string_lossy().to_string();
+        let _ = std::fs::remove_file(&tmp);
+
+        let quelle = "https://img.rewe-static.de/1/gouda.png";
+        let bucket = "https://x.supabase.co/storage/v1/object/public/offer-images/alt.webp";
+        {
+            let conn = db::open(&db_path).unwrap();
+            db::cache_image_url(&conn, quelle, bucket).unwrap();
+        }
+
+        let mut groups = groups_with(vec![netto_row(quelle)]);
+        let vorab = apply_known_mirror_urls(&mut groups, &db_path).unwrap();
+
+        assert_eq!(vorab, 0);
+        assert_eq!(groups["Netto"].rows[0].image_url.as_deref(), Some(quelle));
+        let _ = std::fs::remove_file(&tmp);
+    }
 }
