@@ -238,20 +238,32 @@ fn market_id_from_url(url: &str) -> Option<&str> {
         .filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()))
 }
 
+pub fn offers_url(market_id: &str) -> String {
+    format!("{BASE}/maerkte/{market_id}/angebote/")
+}
+
+/// Die Angebotsseite als Roh-HTML — **derselbe Weg, den `fetch_offers` geht**.
+///
+/// Eigene Funktion, damit eine Probe das Markup messen kann, ohne den
+/// Header-Satz nachzubauen: Ein nachgebauter Aufruf misst die Probe, nicht die
+/// Seite (siehe `vorschau_probe`, dessen erster Anlauf genau daran scheiterte).
+pub fn fetch_offers_html(market_id: &str) -> Result<String> {
+    let url = offers_url(market_id);
+    curl_get(&url, OFFERS_HEADERS).with_context(|| util::ctx("EDEKA", "Angebote laden", &url))
+}
+
+const OFFERS_HEADERS: &[(&str, &str)] = &[
+    ("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
+    ("Sec-Fetch-Site", "none"),
+    ("Sec-Fetch-Mode", "navigate"),
+    ("Sec-Fetch-Dest", "document"),
+    ("Sec-Fetch-User", "?1"),
+    ("Upgrade-Insecure-Requests", "1"),
+];
+
 pub fn fetch_offers(market: &Market) -> Result<Vec<Offer>> {
-    let url = format!("{BASE}/maerkte/{}/angebote/", market.id);
-    let html = curl_get(
-        &url,
-        &[
-            ("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
-            ("Sec-Fetch-Site", "none"),
-            ("Sec-Fetch-Mode", "navigate"),
-            ("Sec-Fetch-Dest", "document"),
-            ("Sec-Fetch-User", "?1"),
-            ("Upgrade-Insecure-Requests", "1"),
-        ],
-    )
-    .with_context(|| util::ctx("EDEKA", "Angebote laden", &url))?;
+    let url = offers_url(&market.id);
+    let html = fetch_offers_html(&market.id)?;
 
     let offers = parse_offers(&html, &market.id)
         .with_context(|| util::ctx("EDEKA", "Angebote parsen", &url))?;
@@ -272,6 +284,22 @@ pub fn fetch_offers(market: &Market) -> Result<Vec<Offer>> {
         }
         bail!("[EDEKA] Keine Angebote gefunden ({url}) — Seitenstruktur hat sich möglicherweise geändert");
     }
+
+    // Kacheln ohne Preis gibt es echt (siehe unten), aber **kein einziger**
+    // Preis auf einer ganzen Angebotsseite ist keine Woche ohne Preise,
+    // sondern ein Parser, der am Markup vorbeigreift. Genau dieser Zustand
+    // hielt die Nightly vom 05.08. bis zum 09.08. rot, und die Meldung dazu
+    // fiel erst ganz am Ende beim Ketten-Wächter — hier steht sie beim Markt,
+    // der sie ausgelöst hat.
+    if offers.iter().all(|o| o.price.is_none()) {
+        eprintln!(
+            "WARNUNG [EDEKA] Markt {} ({}): {} Angebote, aber keines mit Preis — \
+             das Preis-Markup auf {url} hat sich vermutlich geändert.",
+            market.name,
+            market.id,
+            offers.len()
+        );
+    }
     Ok(offers)
 }
 
@@ -286,7 +314,12 @@ pub fn parse_offers(html: &str, market_id: &str) -> Result<Vec<Offer>> {
     // der Anker "#angebot-<uuid>" unterscheidet Angebote von anderen <article>s.
     let sel_title = sel(r##"a[href^="#angebot-"]"##);
     let sel_desc = sel("p.line-clamp-2");
-    let sel_sronly = sel("div.sr-only");
+    // Der Preis steht in der Vorlesehilfe der Kachel, weil die sichtbare Zahl
+    // `aria-hidden` ist. Bis Anfang August war das ein `<div class="sr-only">`,
+    // seither ein `<span>` (gemessen 2026-08-09) — deshalb hier ohne Tag: der
+    // Selektor beschreibt die Rolle, nicht das Element, und trägt beide
+    // Fassungen.
+    let sel_sronly = sel(".sr-only");
     let sel_img = sel("img");
 
     // Seitenweite Gültigkeit: "Gültig ab 13.07.2026" ... "gültig bis ..., den 18.07.2026"
@@ -306,7 +339,15 @@ pub fn parse_offers(html: &str, market_id: &str) -> Result<Vec<Offer>> {
             continue;
         };
 
-        // "Festpreis von 3.99 €" / "App-Preis von 0.88 €"
+        // "Festpreis von 1.49€" / "App Preis von 5.99€" / "Rabattierter Preis
+        // von 6.49€ (Insgesamt -35% Rabatt)".
+        //
+        // Trägt eine Kachel zwei Preise, gewinnt der erste — das ist der
+        // App-Preis, und es bleibt damit bei der Auslegung von vor dem
+        // Markup-Wechsel. Ob ein Preis, den nur die EDEKA-App hergibt, in der
+        // Zeile stehen sollte, ist eine offene Frage und steht als solche im
+        // Backlog; sie hier nebenbei anders zu beantworten hieße, den
+        // Preisverlauf still zu verbiegen.
         let price = article
             .select(&sel_sronly)
             .map(|e| e.text().collect::<String>())
@@ -358,10 +399,23 @@ fn text_of(el: ElementRef, selector: &Selector) -> Option<String> {
     if text.is_empty() { None } else { Some(text) }
 }
 
-// "Festpreis von 3.99 €" -> 3.99 (erste als Zahl parsbare Token)
+// "Festpreis von 3.99 €" -> 3.99
+//
+// Die Zahl wird **hinter dem Marker** gelesen, nicht als erstes zahlartiges
+// Token der Zeile. Der Unterschied ist neu und wichtig: Seit Anfang August
+// heißt die zweite Fassung „Rabattierter Preis von 1.49€ (Insgesamt -45%
+// Rabatt)" — eine Zeile, die zwei Zahlen trägt. Und das Euro-Zeichen klebt
+// jetzt an der Zahl ("1.49€"), weshalb ein Token-Parser hier gar nichts mehr
+// findet: genau das hat die Nightly ab 05.08. auf „0 Angebote hochladbar"
+// gesetzt.
 fn parse_price(s: &str) -> Option<f64> {
-    s.split_whitespace()
-        .find_map(|tok| tok.replace(',', ".").parse::<f64>().ok())
+    let rest = s.split_once("reis von").map(|(_, rest)| rest)?;
+    let zahl: String = rest
+        .trim_start()
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == ',' || *c == '.')
+        .collect();
+    zahl.trim_end_matches(['.', ',']).replace(',', ".").parse().ok()
 }
 
 // Erstes "dd.mm.yyyy" nach dem Marker -> "yyyy-mm-dd"
@@ -404,9 +458,31 @@ mod tests {
 
     #[test]
     fn price_parsing() {
+        // Alte Schreibweise (bis Anfang August): Leerzeichen vor dem Euro.
         assert_eq!(parse_price("Festpreis von 3.99 €"), Some(3.99));
         assert_eq!(parse_price("App-Preis von 0.88 €"), Some(0.88));
         assert_eq!(parse_price("kein Preis"), None);
+    }
+
+    /// Die drei Fassungen, die edeka.de seit dem Markup-Wechsel schreibt
+    /// (gemessen 2026-08-09 an 021868/421696/421347). Das Euro-Zeichen klebt
+    /// an der Zahl, der Bindestrich im App-Preis ist weg, und die
+    /// rabattierte Zeile trägt hinter dem Preis eine zweite Zahl.
+    #[test]
+    fn price_parsing_neues_markup() {
+        assert_eq!(parse_price("Festpreis von 1.49€"), Some(1.49));
+        assert_eq!(parse_price("App Preis von 5.99€"), Some(5.99));
+        assert_eq!(
+            parse_price("Rabattierter Preis von 6.49€ (Insgesamt -35% Rabatt)"),
+            Some(6.49),
+            "der Rabatt hinter dem Preis darf die Zahl nicht kapern"
+        );
+        // Komma-Schreibweise, falls die Seite sie je zurückbringt.
+        assert_eq!(parse_price("Festpreis von 1,49 €"), Some(1.49));
+        // Ohne Marker kein Preis: „Angebot:" und Mengenangaben tragen Zahlen,
+        // sind aber keine Preise.
+        assert_eq!(parse_price("Angebot: 3 Stück"), None);
+        assert_eq!(parse_price("Insgesamt -45% Rabatt"), None);
     }
 
     #[test]
