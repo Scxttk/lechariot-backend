@@ -13,7 +13,7 @@ Angebotszahlen schwanken je Woche und Region.
 | Lidl | Store-Finder-Feld `AR` → `lidl.com/flyer/esi-overview` → `endpoints.leaflets.schwarz/v4/flyer?flyer_identifier=<slug>` → `pdfUrl` → `pdftotext -bbox-layout` | kein Key, keine Anmeldung; braucht **poppler-utils**; PDF ~83 MB; Angebotspreis am Stern erkennbar (`2.49*`) | Absatzregion der Filiale (18 Varianten/Woche, 40 Regionscodes) | ~195 (1 Woche) | `tests/fixtures/lidl/prospekt_bbox_layout.xml`, `tests/fixtures/lidl/prospekt_flyer.json` |
 | EDEKA | `edeka.de/api/marketsearch/markets?searchstring=<PLZ>`, Markt-ID via 308-Redirect der Legacy-URL, Angebote aus `/maerkte/<id>/angebote/`-HTML | Akamai-Bot-Schutz → System-`curl` (util.rs); Preis maschinenlesbar im `sr-only`-Div („Festpreis von 3.99 €" / „App-Preis von …") | filialspezifisch | ~200 | `tests/fixtures/edeka/angebote.html` |
 | Netto | Intershop-Filialsuche (JSON) + `/filialangebote/{1,2,4,5}`-HTML | Akamai → System-`curl`; Filiale über Cookie `netto_user_stores_id` | filialspezifisch | ~300 | `tests/fixtures/netto/filialangebote_1.html` |
-| ALDI Nord | `aldi-nord.de/angebote.html`, Daten im `__NEXT_DATA__`-JSON (`OFFER_GET.res.algoliaDataMap`) | plain reqwest | bundesweit (`ALDI_NORD_DE`) | ~230 | `tests/fixtures/aldi_nord/angebote.html` |
+| ALDI Nord | `aldi-nord.de/angebote.html`, Daten im `__NEXT_DATA__`-JSON (`OFFER_GET.res.algoliaDataMap`) | plain reqwest; **Aktionstage und Produkt-Snapshot laufen auseinander** (siehe unten) | bundesweit (`ALDI_NORD_DE`) | ~230 | `tests/fixtures/aldi_nord/angebote.html`, `…/angebote_luecke.html` |
 | ALDI Süd | `api.aldi-sued.de/v3/product-search?categoryKey=1588161426582123` (paginiert) | Akamai → System-`curl`; Preise in **Cent**; keine Gültigkeitsdaten | Süd-Gebiet einheitlich (`ALDI_SUED_DE`) | ~75 | `tests/fixtures/aldi_sued/product_search.json` |
 | NORMA | `norma-online.de/de/angebote/` (Index) → je Themenseite `…/ab-<tag>,-<dd.mm.jj>/<thema>-t-<id>/` | plain reqwest, kein Key, kein Cookie; Preis maschinenlesbar im `aria-label` („0,99 Euro"), sichtbar steht dort `–,99`; **Marke und Produkt getrennt** (Offer-ID enthält deshalb die Marke); Laufzeit abgeleitet (siehe unten) | bundesweit (`NORMA_DE`) | ~220 (3 Termine) | `tests/fixtures/norma/angebote_index.html`, `…/thema_mehr_fuers_geld.html`, `…/filialfinder_01219.html` |
 
@@ -113,6 +113,38 @@ abgeschnitten, wie bei jeder anderen Kette in einer Großstadt auch.
   es nicht mehr. Im Prospekt-Weg sind
   Lidl-Plus-Preise ganz normale Sternpreise und im Untertitel als „nur mit
   Lidl Plus" gekennzeichnet.
+
+## ALDI Nord: Aktionstage und Produkt-Snapshot laufen auseinander
+
+Die Angebotsseite trägt zwei getrennte Quellen in einem statisch gebauten
+`__NEXT_DATA__` (`"gsp": true`):
+
+- `OFFER_GET.res.categories` — die Aktionstage aus dem Magnolia-CMS, je Sektion
+  eine Liste von `productIds`.
+- `OFFER_GET.res.algoliaDataMap` — der Produkt-Snapshot mit Name, Preis,
+  Verkaufseinheit, Bildern.
+
+Beide können auseinanderlaufen, und dann verspricht `categories` ein Produkt,
+das `algoliaDataMap` nicht kennt. **Gemessen am 06.08.2026:** Die
+„Osteuropa-Aktion" der KW 32 nannte elf `productIds`, der Snapshot kannte zehn.
+Es fehlte `1032980` — „OSTEUROPA Original polnische Pierogi", 400-g-Packung,
+2,49 €, im gedruckten Prospekt derselben Woche abgebildet. Ein zweites Produkt
+(`4369`, Sektion „Haltbare Produkte" ab Do 6.8.) fehlte genauso.
+
+Die Lücke sitzt in der Quelle, nicht im Parser: Auch die Produktseite
+`/produkt/…-1032980.html` antwortete mit HTTP 404, und die gerenderte
+Angebotsseite ließ die Kachel selbst weg. Nachbauen lässt sich so ein Angebot
+nicht — ohne Name und Preis zeigt die App keine Zeile, und `push::map_offer`
+verwirft preislose Angebote ohnehin.
+
+Was der Scraper deshalb tut: Er **meldet** die Lücke.
+`aldi_nord::parse_offers_reporting` gibt die verlorenen Produkte als
+`MissingProduct` zurück, `parse_offers` schreibt je eine `WARNUNG`-Zeile mit der
+`productId` auf stderr — dieselbe Klasse stiller Datenverlust, die `sync.rs`
+schon für übersprungene Filialen laut macht. Ohne die ID ließe sich das fehlende
+Produkt bei ALDI gar nicht wiederfinden.
+
+Nachmessen: `cargo run --example aldi_nord_luecke`.
 
 ## Streichpreise: welche Kette den alten Preis überhaupt druckt
 

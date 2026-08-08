@@ -127,6 +127,51 @@ fn aldi_nord_fixture_parses_next_data() {
     assert_eq!(avocado.valid_until.as_deref(), Some("2026-07-18"));
 }
 
+/// Die Lücke zwischen Aktionstagen und Produkt-Snapshot fällt auf.
+///
+/// Nachgebaut aus der echten Seite vom 06.08.2026: Die „Osteuropa-Aktion" der
+/// KW 32 nannte `1032980` — „OSTEUROPA Original polnische Pierogi", 2,49 €, im
+/// Prospekt derselben Woche —, `algoliaDataMap` kannte die ID nicht, und das
+/// Angebot verschwand spurlos. Dazu ein Eintrag mit leerem `name`, der ebenso
+/// unbrauchbar ist.
+#[test]
+fn aldi_nord_reports_products_the_datamap_does_not_have() {
+    use lechariot::scrapers::aldi_nord::MissingReason;
+
+    let (offers, missing) = lechariot::scrapers::aldi_nord::parse_offers_reporting(
+        include_str!("fixtures/aldi_nord/angebote_luecke.html"),
+        "ALDI_NORD_DE",
+    )
+    .unwrap();
+
+    // Nur das Produkt mit Namen und Preis wird ein Angebot.
+    assert_eq!(offers.len(), 1);
+    assert_eq!(offers[0].title, "Würstchen");
+
+    assert_eq!(missing.len(), 2);
+
+    let pierogi = missing.iter().find(|m| m.product_id == "1032980").unwrap();
+    assert_eq!(pierogi.reason, MissingReason::NotInDataMap);
+    assert_eq!(pierogi.section.as_deref(), Some("Osteuropa-Aktion"));
+    assert_eq!(pierogi.aktion_start.as_deref(), Some("2026-08-03"));
+
+    let namenlos = missing.iter().find(|m| m.product_id == "9999999").unwrap();
+    assert_eq!(namenlos.reason, MissingReason::EmptyName);
+    assert_eq!(namenlos.section.as_deref(), Some("Osteuropa-Aktion"));
+}
+
+/// Eine vollständige Seite meldet keine Lücke — sonst wäre die Warnung Lärm.
+#[test]
+fn aldi_nord_complete_fixture_reports_nothing_missing() {
+    let (offers, missing) = lechariot::scrapers::aldi_nord::parse_offers_reporting(
+        include_str!("fixtures/aldi_nord/angebote.html"),
+        "ALDI_NORD_DE",
+    )
+    .unwrap();
+    assert_eq!(offers.len(), 3);
+    assert!(missing.is_empty(), "unerwartet gemeldet: {missing:?}");
+}
+
 // ---------------------------------------------------------------- ALDI Süd
 
 #[test]

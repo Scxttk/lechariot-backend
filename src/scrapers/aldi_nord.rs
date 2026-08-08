@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, bail};
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
 use crate::models::{Market, Offer};
@@ -87,7 +88,82 @@ fn load(url: &str) -> Result<String> {
         .with_context(|| util::ctx("ALDI Nord", "Angebote lesen", url))
 }
 
+/// Ein Produkt, das die Aktionstage versprechen, aus dem aber kein Angebot
+/// werden kann.
+///
+/// `res.categories` (Aktionstage aus dem Magnolia-CMS) und `res.algoliaDataMap`
+/// (Produkt-Snapshot) sind zwei getrennte Quellen in einer statisch gebauten
+/// Seite — `__NEXT_DATA__` trägt `"gsp": true`. Sie können auseinanderlaufen,
+/// und dann verspricht die eine ein Produkt, das die andere nicht kennt.
+///
+/// **Gemessen am 06.08.2026:** Die „Osteuropa-Aktion" der KW 32 (Mo 3.8.–Sa 8.8.)
+/// nannte elf `productIds`, `algoliaDataMap` kannte nur zehn davon. Es fehlte
+/// `1032980` — „OSTEUROPA Original polnische Pierogi", 400-g-Packung, 2,49 €,
+/// im gedruckten Prospekt derselben Woche abgebildet. Auch die Produktseite
+/// `/produkt/…-1032980.html` antwortete mit 404, und die gerenderte
+/// Angebotsseite ließ die Kachel selbst weg: Das Produkt fehlte auf der Quelle,
+/// es wurde nicht falsch geparst.
+///
+/// Erfinden lässt sich so ein Angebot nicht — ohne Name und Preis zeigt die App
+/// keine Zeile, `push::map_offer` verwirft preislose Angebote ohnehin. Worauf es
+/// ankommt: Der Verlust fällt auf. Vorher lief die Schleife nur über
+/// `algoliaDataMap`, und ein ganzes Aktionsprodukt verschwand spurlos.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MissingProduct {
+    pub product_id: String,
+    /// Sektionstitel des Aktionstags, z. B. „Osteuropa-Aktion".
+    pub section: Option<String>,
+    /// Start des Aktionstags, z. B. „2026-08-03".
+    pub aktion_start: Option<String>,
+    pub reason: MissingReason,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MissingReason {
+    /// `productId` steht in `res.categories`, hat aber keinen Eintrag in
+    /// `res.algoliaDataMap`.
+    NotInDataMap,
+    /// Eintrag vorhanden, aber `name` fehlt oder ist leer — ohne Titel lässt
+    /// sich weder eine ID bilden noch etwas anzeigen.
+    EmptyName,
+}
+
+impl MissingReason {
+    fn label(self) -> &'static str {
+        match self {
+            MissingReason::NotInDataMap => "fehlt in algoliaDataMap",
+            MissingReason::EmptyName => "ohne Namen in algoliaDataMap",
+        }
+    }
+}
+
 pub fn parse_offers(html: &str, market_id: &str) -> Result<Vec<Offer>> {
+    let (offers, missing) = parse_offers_reporting(html, market_id)?;
+    warn_missing(&missing);
+    Ok(offers)
+}
+
+/// Eine Zeile pro verlorenem Produkt, mit der ID zum Nachschlagen. Lieber
+/// mehrere Zeilen als eine Summe: Die ID ist das Einzige, womit sich das
+/// fehlende Produkt bei ALDI überhaupt wiederfinden lässt.
+fn warn_missing(missing: &[MissingProduct]) {
+    for m in missing {
+        eprintln!(
+            "WARNUNG [ALDI Nord] Produkt {} {} — fällt weg (Sektion {}, ab {})",
+            m.product_id,
+            m.reason.label(),
+            m.section.as_deref().unwrap_or("?"),
+            m.aktion_start.as_deref().unwrap_or("?"),
+        );
+    }
+}
+
+/// Wie [`parse_offers`], gibt aber zusätzlich die Produkte zurück, die die
+/// Aktionstage nennen und die Seite nicht liefert (siehe [`MissingProduct`]).
+pub fn parse_offers_reporting(
+    html: &str,
+    market_id: &str,
+) -> Result<(Vec<Offer>, Vec<MissingProduct>)> {
     let next_data = extract_next_data(html)
         .context("__NEXT_DATA__-Block nicht gefunden — Seitenstruktur geändert?")?;
     let root: serde_json::Value =
@@ -117,6 +193,9 @@ pub fn parse_offers(html: &str, market_id: &str) -> Result<Vec<Offer>> {
     // productId -> (Sektionstitel, Aktions-Start, Aktions-Ende)
     let mut meta: HashMap<String, (Option<String>, Option<String>, Option<String>)> =
         HashMap::new();
+    // Jede productId genau einmal, in der Reihenfolge der Aktionstage. Erst
+    // dadurch lässt sich unten sagen, welches versprochene Produkt fehlt.
+    let mut referenced: Vec<String> = Vec::new();
     if let Some(categories) = res.get("categories").and_then(|v| v.as_array()) {
         for aktion in categories {
             let start = aktion.get("startDate").and_then(|v| v.as_str()).map(String::from);
@@ -128,8 +207,12 @@ pub fn parse_offers(html: &str, market_id: &str) -> Result<Vec<Offer>> {
                     continue;
                 };
                 for id in ids.iter().filter_map(|v| v.as_str()) {
-                    meta.entry(id.to_string())
-                        .or_insert_with(|| (title.clone(), start.clone(), end.clone()));
+                    // Erster Aktionstag gewinnt (unverändert): ein Produkt, das
+                    // Mo und Do läuft, gilt ab Mo.
+                    if let Entry::Vacant(slot) = meta.entry(id.to_string()) {
+                        slot.insert((title.clone(), start.clone(), end.clone()));
+                        referenced.push(id.to_string());
+                    }
                 }
             }
         }
@@ -142,10 +225,32 @@ pub fn parse_offers(html: &str, market_id: &str) -> Result<Vec<Offer>> {
 
     let mut offers = Vec::new();
     let mut seen = HashSet::new();
+    let mut missing = Vec::new();
+
+    // Was die Aktionstage versprechen, der Produkt-Snapshot aber nicht kennt.
+    for id in &referenced {
+        if !data_map.contains_key(id) {
+            let (section, aktion_start, _) = meta.get(id).cloned().unwrap_or((None, None, None));
+            missing.push(MissingProduct {
+                product_id: id.clone(),
+                section,
+                aktion_start,
+                reason: MissingReason::NotInDataMap,
+            });
+        }
+    }
 
     for (object_id, entry) in data_map {
         let Some(title) = entry.get("name").and_then(|v| v.as_str()).filter(|s| !s.is_empty())
         else {
+            let (section, aktion_start, _) =
+                meta.get(object_id).cloned().unwrap_or((None, None, None));
+            missing.push(MissingProduct {
+                product_id: object_id.clone(),
+                section,
+                aktion_start,
+                reason: MissingReason::EmptyName,
+            });
             continue;
         };
         let title = title.to_string();
@@ -241,7 +346,7 @@ pub fn parse_offers(html: &str, market_id: &str) -> Result<Vec<Offer>> {
         });
     }
 
-    Ok(offers)
+    Ok((offers, missing))
 }
 
 fn extract_next_data(html: &str) -> Option<&str> {
