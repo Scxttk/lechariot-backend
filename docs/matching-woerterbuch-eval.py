@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Wörterbuch-Entwurf: taggt aktuelle Angebote regelbasiert mit Alltagsbegriffen."""
-import sqlite3, re, os, json
+import sqlite3, re, os, json, sys
 from collections import Counter, defaultdict
 
 DB = os.path.expanduser("~/.local/share/lechariot/lechariot.db")
 
 # Kategorien, die klar Non-Food sind (Ketten-Marketing-Kategorien)
-NONFOOD_CAT = re.compile(r"mode|style|heim|haus|garten|haustier|tierbedarf|tiernahrung|pflanzen|angeln|elektro|medien|kinderzimmer|wäschepflege|schulstart|alles für die schule|kochen-und-grillen|drogerie|spielzeug|alltagshelfer|technik|spielwaren|baumarkt|multimedia|bekleidung|schuhe|camping|auto|buero|non.?food|onlineshop|e-bikes?|fahrrad|trolley|koffer|unterhemd|\btops\b|\bteller\b|sch[üu]sseln?|staubsauger|wischroboter|k[üu]chenmasch|n[äa]hmasch|batterien|\bfarben\b|kleber|zahngesundheit|glasartikel|aufbewahr|essgeschirr|reinigungsger|k[üu]chenger|k[üu]chengro|k[üu]chenzubeh|grillzubeh|backzubeh|damen|herren|w[äa]sche\b|leuchten|m[öo]bel|werkzeug|haartrockner|rasierer|zahnpflege|fernseh|led ?& ?lcd|kapsel|padmasch|\bk[üu]che\b|blumen|strauß|kochen-und-backen|reinigen|waschmittel", re.I)
-FOOD_CAT = re.compile(r"obst|gemüse|fleisch|geflügel|wurst|molkerei|fette|getränke|feinkost|konserven|kaffee|tee|süßwaren|knabber|grundnahrung|fisch|bäckerei|backwaren|tiefkühl", re.I)
+NONFOOD_CAT = re.compile(r"mode|style|heim|haus|garten|haustier|tierbedarf|tiernahrung|pflanzen|angeln|elektro|medien|kinderzimmer|wäschepflege|schulstart|alles für die schule|kochen-und-grillen|drogerie|spielzeug|alltagshelfer|technik|spielwaren|baumarkt|multimedia|bekleidung|schuhe|camping|auto|buero|non.?food|onlineshop|e-bikes?|fahrrad|trolley|koffer|unterhemd|\btops\b|\bteller\b|sch[üu]sseln?|staubsauger|wischroboter|k[üu]chenmasch|n[äa]hmasch|batterien|\bfarben\b|kleber|zahngesundheit|glasartikel|aufbewahr|essgeschirr|reinigungsger|k[üu]chenger|k[üu]chengro|k[üu]chenzubeh|grillzubeh|backzubeh|damen|herren|w[äa]sche\b|leuchten|m[öo]bel|werkzeug|haartrockner|rasierer|zahnpflege|fernseh|led ?& ?lcd|kapsel|padmasch|\bk[üu]che\b|blumen|strauß|kochen-und-backen|reinigen|waschmittel|büro", re.I)
+FOOD_CAT = re.compile(r"obst|gemüse|fleisch|geflügel|wurst|molkerei|fette|getränke|feinkost|konserven|kaffee\b|tee|süßwaren|knabber|grundnahrung|fisch|bäckerei|backwaren|tiefkühl", re.I)
 
 # Kategorie → Begriff, als LETZTER Ausweg: greift nur, wenn Titel und
 # Untertitel nichts hergeben. Die Ketten schreiben dorthin, was das Produkt
@@ -169,15 +169,19 @@ V = {
  "tofu":(["tofu","vegane","vegan","veggie","fleischersatz","falafel","gemüsebällchen"],[],[]),
  "eintopf":(["eintopf","suppe","brühe","bouillon"],["eintopf","suppe"],[]),
  "konserven":(["mais","kidneybohnen","kichererbsen","linsen","bohnen","tomatenmark","passierte tomaten","gehackte tomaten","sauerkraut","rotkohl","oliven","pfefferoni","brechbohnen","datteln"],[],[]),
- "soßen":(["ketchup","mayonnaise","mayo","senf","grillsauce","bbq sauce","sriracha","sojasauce","dressing","pesto","tomatenketchup","tzatziki","zaziki"],["sauce","soße","sosse","ketchup"],[]),
+ "soßen":(["ketchup","mayonnaise","mayo","senf","grillsauce","sriracha","sojasauce","dressing","pesto","tomatenketchup","tzatziki","zaziki"],["sauce","soße","sosse","ketchup"],[]),
  "gewürze":(["pfeffer","paprikapulver","curry","gewürz","gewürze","gewürzmischung","kräuter","koriander","ingwer"],["gewürz"],["gewürzgurken"]),
  "backwaren":(["croissant","kuchen","torte","berliner","muffins","brezel","laugengebäck","hefezopf","stollen","backmischung","weckli","flammkuchenböden","törtchen"],["kuchen","backmischung","törtchen"],[]),
- "windeln/hygiene":(["windeln","toilettenpapier","küchenrolle","taschentücher","zahnpasta","duschgel","shampoo","deo","deodorant","waschmittel","spülmittel","vanish","lenor","zewa"],["papier","waschmittel"],["stofftaschentücher"]),
+ # Der Sammeltopf ist eingedampft: zahnpasta, duschgel, shampoo, deo,
+ # waschmittel, spülmittel, toilettenpapier und küchenrolle haben seit den
+ # Artikelzeichen-Tranchen eigene Begriffe. Wer sie hier stehen ließ, gab
+ # jeder Zahncreme zwei Tags, von denen eines nichts erklärt.
+ "windeln/hygiene":(["windeln","vanish","lenor","zewa","wasserenthärter","calgon"],["papier","spülmittel"],["stofftaschentücher"]),
  "spirituosen":(["vodka","wodka","whisky","whiskey","gin","rum","likör","likoer","korn","tequila","aperol","batida","asti","spirituose","jack daniels","jim beam","bittergetränke","doppelkorn","edelbrand","wermut","grappa"],["likör","limes"],[]),
  "pudding":(["pudding","dessert","götterspeise","grießpudding","mousse","milchreis"],["pudding"],[]),
  "nüsse":(["nüsse","erdnüsse","cashewkerne","cashew","erdnuss","mandeln","pistazien","pistazienkerne","walnüsse","studentenfutter","trockenfrüchte"],["kerne","nüsse"],[]),
  "margarine":(["margarine","rama","cremefine","pflanzencreme"],["margarine"],[]),
- "fertiggericht":(["fertiggericht","fertiggerichte","tortelloni","maultaschen","bowl","ravioli","mikrowellengericht","instant","gyoza","onigiri","wrap","wraps"],["gericht"],["tortilla"]),
+ "fertiggericht":(["fertiggericht","fertiggerichte","tortelloni","maultaschen","bowl","mikrowellengericht","instant","gyoza","onigiri","wrap","wraps"],["gericht"],["tortilla"]),
  "knäckebrot":(["knäckebrot","knusperbrot","zwieback","wasa","reiswaffeln"],[],[]),
  "schoten/hülsen":(["kaiserschoten","zuckerschoten","edamame","bohnen grün"],["schoten"],[]),
  "protein/fitness":(["proteinriegel","high protein","proteindrink","proteinpulver","whey","trinkmahlzeiten","trinkmahlzeit"],[],[]),
@@ -575,7 +579,7 @@ _ADD = {
  "eis":(["mochi","icesticks","raketeneis","stracciatella","eisfrüchte"],[]),
  "butter":(["kräuterbutter"],[]),
  "müsli":(["haferpops","cerealienmix"],[]),
- "soßen":(["ajvar","zaziki","tsatsiki","dip","dips"],[]),
+ "soßen":(["ajvar","zaziki","tsatsiki","dips"],[]),
  "brot":(["croutons"],[]),
  "chips":(["krupuk","cheese balls"],[]),
  "pudding":(["puddingpulver"],[]),
@@ -785,7 +789,7 @@ for _t,_bl in _BLOCK4.items():
     V[_t] = (V[_t][0], V[_t][1], V[_t][2]+_bl)
 
 # Non-Food-Begriffe im Titel (fängt Non-Food in Food-Kategorien wie „Wochenangebote")
-NONFOOD_TERMS = re.compile(r"lichterkette|lampion|wäschest|wäscheklammer|wäschekorb|kettensäge|akku|werkzeug|kinderbuch|spielzeug|\blego\b|rosen\b|blumen|pflanze|socken|shorts|shirt|cap\b|hose|schuhe|handtuch|bettwäsche|pfannen?\b|topf\b|löffel|messer|grill\b|kohle|batterie|lampe|leuchte|katzen|hunde|tiernahrung|nassfutter|trockenfutter|snack für|rasenkanten|solar|deko|kissen|matratze|drucker|kopfhörer|wc-|reiniger|megaperls|oxi action|waschpulver|schreibwaren|mikrofon|duschregal|sonnensegel|wäscheparf|karaoke|trinkzubehör|wäschetrockner|weißer riese|sonnenspray|duftspüler|sonnencreme|feuchttücher|servietten|haushaltstücher|klumpstreu|geschirrtücher|platzset|schlafsack|fusselrolle|bügeleisen|glasschüssel|lautsprecher|geräusche-box|fliegengitter|kajak|husarenknöpfchen|lavendel|bilderbuch|wecker|hairstyler|bastelkoffer|kochgeschirr|grillplatte|boombox|fliegenfalle|mottenabwehr|badvorleger|schrubber|kosmetikspiegel|shorty|plaid|fototafel|komfort-bh|pantoletten|spannbetttuch|küchentücher|sneaker|hoodie|bodyspray|deospray|haarspray|rasierkling|sonnenschutz|dutch oven|gläsersortiment|sonnenschirm|tischdecke|fleece|wellnessbürste|maniküre|pediküre|teppich|taillenslip|haftcreme|wasserballon|doppelwandig|kollagenpulver|pokémon|pokemon|plüsch|spielfigur|sammelkarten|tiptoi|autorennbahn|gesellschaftsspiel|kreuzworträtsel|rätselbuch|pixi|bastel|schüleretui|sticker|puzzle|holzperlen|magnet-bausatz|wasserbahn|kinderbesteck|steckdose|usb|ladegerät|smart-tv|wasserkocher|toaster|standmixer|espressomaschine|kaffeemaschine|kaffeevollautomat|kapselmaschine|waffeleisen|reiskocher|luftkühler|ventilator|wetterstation|vakuumiergerät|hamburger-maker|hamburger maker|inspektionskamera|range extender|mini-led-tv|qled|e-bike|faltrad|mountainbike|fahrradträger|mähroboter|heckenschere|bohrhammer|abbruchhammer|bohrer|winkelschleifer|meißel|werkstatt|rohrzange|bolzenschneider|kabelbinder|elektrohobel|feinbohrschleifer|spannzwingen|zwingen-set|rasendünger|gartenspritze|gartenhocker|sanitär|montageschlüssel|sekundenkleber|buntlack|abdeckplane|duschtürdichtung|badewannenmatte|duschhocker|steppbett|spannbettlaken|tagesdecke|daunendecke|luftbett|matratze|kleiderschrank|drehtürenschrank|büroschrank|bürostuhl|beistelltisch|wohnzimmertisch|tischgruppe|schuhregal|metallregal|kunststoffregal|regalwürfel|polsterbank|schlafsessel|schminktisch|nischenwagen|akustikpaneel|bilderrahmen|sofa |brotkasten|kartoffelstampfer|schneebesen|kleid|tunika|slips|pyjama|leggings|unterhemden|retroboxer|sandalen|bademantel|freizeitanzug|loungewear|trikot-set|tops |ripptops|jersey|boardcase|reisetasche|rucksack|einkaufstrolley|packbänder|kuppelzelt|autodachzelt|zelt |trampolin|nestschaukel|rutsche|sandkasten|whirlpool|sup |sup-|campingstuhl|spieltipi|matschküche|super soaker|großfahrzeug|mini-fahrzeug|rennboot|inkontinenz|rollator|blutdruckmess|pulsoximeter|lesehilfe|spezialbrille|erste-hilfe|massagematte|haltungstrainer|beintrainer|rückenstütz|körperanalyse|waschhilfe|slipeinlagen|mighty patch|orchidee|phalaenopsis|chrysanthem|alpenveilchen|hortensie|glockenblume|dahlie|aster|eustoma|feigenkaktus|bogenhanf|celosia|zauberglöckchen|prärieenzian|rosenstrauß|bunter strauß|alufolie|frischhaltefolie|netflix|wertkarte|löschdecke|trinkflasche|zitronensäure|insektenschutz|corega|axe ", re.I)
+NONFOOD_TERMS = re.compile(r"lichterkette|lampion|wäschest|wäscheklammer|wäschekorb|kettensäge|akku|werkzeug|kinderbuch|spielzeug|\blego\b|rosen\b|blumen|pflanze|socken|shorts|shirt|cap\b|hose|schuhe|handtuch|bettwäsche|pfannen?\b|topf\b|löffel|messer|grill\b|kohle|batterie|lampe|leuchte|katzen|hunde|tiernahrung|nassfutter|trockenfutter|snack für|rasenkanten|solar|deko|kissen|matratze|drucker|kopfhörer|wc-|reiniger|megaperls|oxi action|waschpulver|schreibwaren|mikrofon|duschregal|sonnensegel|wäscheparf|karaoke|trinkzubehör|wäschetrockner|weißer riese|sonnenspray|duftspüler|sonnencreme|feuchttücher|servietten|haushaltstücher|klumpstreu|geschirrtücher|platzset|schlafsack|fusselrolle|bügeleisen|glasschüssel|lautsprecher|geräusche-box|fliegengitter|kajak|husarenknöpfchen|lavendel|bilderbuch|wecker|hairstyler|bastelkoffer|kochgeschirr|grillplatte|boombox|fliegenfalle|mottenabwehr|badvorleger|schrubber|kosmetikspiegel|shorty|plaid|fototafel|komfort-bh|pantoletten|spannbetttuch|küchentücher|sneaker|hoodie|bodyspray|deospray|haarspray|rasierkling|sonnenschutz|dutch oven|gläsersortiment|sonnenschirm|tischdecke|fleece|wellnessbürste|maniküre|pediküre|teppich|taillenslip|haftcreme|wasserballon|doppelwandig|kollagenpulver|pokémon|pokemon|plüsch|spielfigur|sammelkarten|tiptoi|autorennbahn|gesellschaftsspiel|kreuzworträtsel|rätselbuch|pixi|bastel|schüleretui|sticker|puzzle|holzperlen|magnet-bausatz|wasserbahn|kinderbesteck|steckdose|usb|ladegerät|smart-tv|wasserkocher|toaster|standmixer|espressomaschine|kaffeemaschine|kaffeevollautomat|kapselmaschine|waffeleisen|reiskocher|luftkühler|ventilator|wetterstation|vakuumiergerät|hamburger-maker|hamburger maker|inspektionskamera|range extender|mini-led-tv|qled|e-bike|faltrad|mountainbike|fahrradträger|mähroboter|heckenschere|bohrhammer|abbruchhammer|bohrer|winkelschleifer|meißel|werkstatt|rohrzange|bolzenschneider|kabelbinder|elektrohobel|feinbohrschleifer|spannzwingen|zwingen-set|rasendünger|gartenspritze|gartenhocker|sanitär|montageschlüssel|sekundenkleber|buntlack|abdeckplane|duschtürdichtung|badewannenmatte|duschhocker|steppbett|spannbettlaken|tagesdecke|daunendecke|luftbett|matratze|kleiderschrank|drehtürenschrank|büroschrank|bürostuhl|beistelltisch|wohnzimmertisch|tischgruppe|schuhregal|metallregal|kunststoffregal|regalwürfel|polsterbank|schlafsessel|schminktisch|nischenwagen|akustikpaneel|bilderrahmen|sofa |brotkasten|kartoffelstampfer|schneebesen|kleid|tunika|slips|pyjama|leggings|unterhemden|retroboxer|sandalen|bademantel|freizeitanzug|loungewear|trikot-set|tops |ripptops|jersey|boardcase|reisetasche|rucksack|einkaufstrolley|packbänder|kuppelzelt|autodachzelt|zelt |trampolin|nestschaukel|rutsche|sandkasten|whirlpool|sup |sup-|campingstuhl|spieltipi|matschküche|super soaker|großfahrzeug|mini-fahrzeug|rennboot|inkontinenz|rollator|blutdruckmess|pulsoximeter|lesehilfe|spezialbrille|erste-hilfe|massagematte|haltungstrainer|beintrainer|rückenstütz|körperanalyse|waschhilfe|slipeinlagen|mighty patch|orchidee|phalaenopsis|chrysanthem|alpenveilchen|hortensie|glockenblume|dahlie|aster|eustoma|feigenkaktus|bogenhanf|celosia|zauberglöckchen|prärieenzian|rosenstrauß|bunter strauß|alufolie|frischhaltefolie|netflix|wertkarte|löschdecke|trinkflasche|zitronensäure|insektenschutz|corega|axe |all-in-1-pods|allzwecktücher|badebombe|beschriftungsgerät|beschäftigungsbuch|gaming|haushaltsartikel|hipster|kaffeebecher|kaltwachsstreifen|klebestift|nachtwäsche|nutri mixer|shaping-short|silikonform|sprühflasche|treteimer|vorlesebuch|wäschesammler|zitruspresse", re.I)
 
 # Tokens, bei denen Suffix-Matching generell verboten ist (falsche Komposita)
 SUFFIX_STOP = {"reis","preis","schwein","schweine","kreis","eis","wein",
@@ -869,6 +873,22 @@ def term_hits(text):
     return hits
 
 
+# Nachgetragen aus docs/matching-woerterbuch.json: Die Runde vom 06.08.
+# („Die letzten elf Lücken" und „Die letzten drei") hat diese Wörter direkt
+# in der generierten Datei ergänzt, nie hier. Damit taggte die Nightly nach
+# einem Wörterbuch, das der Schiedsrichter nicht kannte — sichtbar erst am
+# ignorierten Paritätstest. Die Wörter stehen jetzt in der Quelle.
+_ADD_BRING = {
+ "tiefkühlgemüse":["kaisergemüse","buttergemüse","gemüse gefroren","tiefkühl brokoli","tk gemüse"],
+ "grillsauce":["dip","dips"],
+ "kräuterfrischkäse":["kochcreme"],
+ "bratensauce":["preiselbeer sauce","pasta sauce","vanille sauce"],
+ "pizzateig":["mini pizzen","mini pizza"],
+ "sellerie":["stangenselerie"],
+}
+for _t,_ex in _ADD_BRING.items():
+    V[_t] = (V[_t][0]+_ex, V[_t][1], V[_t][2])
+
 NONFOOD_KEY = "nonfood"
 
 
@@ -916,11 +936,34 @@ def match_keys(title, sub="", cat=""):
 # damit `V`, `MARKEN`, `norm` und `tokens` importierbar sind, ohne dass ein
 # Import die Datenbank anfasst — docs/feedback-auswertung.py braucht genau
 # diese Definitionen und darf keine zweite Kopie davon führen.
+def schreibe_json():
+    """Wörterbuch für die Rust-Seite ausgeben.
+
+    Steht **vor** dem Messlauf und nicht mehr an dessen Ende, und das ist
+    keine Kosmetik: Am 2026-08-08 lag die letzte Woche der Eval-DB vier Tage
+    zurück, `main` fand null Zeilen und starb in der Abdeckungs-Rechnung an
+    einer Division durch null — vor der Ausgabe. Wer danach die Datei ansah,
+    fand die alte. Das Wörterbuch schreiben und das Wörterbuch messen sind
+    zwei Dinge; das erste darf nicht am zweiten hängen.
+    """
+    json.dump({"begriffe":{t:{"exact":e,"suffix":s,"prefix":PRAEFIX.get(t,[]),"block":b} for t,(e,s,b) in V.items()},"marken":MARKEN,"kategorien":KAT,"nonfood_cat":NONFOOD_CAT.pattern,"nonfood_terms":NONFOOD_TERMS.pattern,"food_cat":FOOD_CAT.pattern},
+              open(os.path.join(os.path.dirname(__file__),"matching-woerterbuch.json"),"w"), ensure_ascii=False, indent=1)
+
+
 def main():
+    schreibe_json()
+    # `--alle` misst den ganzen Korpus statt der heute gültigen Woche. Nötig,
+    # sobald die Eval-DB älter ist als die laufende Woche — ein Sync wäre der
+    # andere Weg, aber der schreibt nach Supabase, und die Pflegerunde liest
+    # nur (siehe .claude/commands/pflegerunde.md).
+    wo = "" if "--alle" in sys.argv else "where o.valid_until >= date('now')"
     con = sqlite3.connect(DB)
-    rows = con.execute("""select o.title, coalesce(o.subtitle,''), coalesce(o.category,''), m.name
-                          from offers o join markets m on m.id=o.market_id
-                          where o.valid_until >= date('now')""").fetchall()
+    rows = con.execute(f"""select o.title, coalesce(o.subtitle,''), coalesce(o.category,''), m.name
+                          from offers o join markets m on m.id=o.market_id {wo}""").fetchall()
+    if not rows:
+        print(f"Wörterbuch geschrieben. Keine Angebote mit valid_until >= heute in {DB} —\n"
+              f"für einen Messlauf gegen den ganzen Korpus: matching-woerterbuch-eval.py --alle")
+        return
 
     stats = Counter(); tagged = defaultdict(list); untagged = []
     for title, sub, cat, market in rows:
@@ -950,9 +993,6 @@ def main():
     import random; random.seed(1)
     for market, title, sub, cat in random.sample(untagged, min(120, len(untagged))):
         print(f"  [{market[:12]:12s}] {title[:55]:55s} | {sub[:25]:25s} | {cat[:25]}")
-
-    json.dump({"begriffe":{t:{"exact":e,"suffix":s,"prefix":PRAEFIX.get(t,[]),"block":b} for t,(e,s,b) in V.items()},"marken":MARKEN,"kategorien":KAT,"nonfood_cat":NONFOOD_CAT.pattern,"nonfood_terms":NONFOOD_TERMS.pattern,"food_cat":FOOD_CAT.pattern},
-              open(os.path.join(os.path.dirname(__file__),"matching-woerterbuch.json"),"w"), ensure_ascii=False, indent=1)
 
 
 if __name__ == "__main__":
