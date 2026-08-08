@@ -856,6 +856,29 @@ mod tests {
             .contains(&"chips".to_string()));
         assert!(match_keys("Protein Coffee", None, Some("Sportnahrung"))
             .contains(&"kaffee".to_string()));
+        // Backend-Runde 08.08.: `käse` hatte als einziger Molkerei-Begriff
+        // keinen Präfix, „ALPENHAIN Grill-Käsegenuss" trug deshalb gar kein
+        // Tag — weder exact noch Suffix noch Präfix kannten „käsegenuss".
+        assert_eq!(keys("ALPENHAIN Grill-Käsegenuss"), vec!["käse"]);
+        assert!(keys("LINDENHOF Käseaufschnitt").contains(&"käse".to_string()));
+        // Der Präfix erbt die Blockliste des Begriffs — sonst wäre er
+        // teurer als die Lücke, die er schließt. Gemessen über den ganzen
+        // Korpus: Ohne diese zwei Einträge zieht er drei Backwaren in den
+        // Käse, und die Laugenstange verliert dabei ihr `brot` (der
+        // Marken-/Kategorie-Rückfall läuft nur bei leerem Ergebnis).
+        // Die Kategorie steht bewusst dabei: Genau über sie bekam die Zeile
+        // ihr `brot`, und der Rückfall auf die Kategorie läuft nur, solange
+        // der Präfix nichts trifft.
+        let laugenstange = keys_cat("Käselaugenstange", "Brötchen");
+        assert!(!laugenstange.contains(&"käse".to_string()), "{laugenstange:?}");
+        assert_eq!(laugenstange, vec!["brot"]);
+        assert!(!keys("Käseschnecke").contains(&"käse".to_string()));
+        assert!(!keys("Käseschnecken").contains(&"käse".to_string()));
+        // Gegenprobe: die alten Blockeinträge halten weiter, und echter Käse
+        // trägt seinen Tag.
+        assert!(!keys("Speck-Käse-Twister").contains(&"käse".to_string()));
+        assert!(!keys("Käsekuchen").contains(&"käse".to_string()));
+        assert!(keys("Bergkäse am Stück").contains(&"käse".to_string()));
     }
 
     /// Zwei Meldungen aus `match_feedback` vom 2026-07-31, beide vom selben
@@ -1423,12 +1446,29 @@ mod tests {
     #[test]
     #[ignore]
     fn parity_with_eval_db() {
-        const QUERY: &str = "select o.title, coalesce(o.subtitle,''), coalesce(o.category,'') \
+        const WOCHE: &str = "select o.title, coalesce(o.subtitle,''), coalesce(o.category,'') \
                              from offers o where o.valid_until >= date('now') order by o.id";
+        const ALLE: &str = "select o.title, coalesce(o.subtitle,''), coalesce(o.category,'') \
+                            from offers o order by o.id";
         let root = env!("CARGO_MANIFEST_DIR");
         let db = std::env::var("LECHARIOT_PARITY_DB").unwrap_or_else(|_| {
             std::env::var("HOME").unwrap() + "/.local/share/lechariot/lechariot.db"
         });
+
+        // Ist die Eval-DB älter als die laufende Woche, findet der Datums-
+        // filter null Zeilen — und der Test lief am 08.08. genau so durch:
+        // grün, mit 2093 Wörterbuch-Einträgen und **null** Angebotszeilen.
+        // Die Zeilen sind aber die Hälfte, die den Marken- und den
+        // Kategorie-Weg überhaupt anfasst. Statt still zu schrumpfen, misst
+        // der Lauf dann den ganzen Korpus, wie es die Python-Referenz mit
+        // `--alle` schon tut.
+        let conn = rusqlite::Connection::open(&db).unwrap();
+        let zaehle = |q: &str| -> usize {
+            conn.query_row(&format!("select count(*) from ({q})"), [], |r| r.get(0))
+                .map(|n: i64| n as usize)
+                .unwrap()
+        };
+        let query = if zaehle(WOCHE) > 0 { WOCHE } else { ALLE };
 
         // Der Treiber ruft `match_keys` der Referenz, nicht `term_hits`: sonst
         // bliebe der Marken- und der Kategorie-Weg ungeprüft, und die stehen
@@ -1441,7 +1481,7 @@ import importlib.util, sqlite3, sys
 spec = importlib.util.spec_from_file_location("ev", r"{root}/docs/matching-woerterbuch-eval.py")
 ev = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ev)
-faelle = [("db",) + r for r in sqlite3.connect(sys.argv[1]).execute("""{QUERY}""")]
+faelle = [("db",) + r for r in sqlite3.connect(sys.argv[1]).execute("""{query}""")]
 for begriff, (exact, suffix, block) in ev.V.items():
     eintraege = list(exact) + list(suffix) + list(block) + list(ev.PRAEFIX.get(begriff, []))
     faelle += [("dict", e, "", "") for e in eintraege]
@@ -1481,13 +1521,9 @@ for quelle, title, sub, cat in faelle:
 
         // Gegenprobe, dass die Referenz überhaupt gearbeitet hat: eine leere
         // oder halbe Ausgabe wäre sonst der grünste Test der Welt.
-        let conn = rusqlite::Connection::open(&db).unwrap();
-        let erwartet: usize = conn
-            .query_row(&format!("select count(*) from ({QUERY})"), [], |r| r.get(0))
-            .map(|n: i64| n as usize)
-            .unwrap();
-        assert_eq!(aus_db, erwartet, "die Referenz sah nicht dieselben Angebotszeilen");
+        assert_eq!(aus_db, zaehle(query), "die Referenz sah nicht dieselben Angebotszeilen");
         assert!(aus_dict > 0, "kein einziger Wörterbuch-Eintrag geprüft");
+        assert!(aus_db > 0, "keine einzige Angebotszeile geprüft — ist die Eval-DB leer?");
 
         println!("{aus_db} Angebotszeilen aus {db} + {aus_dict} Wörterbuch-Einträge verglichen");
         assert!(

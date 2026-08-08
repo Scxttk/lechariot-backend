@@ -7,12 +7,18 @@ fn main() {
     let db = std::env::args().nth(1).unwrap_or_else(|| {
         std::env::var("HOME").unwrap() + "/.local/share/lechariot/lechariot.db"
     });
+    // `--alle` misst den ganzen Korpus statt der heute gültigen Woche —
+    // dieselbe Schaltung wie in der Python-Referenz, und aus demselben Grund:
+    // Sobald die Eval-DB älter ist als die laufende Woche, findet der Filter
+    // null Zeilen und der Vergleich vergleicht zwei leere Dateien.
+    let alle = std::env::args().any(|a| a == "--alle");
     let conn = rusqlite::Connection::open(&db).unwrap();
     let mut stmt = conn
-        .prepare(
+        .prepare(&format!(
             "select o.title, coalesce(o.subtitle,''), coalesce(o.category,'')
-             from offers o where o.valid_until >= date('now') order by o.id",
-        )
+             from offers o {} order by o.id",
+            if alle { "" } else { "where o.valid_until >= date('now')" }
+        ))
         .unwrap();
     let rows: Vec<(String, String, String)> = stmt
         .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))

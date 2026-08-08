@@ -149,7 +149,8 @@
     "kaese"
    ],
    "prefix": [
-    "schmelzkäse"
+    "schmelzkäse",
+    "käse"
    ],
    "block": [
     "käsekuchen",
@@ -164,6 +165,8 @@
     "käsegebäck",
     "fleischkäse",
     "twister",
+    "käselaugenstange",
+    "käseschnecke",
     "mascarpone joghurt"
    ]
   },

@@ -488,8 +488,14 @@ const RULES: &[(&str, &str, &str)] = &[
     ("auto", "🚗", "Sonstiges"),
     ("fahrrad", "🚲", "Sonstiges"),
     ("garten", "🪴", "Sonstiges"),
+    // `vegan`, `soja` und `soya` sagen für sich genommen nichts über das
+    // Regal — sie stehen hier für ihr Emoji, das Regal holt die Zeile über
+    // ihren Begriff. `tofu` steht dagegen weiter unten bei den Vorräten:
+    // Es ist der einzige der vier, der auch ein Wörterbuch-BEGRIFF ist, und
+    // ein Begriff, der auf „Sonstiges" zeigt, ist für `enrich` kein
+    // fehlendes Regal, sondern ein gültiges — er verdeckte damit jeden
+    // feineren Begriff derselben Zeile.
     ("vegan", "🌱", "Sonstiges"),
-    ("tofu", "🌱", "Sonstiges"),
     ("soja", "🌱", "Sonstiges"),
     ("soya", "🌱", "Sonstiges"),
     // Runde 4: Long-Tail aus echten Daten
@@ -741,6 +747,23 @@ const RULES: &[(&str, &str, &str)] = &[
     ("sandwich", "🥪", "Sonstiges"),
     ("snackbox", "🥪", "Sonstiges"),
     ("spiel", "🧸", "Kinder"),
+    // Runde 08.08.: Begriffe, die das Wörterbuch als Essen führt und für die
+    // diese Tabelle kein Regal kannte. Ohne Eintrag fällt die Zeile in den
+    // Sonstiges-Topf, in dem die Aktionsware steht.
+    ("tofu", "🌱", "Vorräte & Kochen"),
+    ("tempeh", "🌱", "Vorräte & Kochen"),
+    ("speisestärke", "🌾", "Vorräte & Kochen"),
+    ("hummus", "🫙", "Vorräte & Kochen"),
+    ("kapern", "🫙", "Vorräte & Kochen"),
+    ("schoten", "🫘", "Obst & Gemüse"),
+    // Beide vom Prüftest gefunden, nicht von einer Zeile: Im Korpus dieser
+    // Woche steht keines der beiden. „pflanzendrink" ist länger als
+    // „pflanze" und sticht es damit — sonst wäre Hafermilch Gartenbedarf.
+    ("pflanzendrink", "🌱", "Getränke"),
+    ("kohletabletten", "💊", "Drogerie"),
+    // Länger als "schoten" und damit Vorrang: die Vanilleschote ist eine
+    // Backzutat, keine Zuckerschote.
+    ("vanilleschote", "🌿", "Vorräte & Kochen"),
     // "filet" (Fleisch) und "lachs" sind gleich lang — Compounds explizit,
     // sonst entscheidet bei Gleichstand die Tabellenreihenfolge
     ("lachsfilet", "🐟", "Fisch"),
@@ -898,7 +921,19 @@ pub fn enrich(title: &str, subtitle: Option<&str>, raw_category: Option<&str>) -
         // Umgekehrt: Was das Wörterbuch als Essen erkannt hat, gehört nicht
         // in den Topf für das Unsortierbare. Der Begriff weiß, in welches
         // Regal es gehört.
-        if let Some(c) = tags.iter().find_map(|t| kategorie_fuer_begriff(t)) {
+        //
+        // „Sonstiges" zählt dabei nicht als Antwort, und das ist der Fund vom
+        // 08.08.: Die Suche endet beim ersten Begriff, der ein Regal nennt —
+        // ein Begriff, der auf den Sonstiges-Topf zeigt, verdeckte damit
+        // jeden feineren Begriff derselben Zeile. `tofu` stand bei den
+        // Non-Food-Zeilen und nahm so `hummus` und `krautsalat` das Wort.
+        // Sieben Begriffe zeigen weiter dorthin (Handschuhe, Blumenerde,
+        // Socken …) — bei denen ist es richtig, und seitdem folgenlos.
+        if let Some(c) = tags
+            .iter()
+            .filter_map(|t| kategorie_fuer_begriff(t))
+            .find(|c| *c != FALLBACK_CATEGORY)
+        {
             category = c;
         }
     }
