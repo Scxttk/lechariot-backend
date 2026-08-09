@@ -36,6 +36,10 @@ static WORT_FORMEN: LazyLock<Regex> =
 const LIDL_ZIP: &str = "01219";
 /// Der Markt, an dem die Vorschau-Fixture entstanden ist (REWE Dresden).
 const REWE_MARKET: &str = "565005";
+/// Ein zweiter Markt, über die PLZ aufgelöst: Ein einzelner Markt kann eine
+/// Woche lang zufällig ohne alten Preis dastehen — zwei in verschiedenen
+/// Gebieten machen aus dem Einzelfall einen Befund.
+const REWE_ZIPS: &[&str] = &["10115"];
 /// Die drei Märkte der Nightly, wie in `edeka_preis_probe`.
 const EDEKA_MARKETS: &[&str] = &["021868", "421696", "421347"];
 
@@ -118,14 +122,28 @@ fn lidl() {
 /// Gezählt wird nur, was sich als Betrag lesen lässt **und** über dem
 /// Angebotspreis liegt — alles andere ist kein Streichpreis.
 fn rewe_chain() {
-    println!("\n=== REWE (rewerse -raw, Markt {REWE_MARKET}) ===");
     let cert = std::env::var("REWE_CERT").unwrap_or_else(|_| "cert.pem".into());
     let key = std::env::var("REWE_KEY").unwrap_or_else(|_| "private.key".into());
-    let raw = match rewe::fetch_raw(REWE_MARKET, &cert, &key) {
+
+    let mut markets = vec![REWE_MARKET.to_string()];
+    for zip in REWE_ZIPS {
+        match rewe::find_market(zip, &cert, &key) {
+            Ok(m) => markets.push(m.id),
+            Err(e) => println!("PLZ {zip}: kein Markt gefunden ({e:#})"),
+        }
+    }
+    for market in markets {
+        rewe_market(&market, &cert, &key);
+    }
+}
+
+fn rewe_market(market_id: &str, cert: &str, key: &str) {
+    println!("\n=== REWE (rewerse -raw, Markt {market_id}) ===");
+    let raw = match rewe::fetch_raw(market_id, cert, key) {
         Ok(v) => v,
         Err(e) => {
             println!("FEHLER: {e:#}");
-            line("REWE", REWE_MARKET, 0, "?", 0, "FEHLER");
+            line("REWE", market_id, 0, "?", 0, "FEHLER");
             return;
         }
     };
@@ -194,10 +212,29 @@ fn rewe_chain() {
     }
 
     println!("Summe: {gesamt} Angebote, {betraege} mit Betrag, {echte} brauchbar");
-    // Was ankommt: Die laufende Woche liest `parse_offers` aus `-json` und
-    // setzt `regular_price: None`. Solange das so ist, sind es null.
-    let verdict = if echte > 0 { "QUELLE HAT MEHR" } else { "Quelle gibt nichts her" };
-    line("REWE", REWE_MARKET, gesamt, &echte.to_string(), 0, verdict);
+
+    // Was ankommt, gemessen an den Parsern selbst statt behauptet: Die
+    // laufende Woche geht über `-json` und setzt `regular_price: None`; die
+    // Vorschau liest dieselbe Rohantwort und nimmt den Betrag mit, sofern sie
+    // eingeschaltet ist.
+    let today = chrono::Utc::now()
+        .with_timezone(&chrono_tz::Europe::Berlin)
+        .date_naive()
+        .format("%Y-%m-%d")
+        .to_string();
+    let vorschau = rewe::parse_next_week_offers(&raw, market_id, &today);
+    let taken = vorschau.iter().filter(|o| o.regular_price.is_some()).count();
+    println!(
+        "Vorschau-Parser: {} Angebote, {taken} mit regular_price (laufende Woche: strukturell 0)",
+        vorschau.len()
+    );
+
+    let verdict = match (echte, taken) {
+        (0, _) => "Quelle gibt nichts her",
+        (q, t) if t >= q => "geholt, was dasteht",
+        _ => "QUELLE HAT MEHR",
+    };
+    line("REWE", market_id, gesamt, &echte.to_string(), taken, verdict);
 }
 
 /// EDEKA: nach dem Markup-Wechsel vom 04.08. neu nachgesehen.
