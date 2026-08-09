@@ -1531,6 +1531,65 @@ fn regular_candidates(sources: &[String]) -> Vec<RegularCandidate> {
     labelled
 }
 
+/// Was der Prospekt an Streichpreisen druckt — und was davon im Angebot
+/// ankommt.
+#[derive(Debug, Default, Clone)]
+pub struct RegularPriceAudit {
+    /// Angebote nach der Extraktion (nach Dedup, also der Stand, der hochgeht).
+    pub offers: usize,
+    /// Streichpreis-Angaben auf der Textebene des PDFs, Textinsel für
+    /// Textinsel gezählt. Das ist die Quelle, unabhängig davon, ob die
+    /// Kachelbildung die Plakette einem Produkt zuordnen konnte.
+    pub printed: usize,
+    /// Davon: Plaketten, die eine verwertbare Kachel besitzt und die deshalb
+    /// überhaupt zur Zuteilung kommen.
+    pub owned: usize,
+    /// Angebote mit `regular_price`.
+    pub assigned: usize,
+    /// Die Textinseln hinter `printed`, damit sich die Zahl ansehen lässt
+    /// statt geglaubt zu werden.
+    pub samples: Vec<String>,
+}
+
+/// Streichpreise zählen: gedruckt gegen übernommen.
+///
+/// Getrennt von [`extract_offers`] und bewusst mit eigenem Durchlauf über die
+/// Textinseln: Der Extraktor sieht nur die Plaketten, die eine Kachel
+/// **besitzt** — eine Plakette an einer Kachel ohne Partner oder ohne
+/// brauchbaren Titel taucht dort nie auf. Für die Frage „gibt die Quelle mehr
+/// her, als ankommt?" ist genau die aber der Nenner.
+///
+/// `printed` zählt Angaben, nicht Kacheln: Zwei Plaketten an einer Kachel
+/// sind zwei. Es ist eine Obergrenze — der Prospekt druckt dieselbe Plakette
+/// auch mal doppelt (Preisleiste und Kachel), und `assign_regular_prices`
+/// verwirft mit Absicht alles Mehrdeutige.
+pub fn regular_price_audit(
+    xml: &str,
+    market_id: &str,
+    valid_from: Option<&str>,
+    valid_until: Option<&str>,
+) -> RegularPriceAudit {
+    let (offers, _, _, stats) =
+        extract_offers_shots_and_open(xml, market_id, valid_from, valid_until);
+    let mut printed = 0;
+    let mut samples = Vec::new();
+    for island in parse_bbox_layout(xml).iter().flatten() {
+        let text = island.text();
+        let n = regular_candidates(std::slice::from_ref(&text)).len();
+        if n > 0 {
+            printed += n;
+            samples.push(text);
+        }
+    }
+    RegularPriceAudit {
+        offers: offers.len(),
+        printed,
+        owned: stats.candidates,
+        assigned: offers.iter().filter(|o| o.regular_price.is_some()).count(),
+        samples,
+    }
+}
+
 /// Rechenprobe: Der Prospekt nennt Packungsgröße **und** Grundpreis, also
 /// muss `Menge × Grundpreis ≈ Preis` gelten. Stimmt das nicht, ist die Kachel
 /// falsch zusammengesetzt — und ein falscher Preis ist in einer
@@ -1618,6 +1677,10 @@ struct Stats {
     implausible_price: usize,
     failed_arithmetic: usize,
     bad_title: usize,
+    /// Streichpreis-Plaketten, die eine verwertbare Kachel besitzt — der
+    /// Nenner für die Zuteilung. Was der Prospekt sonst noch druckt, hat
+    /// keine Kachel, die es tragen könnte.
+    candidates: usize,
     /// Zugeteilte Streichpreise. Zählt vor dem Dedup, also leicht über der
     /// Zahl in der fertigen Liste — als Trend genügt das, und die genaue Zahl
     /// steht in der Zeile darüber.
@@ -1628,13 +1691,14 @@ impl Stats {
     fn report(&self, kept: usize) {
         println!(
             "  {kept} von {} Sternpreisen übernommen (ohne Partner {}, Preis unplausibel {}, \
-             Rechenprobe {}, kein Titel {}), davon mit Streichpreis {}",
+             Rechenprobe {}, kein Titel {}), davon mit Streichpreis {} von {} angebotenen",
             self.anchors,
             self.no_partner,
             self.implausible_price,
             self.failed_arithmetic,
             self.bad_title,
-            self.regular
+            self.regular,
+            self.candidates
         );
     }
 }
@@ -1732,7 +1796,8 @@ pub fn extract_offers_with_shots(
     valid_from: Option<&str>,
     valid_until: Option<&str>,
 ) -> (Vec<Offer>, Vec<TileShot>) {
-    let (offers, shots, _) = extract_offers_shots_and_open(xml, market_id, valid_from, valid_until);
+    let (offers, shots, _, _) =
+        extract_offers_shots_and_open(xml, market_id, valid_from, valid_until);
     (offers, shots)
 }
 
@@ -1743,7 +1808,7 @@ fn extract_offers_shots_and_open(
     market_id: &str,
     valid_from: Option<&str>,
     valid_until: Option<&str>,
-) -> (Vec<Offer>, Vec<TileShot>, Vec<OpenTile>) {
+) -> (Vec<Offer>, Vec<TileShot>, Vec<OpenTile>, Stats) {
     let mut offers = Vec::new();
     let mut shots = Vec::new();
     let mut open: Vec<OpenTile> = Vec::new();
@@ -1953,7 +2018,9 @@ fn extract_offers_shots_and_open(
             // Eine Plakette gehört zu genau einem Preis der Kachel, das lässt
             // sich nicht entscheiden, während man die Preise einzeln
             // durchgeht.
-            let regulars = assign_regular_prices(&usable, &regular_candidates(&sources));
+            let candidates = regular_candidates(&sources);
+            stats.candidates += candidates.len();
+            let regulars = assign_regular_prices(&usable, &candidates);
             stats.regular += regulars.iter().filter(|r| r.is_some()).count();
 
             for (slot, price) in usable.iter().copied().enumerate() {
@@ -2066,7 +2133,7 @@ fn extract_offers_shots_and_open(
     });
 
     stats.report(offers.len());
-    (offers, shots, open)
+    (offers, shots, open, stats)
 }
 
 /// Untertitel aus Packungsgröße, Grundpreis und Lidl-Plus-Hinweis.
@@ -2896,6 +2963,19 @@ pub fn products_as_offers(
     offers
 }
 
+/// Prospekt der Woche plus seine Textebene mit Koordinaten — dieselbe
+/// Eingabe, die [`extract_offers`] im Lauf bekommt.
+///
+/// Für Messungen am Prospekt, die ohne Filiale, ohne Datenbank und ohne
+/// Bildschnitt auskommen sollen. Der Cache aus [`cached_leaflet`] gilt, ein
+/// Aufruf kostet also nichts, wenn der Lauf den Prospekt schon gelesen hat.
+pub fn fetch_bbox_layout(zip: &str) -> Result<(Flyer, std::sync::Arc<String>)> {
+    let flyer = resolve_flyer(zip)?;
+    let pdf_url = flyer.pdf_url.clone().context("Prospekt ohne pdfUrl")?;
+    let (_, xml) = cached_leaflet(&pdf_url, "-bbox-layout", &download_pdf, &run_pdftotext)?;
+    Ok((flyer, xml))
+}
+
 /// Prospekt der Woche plus seinen Text, seitenweise in Lesereihenfolge.
 ///
 /// `-layout` statt `-bbox-layout`, weil hier
@@ -2982,7 +3062,7 @@ fn read_flyer(flyer: &Flyer, market_id: &str, with_images: bool) -> Result<Vec<O
     let (pdf_path, xml) = cached_leaflet(pdf_url, "-bbox-layout", &download_pdf, &run_pdftotext)?;
     let xml = xml.as_str();
 
-    let (mut offers, shots, open) = extract_offers_shots_and_open(
+    let (mut offers, shots, open, _) = extract_offers_shots_and_open(
         xml,
         market_id,
         flyer.offer_start_date.as_deref(),
@@ -3739,7 +3819,7 @@ mod tests {
 
         for lauf in 1..=2 {
             // Durchgang 1: der laufende Prospekt, mit Bildern.
-            let (mut offers, shots, open) =
+            let (mut offers, shots, open, _) =
                 extract_offers_shots_and_open(&xml, "MESSUNG", None, None);
             let crops = render_shots(path, &shots);
             let embedded = embedded_photos("", path, &xml, &open);
@@ -3750,7 +3830,7 @@ mod tests {
             }
 
             // Durchgang 2: derselbe Prospekt als Vorschau — ohne Bilder.
-            let (vorschau, _, _) = extract_offers_shots_and_open(&xml, "MESSUNG", None, None);
+            let (vorschau, _, _, _) = extract_offers_shots_and_open(&xml, "MESSUNG", None, None);
 
             let vorher = {
                 let mut alle = offers.clone();
@@ -3783,7 +3863,7 @@ mod tests {
         let pdf = std::env::var("LIDL_PDF").expect("LIDL_PDF fehlt");
         let path = std::path::Path::new(&pdf);
         let xml = run_pdftotext(path, "-bbox-layout").expect("pdftotext");
-        let (offers, shots, open) =
+        let (offers, shots, open, _) =
             extract_offers_shots_and_open(&xml, "MESSUNG", None, None);
         // Ohne Prospekt-URL: Der Auszug landet nicht im Cache und die Wurzel
         // wird am Ende weggeräumt.

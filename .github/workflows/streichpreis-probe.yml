@@ -1,0 +1,122 @@
+name: Streichpreis-Probe (nur lesen)
+
+# Fragt je Kette nach, ob die Quelle heute einen alten Preis hergibt — und wie
+# viel davon in `offers.regular_price` ankommt. Nur GET, keine
+# Supabase-Secrets, kein Push, kein Löschen.
+#
+# Warum in CI: REWE spricht nur mit dem Clientzertifikat, und das liegt als
+# Secret hier und nicht auf dem Entwicklungsrechner. Lidl und EDEKA laufen
+# auch lokal; sie sind trotzdem dabei, damit die drei Zahlen aus **einem**
+# Lauf stammen und vergleichbar sind.
+#
+# Der `push`-Auslöser hängt an den Dateien, die den Streichpreis betreffen:
+# Wer daran arbeitet, bekommt die Messung ungefragt. Ein Markup-Wechsel wie
+# der bei EDEKA am 04.08. macht keinen Offline-Test rot — nur diese Probe.
+
+on:
+  workflow_dispatch:
+    inputs:
+      chains:
+        description: "Ketten, durch Leerzeichen getrennt (leer = alle drei)"
+        required: false
+        default: ""
+  push:
+    paths:
+      - ".github/workflows/streichpreis-probe.yml"
+      - "examples/streichpreis_probe.rs"
+      - "src/scrapers/lidl_prospekt.rs"
+      - "src/scrapers/rewe.rs"
+      - "src/scrapers/edeka.rs"
+
+concurrency:
+  group: streichpreis-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # `secrets` ist in Step-`if` nicht erlaubt — Verfügbarkeit als Env-Flag.
+      REWE_SECRETS_SET: ${{ secrets.REWE_CERT_PEM != '' && secrets.REWE_KEY_PEM != '' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Preflight (curl, poppler)
+        run: |
+          # EDEKA wird über system-curl geholt (Akamai blockt den
+          # reqwest-TLS-Stack), Lidl braucht poppler für die Textebene.
+          command -v curl >/dev/null || { echo "::error::curl fehlt auf dem Runner."; exit 1; }
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+          pdftotext -v 2>&1 | head -1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-lechariot
+
+      - name: Setup Go (für rewerse)
+        if: ${{ env.REWE_SECRETS_SET == 'true' }}
+        uses: actions/setup-go@v7
+        with:
+          go-version: stable
+
+      # Wortgleich zur Nightly: derselbe `cmd`-Pfad und derselbe Symlink. Eine
+      # Probe, die sich ihren eigenen Weg zur Quelle baut, misst den Nachbau.
+      - name: Setup rewerse + REWE-Zertifikat
+        id: rewe
+        if: ${{ env.REWE_SECRETS_SET == 'true' }}
+        env:
+          REWE_CERT_PEM: ${{ secrets.REWE_CERT_PEM }}
+          REWE_KEY_PEM: ${{ secrets.REWE_KEY_PEM }}
+        run: |
+          set -euo pipefail
+          go install github.com/ByteSizedMarius/rewerse-engineering/cmd@latest
+          ln -sf "$(go env GOPATH)/bin/cmd" "$(go env GOPATH)/bin/rewerse"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          CERT="$RUNNER_TEMP/rewe-cert.pem"
+          KEY="$RUNNER_TEMP/rewe-private.key"
+          printf '%s' "$REWE_CERT_PEM" | base64 -d > "$CERT"
+          printf '%s' "$REWE_KEY_PEM"  | base64 -d > "$KEY"
+          chmod 600 "$CERT" "$KEY"
+          echo "cert=$CERT" >> "$GITHUB_OUTPUT"
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Quellen messen
+        env:
+          CHAINS: ${{ inputs.chains }}
+          REWE_CERT: ${{ steps.rewe.outputs.cert }}
+          REWE_KEY: ${{ steps.rewe.outputs.key }}
+        run: |
+          set -o pipefail
+          mkdir -p probe
+          # shellcheck disable=SC2086
+          cargo run --release --example streichpreis_probe -- $CHAINS 2>&1 | tee probe/probe.log
+
+      - name: Zusammenfassung
+        if: always()
+        run: |
+          {
+            echo "## Streichpreis-Probe"
+            echo ""
+            echo "| Kette | Markt | Angebote | Quelle | übernommen | Urteil |"
+            echo "|---|---|---:|---:|---:|---|"
+            awk -F'\t' '$1 == "STREICHPREIS" {
+              printf "| %s | %s | %s | %s | %s | %s |\n", $2,$3,$4,$5,$6,$7
+            }' probe/probe.log 2>/dev/null || true
+            echo ""
+            echo "**Quelle** = was die Quelle an alten Preisen hergibt "
+            echo "(Lidl: Angaben in der Textebene des Prospekts, REWE: Angebote mit "
+            echo "Betrag in \`priceData.regularPrice\`, EDEKA: Wort- und Durchstreichungsfunde). "
+            echo "**übernommen** = Angebote mit \`regular_price\` nach der Extraktion."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: streichpreis-probe
+          path: probe/
+          if-no-files-found: ignore
+          retention-days: 3

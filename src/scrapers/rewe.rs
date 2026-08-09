@@ -142,6 +142,27 @@ pub fn fetch_offers(market: &Market, cert: &str, key: &str) -> Result<Vec<Offer>
 ///
 /// Gibt bei jedem Fehler eine leere Liste zurück statt `Err` — wie bei
 /// ALDI Nord und Lidl.
+/// Die ungefilterte Antwort des Angebots-Endpunkts (`-raw`).
+///
+/// `-json` liefert eine flachgeklopfte Sicht von rewerse v1.2.0 und lässt
+/// dabei Felder liegen, die die API sehr wohl schickt (`overline`,
+/// `priceData.regularPrice`, `rawValues.flyerPage`). Für Messungen an der
+/// Quelle ist deshalb `-raw` der Zeuge, nicht `-json`.
+pub fn fetch_raw(market_id: &str, cert: &str, key: &str) -> Result<serde_json::Value> {
+    check_certs(cert, key)?;
+    let output = rewerse_cmd(cert, key)
+        .args(["-json", "discounts", "-market", market_id, "-raw"])
+        .output()
+        .context("rewerse CLI nicht gefunden")?;
+    if !output.status.success() {
+        bail!(
+            "[REWE] Rohantwort laden fehlgeschlagen (rewerse discounts -market {market_id} -raw):\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    serde_json::from_slice(&output.stdout).context("[REWE] Rohantwort ist kein JSON")
+}
+
 pub fn fetch_next_week(market: &Market, cert: &str, key: &str) -> Vec<Offer> {
     let output = match rewerse_cmd(cert, key)
         .args(["-json", "discounts", "-market", &market.id, "-raw"])
