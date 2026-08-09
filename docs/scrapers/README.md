@@ -154,16 +154,63 @@ seit Schema v2, gefüllt wird sie je Kette so:
 
 | Kette | Streichpreis in der Quelle | Stand |
 |---|---|---|
-| Lidl | **ja**, im Prospekt gedruckt | 78 von 260 Angeboten (Prospekt 27.07.2026) |
+| Lidl | **ja**, im Prospekt gedruckt | 77 von 239 Prospekt-Angeboten (Prospekt 10.–15.08.2026) |
 | Penny | ja, `tile`-Feld | seit jeher |
 | Kaufland | ja, eigener Selektor | seit jeher |
 | Netto | ja, `strike`-Element | seit jeher |
 | ALDI Nord / Süd | ja, im Preis-Objekt | seit jeher |
 | NORMA | ja | 91 von 221 Angeboten (31.07.2026) |
-| **REWE** | **nein** | siehe unten |
+| **REWE** | **fast nicht** — 8 von 664 (09.08.2026) | siehe unten |
 | **EDEKA** | **nein** | siehe unten |
 
-### REWE veröffentlicht ihn nicht
+### Nachmessen statt nachschlagen
+
+Diese Übersicht ist eine Momentaufnahme und altert wie jede andere: EDEKA hat
+sein Preis-Markup am 04.08.2026 gewechselt, ohne dass ein Test rot wurde.
+Deshalb gibt es das Messgeschirr dazu — es beantwortet die Frage neu, statt
+die alte Antwort weiterzureichen:
+
+```sh
+cargo run --release --example streichpreis_probe            # alle drei
+cargo run --release --example streichpreis_probe -- lidl    # nur eine
+```
+
+Je Kette zwei Zahlen: **was die Quelle hergibt** und **was ankommt**. Lidl und
+EDEKA laufen von einem Entwicklungsrechner, REWE braucht das Clientzertifikat
+und damit CI — `streichpreis-probe.yml` fährt alle drei aus einem Lauf und
+läuft bei jeder Änderung an den beteiligten Scrapern von selbst.
+
+### Lidl: die Quote, und warum sie nicht 100 % ist
+
+Gemessen am Prospekt 10.–15.08.2026 (Absatzregion 20, PLZ 01219), Zahlen aus
+`regular_price_audit`:
+
+```
+239 Angebote — 201 Streichpreis-Angaben im PDF,
+                101 davon an einer verwertbaren Kachel,
+                 77 zugeteilt
+```
+
+**Die zweite Stufe ist erklärt, die erste nicht.** Von den 101 Angaben, die
+eine verwertbare Kachel besitzt, werden 84 zugeteilt (77 nach dem Dedup); die
+17 dazwischen fallen an der Regel aus
+[#40](https://github.com/Scxttk/lechariot-backend/pull/40): Eine Plakette, die
+rechnerisch auf zwei Preise derselben Kachel passt, bekommt keiner. **Ein
+Streichpreis am falschen Produkt ist schlimmer als keiner** — diese 17 sind
+kein Verlust, sondern die Regel bei der Arbeit.
+
+Warum 100 der 201 Angaben gar nicht erst bei einer Kachel ankommen, ist
+**nicht gemessen**. Naheliegend sind zwei Wege, und beide sind Vermutung,
+solange sie niemand zählt: Der Sternpreis daneben ist vorher schon
+ausgeschieden (ohne Partner, Rechenprobe, kein Titel — die Lauf-Zeile darüber
+zählt diese Fälle auf), oder die Plakette liegt weiter als `BADGE_GAP_PT` von
+jeder Preiskachel. Wer hier Ertrag sucht, misst das zuerst; ein Angebot, das
+gar nicht entsteht, hat auch keinen alten Preis zu verlieren.
+
+Die Zahlen hält `lidl_regular_price_audit_counts_source_against_result` an der
+Fixture-Seite fest (10 gedruckt, 10 an einer Kachel, 8 zugeteilt).
+
+### REWE veröffentlicht ihn fast nicht
 
 Nachgesehen am 2026-07-31 an Markt 565005 (Dresden-Leuben), in beiden
 Endpunkten, die das Zertifikat erreicht:
@@ -179,18 +226,39 @@ Endpunkten, die das Zertifikat erreicht:
   `{"__typename": "RegularProductDiscount", "validTo": "01.08."}` — Laufzeit
   und sonst nichts.
 
-Der Kommentar in `rewe.rs` („kein fromDate/regularPrice/overline mehr") ist
-damit bestätigt: `regular_price: None` ist für REWE die richtige Antwort.
+Der Kommentar in `rewe.rs` („kein fromDate/regularPrice/overline mehr")
+beschreibt damit genau, was **`-json`** hergibt. Über die Rohantwort gilt er
+nicht — siehe den Nachtrag gleich darunter.
 
-**Grenze der Messung, ehrlich benannt:** Beobachtet wurde die Ausgabe des
-`rewerse`-CLI, nicht die rohe API-Antwort — die URL steht nur als zerlegter
-String im Go-Binary, und die vier geratenen Pfade unter `mobile-api.rewe.de`
-antworten alle mit 404. Dass `rewerse` ein vorhandenes Feld verschweigt, ist
-damit nicht restlos ausgeschlossen; dagegen spricht, dass sein zweiter
-Endpunkt das Rabatt-Objekt roh durchreicht, mitsamt `__typename` — ein Feld,
-das nur dort steht, weil niemand die Antwort aufgeräumt hat. Die
-Gegenprobe über `www.rewe.de/angebote/` ist nicht gelaufen: Cloudflare
-antwortet dort mit 403.
+**Diese Messung hatte eine Lücke, und die ist am 09.08.2026 geschlossen.**
+Damals stand hier: „Beobachtet wurde die Ausgabe des `rewerse`-CLI, nicht die
+rohe API-Antwort … dass `rewerse` ein vorhandenes Feld verschweigt, ist nicht
+restlos ausgeschlossen." Genau das war der Fall. `rewerse discounts -raw`
+reicht die Antwort ungefiltert durch, und dort steht sehr wohl ein
+`priceData.regularPrice` — die flachgeklopfte `-json`-Sicht von v1.2.0 lässt
+es weg. Der Vorschau-Pfad liest es seit jeher aus `-raw`
+(`parse_next_week_offers`), die laufende Woche nicht, weil sie über `-json`
+geht.
+
+**Nur ändert das am Ergebnis fast nichts.** Nachgemessen in CI am 09.08.2026,
+zwei Märkte in verschiedenen Gebieten (565005 Dresden, 1350030 Berlin),
+`streichpreis_probe`:
+
+| Markt | laufende Woche | Vorschauwoche | Betrag in `regularPrice` |
+|---|---:|---:|---:|
+| 565005 | 319 Angebote | 345 Angebote | 0 · **8** |
+| 1350030 | 324 Angebote | 318 Angebote | 0 · **8** |
+
+In der **laufenden Woche kein einziger** Betrag. In der Vorschauwoche acht,
+in beiden Märkten dieselben acht, und alle acht Non-Food (vileda
+Bodenwischsystem 19.99 statt 47.29, Sauberlaufmatte 6.99 statt 22.99). Sonst
+trägt das Feld Etiketten: `"Aktion"` 573×, `"Knaller"` 64×, `"Tiefpreis"` 10×.
+**Diese acht landen bereits** — der Vorschau-Parser nimmt jeden Betrag mit,
+den er lesen kann.
+
+Damit ist auch beantwortet, was die laufende Woche von einem Wechsel auf
+`-raw` hätte: für den Streichpreis **null**. (`overline` und `flyerPage` wären
+etwas anderes — andere Baustelle, anderer Nutzen.)
 
 Was REWE stattdessen liefert und wir wegwerfen: `loyaltyBonus`, die
 PAYBACK-Cents je Angebot (61 von 335). Das ist ein echter Vorteil, aber kein
@@ -217,6 +285,27 @@ Streichpreis, den die Kette so nie gedruckt hat, ist genau die Behauptung, die
 er widerlegen soll. Bleibt draußen.
 
 Betroffen wären ohnehin 3 von 213 Kacheln.
+
+**Nachgemessen am 09.08.2026, nach dem Markup-Wechsel vom 04.08.**
+([#67](https://github.com/Scxttk/lechariot-backend/pull/67)) — an den drei
+Märkten der Nightly, 382 Kacheln zusammen:
+
+| Markt | Angebote | „statt/UVP/Normalpreis/vorher" | Durchstreichung | mit Rabattsatz |
+|---|---:|---:|---:|---:|
+| 021868 | 58 | 0 | 0 | 3 |
+| 421696 | 237 | 0 | 0 | 3 |
+| 421347 | 87 | 0 | 0 | 3 |
+
+Der Wechsel hat das Element getauscht (`span` statt `div`) und das
+Euro-Zeichen an die Zahl geklebt — **einen alten Preis hat er nicht
+mitgebracht.** Die Antwort von oben gilt unverändert, jetzt an der neuen
+Auszeichnung geprüft statt an der alten geglaubt.
+
+Eine Falle dabei, weil sie sich wiederholen wird: Der erste Lauf der Probe
+meldete „drei Funde je Markt". Alle drei waren **„vorheriger erfolgreicher
+Registrierung"** aus dem Kleingedruckten der App-Angebote — das Wort als
+Teilstück gesucht statt als ganzes Wort. Eine Messung, die den Rechtstext
+mitzählt, misst den Rechtstext.
 
 ## Lidl: der eigene Prospekt, und nur noch der
 

@@ -1491,3 +1491,62 @@ fn norma_store_finder_drops_branches_beyond_the_radius() {
     assert_eq!(stores.len(), 2);
     assert!(stores.iter().all(|s| s.id != "2411"));
 }
+
+// --------------------------------------- Lidl-Prospekt: Streichpreis-Bilanz
+
+/// Die Zahl, die sonst niemand kennt: **wie viel von dem, was der Prospekt
+/// druckt, überhaupt ankommt.**
+///
+/// `regular_price_audit` ist das Messgeschirr hinter
+/// `examples/streichpreis_probe` und die Grundlage der Übersicht in
+/// `docs/scrapers/README.md`. Ohne Test wäre es eine Zahl, der man glauben
+/// muss — und die still auf null fällt, wenn jemand `regular_candidates`
+/// umbaut.
+///
+/// Die Fixture-Seite trägt zehn Streichpreis-Angaben, alle an einer
+/// verwertbaren Kachel, und acht davon werden zugeteilt. Die zwei
+/// verbleibenden sind **kein Verlust, sondern die Regel aus #40**: Eine
+/// Plakette, die rechnerisch auf zwei Preise derselben Kachel passt, bekommt
+/// keiner.
+#[test]
+fn lidl_regular_price_audit_counts_source_against_result() {
+    let xml = include_str!("fixtures/lidl/prospekt_bbox_layout.xml");
+    let audit = scrapers::lidl_prospekt::regular_price_audit(
+        xml,
+        "LIDL_1988",
+        Some("2026-07-20"),
+        Some("2026-07-25"),
+    );
+
+    assert_eq!(audit.offers, 11, "Angebote der Fixture-Seite");
+    assert_eq!(audit.printed, 10, "gedruckte Streichpreis-Angaben");
+    assert_eq!(audit.owned, 10, "davon an einer verwertbaren Kachel");
+    assert_eq!(audit.assigned, 8, "zugeteilt");
+    assert_eq!(audit.samples.len(), 10, "je Fund eine Textinsel");
+
+    // Beide Formen müssen im Nenner stehen — die Plakette mit Stichwort und
+    // die nackte mit Rabatt. Zählte nur eine, sähe die Quote je nach Prospekt
+    // besser aus, als sie ist.
+    let mit_stichwort = audit
+        .samples
+        .iter()
+        .filter(|t| t.contains("UVP") || t.contains("Normalpreis"))
+        .count();
+    assert_eq!(mit_stichwort, 8);
+    assert_eq!(audit.samples.len() - mit_stichwort, 2, "Plaketten ohne Stichwort");
+
+    // Und die Gegenprobe zur Zahl: Was zugeteilt wurde, steht auch am
+    // Angebot, und immer über dem Angebotspreis.
+    let offers = scrapers::lidl_prospekt::extract_offers(
+        xml,
+        "LIDL_1988",
+        Some("2026-07-20"),
+        Some("2026-07-25"),
+    );
+    let mit_streichpreis: Vec<_> = offers.iter().filter(|o| o.regular_price.is_some()).collect();
+    assert_eq!(mit_streichpreis.len(), audit.assigned);
+    for offer in mit_streichpreis {
+        let (preis, alt) = (offer.price.expect("Preis"), offer.regular_price.expect("alt"));
+        assert!(alt > preis, "{}: {alt} ist kein alter Preis zu {preis}", offer.title);
+    }
+}
