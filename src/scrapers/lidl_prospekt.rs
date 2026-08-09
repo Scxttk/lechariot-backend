@@ -610,12 +610,32 @@ pub fn week_slugs(slugs: &[String], today: NaiveDate) -> Vec<String> {
 /// zwei Wochen eine**, und genau das ist der Fehler, den Stufe 2 des Dedupe
 /// (#32) für disjunkte Fenster ausdrücklich nicht macht.
 ///
-/// Ohne den Zeitraum, der heute läuft: Der steht schon in `week_slugs`.
+/// Ohne den Zeitraum, den [`week_slugs`] gewählt hat — nicht ohne den, der
+/// heute läuft.
+///
+/// **Der Unterschied ist an Tagen ohne laufenden Prospekt der ganze Fehler.**
+/// Lidl läuft Montag bis Samstag; am Sonntag greift die Vorwärtsregel in
+/// `week_slugs` und wählt den Prospekt der kommenden Woche. `*f > today`
+/// lässt genau diesen Zeitraum dann noch einmal durch, und `fetch_offers`
+/// liest ihn ein zweites Mal — als Vorschau, also **ohne Bilder**. Weil
+/// `db::upsert_offer` ein `INSERT OR REPLACE` auf die Angebots-ID ist,
+/// überschreibt der zweite Durchgang den ersten und nimmt jedem Angebot sein
+/// Kachelbild wieder weg.
+///
+/// Gemessen am 2026-08-09 (Sonntag) in der Nightly: derselbe Prospekt
+/// `10-08-2026-15-08-2026-8fad80` zweimal gelesen, 144 Kachelbilder
+/// gerastert, **0** davon in der Datenbank — alle 2 657 Lidl-Bilder kamen aus
+/// dem Onlineshop-JSON. Am Samstag davor (Prospekt lief) stand der Zeitraum
+/// genau einmal im Lauf.
 pub fn next_week_slugs(slugs: &[String], today: NaiveDate) -> Vec<Vec<String>> {
+    let current = week_slugs(slugs, today)
+        .first()
+        .and_then(|s| slug_range(s));
     let mut ranges: Vec<(NaiveDate, NaiveDate)> = slugs
         .iter()
         .filter_map(|s| slug_range(s))
         .filter(|(f, _)| *f > today)
+        .filter(|r| Some(*r) != current)
         .collect();
     ranges.sort();
     ranges.dedup();
@@ -2918,6 +2938,7 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
                 .and_then(|f| read_flyer(&f, &market.id, false))
             {
                 Ok(next) => {
+                    let next = without_known_ids(&offers, next);
                     println!("  Vorschau: {} Angebote der Folgewoche", next.len());
                     offers.extend(next);
                 }
@@ -2926,6 +2947,21 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
         }
     }
     Ok(offers)
+}
+
+/// Vorschau-Angebote, die der Lauf noch nicht kennt.
+///
+/// Der zweite Riegel gegen denselben Fehler wie in [`next_week_slugs`], und
+/// er hängt an keiner Kalenderregel: Die Vorschau liest **ohne Bilder**, und
+/// `db::upsert_offer` ist ein `INSERT OR REPLACE` auf die Angebots-ID. Eine
+/// Vorschau-Zeile mit einer ID, die dieser Lauf schon mit Bild gelesen hat,
+/// kann deshalb nur eines tun: das Bild wieder wegnehmen. Egal, wie die
+/// Übersicht ihre Zeiträume künftig führt.
+fn without_known_ids(known: &[Offer], next: Vec<Offer>) -> Vec<Offer> {
+    let seen: std::collections::HashSet<&str> = known.iter().map(|o| o.id.as_str()).collect();
+    next.into_iter()
+        .filter(|o| !seen.contains(o.id.as_str()))
+        .collect()
 }
 
 /// Einen aufgelösten Prospekt lesen.
@@ -3622,6 +3658,117 @@ mod tests {
         assert!((h - 80.0).abs() < 0.001);
     }
 
+
+    /// Der zweite Riegel: Eine Vorschau-Zeile, die dieser Lauf schon gelesen
+    /// hat, darf nicht noch einmal mitkommen — sie trägt kein Bild und würde
+    /// das vorhandene per `INSERT OR REPLACE` löschen.
+    #[test]
+    fn preview_offers_never_repeat_an_id_this_run_already_read() {
+        let mit_bild = Offer {
+            images: vec!["file:///tmp/LIDL_1_a.png".to_string()],
+            ..offer_named("BABYBEL", "2026-08-10")
+        };
+        let ohne_bild = offer_named("BABYBEL", "2026-08-10");
+        assert_eq!(mit_bild.id, ohne_bild.id, "derselbe Upsert-Schlüssel");
+        let echte_folgewoche = offer_named("BABYBEL", "2026-08-17");
+
+        let gefiltert = without_known_ids(
+            &[mit_bild],
+            vec![ohne_bild, echte_folgewoche.clone()],
+        );
+
+        assert_eq!(gefiltert.len(), 1, "die Dublette ist raus");
+        assert_eq!(gefiltert[0].id, echte_folgewoche.id, "die echte Woche bleibt");
+    }
+
+    /// Ein Angebot, wie der Prospekt es baut — Titel und Startdatum sind die
+    /// Teile der ID, auf die es hier ankommt.
+    fn offer_named(title: &str, valid_from: &str) -> Offer {
+        Offer {
+            id: Offer::build_id("LIDL_1988", &format!("{title}_2.49"), Some(valid_from)),
+            market_id: "LIDL_1988".to_string(),
+            title: title.to_string(),
+            subtitle: None,
+            overline: None,
+            price: Some(2.49),
+            regular_price: None,
+            category: None,
+            nutri_score: None,
+            valid_from: Some(valid_from.to_string()),
+            valid_until: None,
+            images: Vec::new(),
+            biozid: false,
+            flyer_page: None,
+        }
+    }
+
+    /// Messgerät, kein Test: **die Sonntagsdublette in Zahlen**, gegen
+    /// dieselbe PDF.
+    ///
+    /// Baut nach, was `fetch_offers` an einem Tag ohne laufenden Prospekt tut
+    /// — denselben Prospekt einmal mit Bildern und einmal als Vorschau ohne —
+    /// und zählt, wie viele Angebote am Ende ein Kachelbild tragen. `VORHER`
+    /// ist die Zahl ohne den Riegel (`INSERT OR REPLACE` gewinnt: die letzte
+    /// Zeile je ID zählt), `NACHHER` die mit [`without_known_ids`].
+    ///
+    /// Zweimal derselbe Aufruf muss dieselben Zahlen liefern; die Läufe
+    /// stehen als `LAUF 1`/`LAUF 2` untereinander. Gemessen am Prospekt
+    /// 10.08.–15.08.: beide Läufe 164 Fotos, `VORHER` 0, `NACHHER` 164.
+    ///
+    /// **Allein laufen lassen** (`--test-threads=1` oder nur diesen Namen).
+    /// [`crop_dir`] und `xobject_root` sind je Prozess, nicht je Test — zwei
+    /// gleichzeitig laufende Messgeräte räumen einander die Dateien weg und
+    /// liefern dann zwei verschiedene Zahlen. Das sieht aus wie Zufall im
+    /// Extraktor und ist keiner (einmal so gemessen: 157 gegen 164).
+    #[test]
+    #[ignore = "Messgerät — braucht LIDL_PDF mit lokaler Prospekt-PDF"]
+    fn measure_sunday_double_read() {
+        let pdf = std::env::var("LIDL_PDF").expect("LIDL_PDF fehlt");
+        let path = std::path::Path::new(&pdf);
+        let xml = run_pdftotext(path, "-bbox-layout").expect("pdftotext");
+
+        // Wie `db::upsert_offer`: letzte Zeile je ID gewinnt.
+        fn mit_bild(offers: &[Offer]) -> usize {
+            let mut letzte: std::collections::HashMap<&str, bool> =
+                std::collections::HashMap::new();
+            for o in offers {
+                letzte.insert(o.id.as_str(), !o.images.is_empty());
+            }
+            letzte.values().filter(|hat| **hat).count()
+        }
+
+        for lauf in 1..=2 {
+            // Durchgang 1: der laufende Prospekt, mit Bildern.
+            let (mut offers, shots, open) =
+                extract_offers_shots_and_open(&xml, "MESSUNG", None, None);
+            let crops = render_shots(path, &shots);
+            let embedded = embedded_photos("", path, &xml, &open);
+            for offer in &mut offers {
+                if let Some(url) = crops.get(&offer.id).or_else(|| embedded.get(&offer.id)) {
+                    offer.images = vec![url.clone()];
+                }
+            }
+
+            // Durchgang 2: derselbe Prospekt als Vorschau — ohne Bilder.
+            let (vorschau, _, _) = extract_offers_shots_and_open(&xml, "MESSUNG", None, None);
+
+            let vorher = {
+                let mut alle = offers.clone();
+                alle.extend(vorschau.clone());
+                mit_bild(&alle)
+            };
+            let nachher = {
+                let mut alle = offers.clone();
+                alle.extend(without_known_ids(&offers, vorschau));
+                mit_bild(&alle)
+            };
+
+            eprintln!("LAUF {lauf}\tANGEBOTE\t{}", offers.len());
+            eprintln!("LAUF {lauf}\tGEFUNDEN\t{}", crops.len() + embedded.len());
+            eprintln!("LAUF {lauf}\tVORHER\t{vorher}");
+            eprintln!("LAUF {lauf}\tNACHHER\t{nachher}");
+        }
+    }
 
     /// Messgerät, kein Test: Abdeckung mit und ohne eingebettete Bilder,
     /// gegen dasselbe PDF. `LIDL_PDF` zeigt auf eine lokale Prospekt-PDF.

@@ -148,6 +148,47 @@ fn lidl_the_last_day_of_the_running_week_is_not_a_preview() {
     assert_eq!(groups.len(), 1, "Nur noch der 10.08.-Prospekt ist Zukunft");
 }
 
+/// **Der Sonntag, an dem die Lidl-Bilder verschwanden.** Lidl läuft Montag bis
+/// Samstag; am Sonntag läuft kein Prospekt, und `week_slugs` greift vorwärts
+/// zum kommenden. Dann darf genau dieser nicht noch einmal als Vorschau
+/// kommen: `fetch_offers` liest die Vorschau **ohne Bilder**, und
+/// `db::upsert_offer` ist ein `INSERT OR REPLACE` auf die Angebots-ID — der
+/// zweite Durchgang nähme jedem Angebot sein Kachelbild wieder weg.
+///
+/// So gemessen am 2026-08-09 in der Nightly: derselbe Prospekt
+/// `10-08-2026-15-08-2026-8fad80` zweimal gelesen, 144 Kachelbilder
+/// gerastert, 0 in der Datenbank.
+#[test]
+fn lidl_a_sunday_without_a_running_flyer_reads_the_coming_one_only_once() {
+    let sonntag = day("2026-08-09");
+    let laufend = scrapers::lidl_prospekt::week_slugs(&slugs(), sonntag);
+    assert_eq!(laufend.len(), 1, "Vorwärtsregel wählt den 10.08.-Prospekt");
+    assert!(laufend[0].starts_with("aktionsprospekt-10-08-2026"));
+
+    let groups = scrapers::lidl_prospekt::next_week_slugs(&slugs(), sonntag);
+
+    assert!(
+        groups.iter().flatten().all(|s| !s.starts_with("aktionsprospekt-10-08-2026")),
+        "Der schon gelesene Prospekt steht ein zweites Mal in der Vorschau — \
+         und der zweite Durchgang trägt keine Bilder"
+    );
+    assert!(groups.is_empty(), "Danach bleibt an diesem Sonntag keine Vorschau übrig");
+}
+
+/// Die Gegenrichtung: Steht hinter dem vorgezogenen Prospekt noch eine echte
+/// weitere Woche, bleibt sie Vorschau. Der Riegel oben darf nicht alles
+/// erschlagen.
+#[test]
+fn lidl_a_sunday_still_previews_the_week_after_the_coming_one() {
+    let mut s = slugs();
+    s.push("aktionsprospekt-17-08-2026-22-08-2026-eee555".to_string());
+
+    let groups = scrapers::lidl_prospekt::next_week_slugs(&s, day("2026-08-09"));
+
+    assert_eq!(groups.len(), 1);
+    assert!(groups[0][0].starts_with("aktionsprospekt-17-08-2026"));
+}
+
 // ============================ Der Schalter ============================
 
 /// **Voreinstellung AUS.** Ohne diese Zusage darf der Zweig nicht gemergt
