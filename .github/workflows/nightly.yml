@@ -427,12 +427,24 @@ jobs:
       # Nightly-Sync (nicht bei On-Demand-Läufen) und nur Objekte älter als
       # 1 Tag: das schützt frisch Gespiegeltes gegen parallel laufende
       # On-Demand-Läufe, die ihre Bilder noch nicht in offers.image_url haben.
+      #
+      # `always()`: Ein roter Ketten-Wächter (Zusammenfassungs-Schritt) darf
+      # das Aufräumen nicht überspringen — vom 06.–08.08. fielen beide
+      # Prune-Läufe still hinter dessen Exit 1 aus, während Bucket und
+      # Preis-Historie weiterwuchsen. Gleiche Entscheidung wie in
+      # edeka-preis-probe.yml und der Bild-Probe unten.
       - name: Prune orphaned bucket images
-        if: inputs.market_id == ''
+        if: always() && inputs.market_id == ''
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
+          # `always()` läuft auch bei gescheitertem Build — dann gibt es kein
+          # Binary (Wächter wie in der Bild-Probe).
+          [ -x ./target/release/lechariot ] || {
+            echo "::warning title=Prune::Kein Binary — prune-images übersprungen."
+            exit 0
+          }
           ./target/release/lechariot prune-images --execute --min-age-days 1 \
             2>&1 | tee -a "$LOG"
 
@@ -440,13 +452,17 @@ jobs:
       # jeder Push legt eine weitere Wochen-Zeile je Produkt und Filiale an,
       # gelöscht wurde nie. Mit dem Filial-Schlüssel (v13) multipliziert sich
       # das zusätzlich mit jeder angeforderten Filiale. Wie beim Bild-Prune
-      # nur im vollen Nightly-Lauf.
+      # nur im vollen Nightly-Lauf. `always()` aus demselben Grund wie dort.
       - name: Prune price history
-        if: inputs.market_id == ''
+        if: always() && inputs.market_id == ''
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
+          [ -x ./target/release/lechariot ] || {
+            echo "::warning title=Prune::Kein Binary — prune-history übersprungen."
+            exit 0
+          }
           ./target/release/lechariot prune-history --execute \
             2>&1 | tee -a "$LOG"
 
@@ -465,8 +481,8 @@ jobs:
       #
       # Steht bewusst GANZ hinten, hinter den Aufräumläufen. Ein Schritt, der
       # fehlschlagen kann, überspringt alles, was nach ihm kommt — genau daran
-      # hängen `prune-images` und `prune-history` seit dem 06.08. hinter dem
-      # Ketten-Wächter. Ein zweites Tor davor hätte den Fehler verdoppelt.
+      # hingen `prune-images` und `prune-history` vom 06.–08.08. hinter dem
+      # Ketten-Wächter, bis beide selbst `always()` bekamen.
       - name: Bilder abrufbar? (Stichprobe je Kette)
         if: always() && inputs.market_id == ''
         env:
