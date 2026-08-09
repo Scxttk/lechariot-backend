@@ -262,6 +262,42 @@ fn edeka_fixture_parses_offers_and_dates() {
     assert_eq!(butter.price, Some(0.99));
 }
 
+// Das Markup vom August: Preis in einem `<span class="sr-only">` statt in
+// einem `<div>`, Euro-Zeichen an der Zahl, dazu die neue Zeile „Rabattierter
+// Preis von … (Insgesamt -45% Rabatt)". Vom 05.08. bis 09.08. fand der Parser
+// darin **keinen einzigen** Preis, und der Ketten-Wächter hat jede Nacht
+// zurecht nichts hochgeladen. Der alte Fixture-Test oben bleibt daneben
+// stehen: Beide Fassungen müssen tragen.
+#[test]
+fn edeka_neues_preis_markup_parst_alle_preisarten() {
+    let offers = scrapers::edeka::parse_offers(
+        include_str!("fixtures/edeka/angebote_2026-08.html"),
+        "021868",
+    )
+    .unwrap();
+    assert_eq!(offers.len(), 5);
+
+    let festpreis = offers.iter().find(|o| o.title == "Himbeeren").unwrap();
+    assert_eq!(festpreis.price, Some(1.49));
+    assert_eq!(festpreis.valid_from.as_deref(), Some("2026-08-03"));
+    assert_eq!(festpreis.valid_until.as_deref(), Some("2026-08-08"));
+
+    // "Rabattierter Preis von 1.49€ (Insgesamt -45% Rabatt)"
+    let rabattiert = offers.iter().find(|o| o.title == "Grünländer Scheiben").unwrap();
+    assert_eq!(rabattiert.price, Some(1.49));
+
+    // Zwei Preise in einer Kachel: der App-Preis steht zuerst und gewinnt.
+    let app = offers.iter().find(|o| o.title.starts_with("Jacobs Krönung oder")).unwrap();
+    assert_eq!(app.price, Some(5.99));
+
+    // EDEKA druckt keinen Streichpreis (#43) — der Rabatt-Prozentsatz ist
+    // keiner, und aus ihm einen zu rechnen wäre erfunden.
+    assert!(offers.iter().all(|o| o.regular_price.is_none()));
+
+    // Die zwei preislosen Kacheln bleiben preislos, aber es sind eben nur zwei.
+    assert_eq!(offers.iter().filter(|o| o.price.is_some()).count(), 3);
+}
+
 // EDEKA-NULL-Preise sind echt: "Tagespreis"-Kacheln und reine
 // PAYBACK-Punkte-Kacheln haben im HTML (Kachel + Dialog) keinen Preis.
 // Sie kommen bewusst mit price = None an — kein Parser-Bug.

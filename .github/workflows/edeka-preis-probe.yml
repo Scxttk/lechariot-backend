@@ -1,0 +1,86 @@
+name: EDEKA-Preis-Probe (nur lesen)
+
+# Fragt an der lebenden Angebotsseite nach, ob der Parser dort Preise findet —
+# nur GET, keine Supabase-Secrets, kein Push, kein Löschen.
+#
+# Warum in CI: edeka.de sitzt hinter Akamai und weist einen von Hand gebauten
+# Aufruf mit „Access Denied" ab (gemessen 2026-08-09 an derselben URL, die über
+# `util::curl_get` durchkommt). Gemessen wird deshalb über den Scraper-Weg
+# selbst — `edeka::fetch_offers_html` samt Header-Satz und Wiederholungen — und
+# auf dem Runner, auf dem die Nightly wirklich läuft.
+#
+# Der `push`-Auslöser hängt an den Dateien, die den Preis betreffen: Wer am
+# EDEKA-Scraper arbeitet, bekommt die Messung ungefragt. Ein Markup-Wechsel wie
+# der vom 05.08. macht keinen Offline-Test rot — nur diese Probe.
+
+on:
+  workflow_dispatch:
+    inputs:
+      markets:
+        description: "Markt-IDs, durch Leerzeichen getrennt (leer = die drei aus der Nightly)"
+        required: false
+        default: ""
+  push:
+    paths:
+      - ".github/workflows/edeka-preis-probe.yml"
+      - "src/scrapers/edeka.rs"
+      - "examples/edeka_preis_probe.rs"
+
+concurrency:
+  group: edeka-preis-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Preflight (curl)
+        run: |
+          # EDEKA wird über system-curl geholt (Akamai blockt den
+          # reqwest-TLS-Stack) — ohne curl misst die Probe die falsche Sache.
+          command -v curl >/dev/null || { echo "::error::curl fehlt auf dem Runner."; exit 1; }
+          curl --version | head -1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-lechariot
+
+      - name: Angebotsseiten abrufen und parsen
+        env:
+          MARKETS: ${{ inputs.markets }}
+          EDEKA_PROBE_DUMP: ${{ github.workspace }}/probe
+        run: |
+          set -o pipefail
+          mkdir -p probe
+          # shellcheck disable=SC2086
+          cargo run --release --example edeka_preis_probe -- $MARKETS 2>&1 | tee probe/probe.log
+
+      - name: Zusammenfassung
+        if: always()
+        run: |
+          {
+            echo "## EDEKA-Preis-Probe"
+            echo ""
+            echo "| Markt | Kacheln | Angebote | mit Preis > 0 | Urteil |"
+            echo "|---|---:|---:|---:|---|"
+            awk -F'\t' '$1 == "PREIS-PROBE" {
+              urteil = $6
+              if (urteil == "ok") urteil = "✅ ok"
+              else urteil = "❌ **" urteil "**"
+              printf "| %s | %s | %s | %s | %s |\n", $2,$3,$4,$5,urteil
+            }' probe/probe.log 2>/dev/null || true
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: edeka-preis-probe
+          path: probe/
+          if-no-files-found: ignore
+          retention-days: 3
