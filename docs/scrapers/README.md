@@ -199,16 +199,52 @@ rechnerisch auf zwei Preise derselben Kachel passt, bekommt keiner. **Ein
 Streichpreis am falschen Produkt ist schlimmer als keiner** — diese 17 sind
 kein Verlust, sondern die Regel bei der Arbeit.
 
-Warum 100 der 201 Angaben gar nicht erst bei einer Kachel ankommen, ist
-**nicht gemessen**. Naheliegend sind zwei Wege, und beide sind Vermutung,
-solange sie niemand zählt: Der Sternpreis daneben ist vorher schon
-ausgeschieden (ohne Partner, Rechenprobe, kein Titel — die Lauf-Zeile darüber
-zählt diese Fälle auf), oder die Plakette liegt weiter als `BADGE_GAP_PT` von
-jeder Preiskachel. Wer hier Ertrag sucht, misst das zuerst; ein Angebot, das
-gar nicht entsteht, hat auch keinen alten Preis zu verlieren.
+**Die erste Stufe ist jetzt gemessen.** `regular_price_audit` verbucht seit
+[#71](https://github.com/Scxttk/lechariot-backend/pull/71) jede gedruckte
+Angabe mit einem Grund — dem Zustand der Kachel, auf der sie steht. Am selben
+Prospekt (10.–15.08.2026):
+
+| Angaben | Anteil | Grund |
+|---:|---:|---|
+| 100 | 49,8 % | an einer verwertbaren Kachel |
+| **85** | **42,3 %** | **Seite ohne jeden Sternpreis** |
+| 9 | 4,5 % | Kachel ohne brauchbaren Titel |
+| 4 | 2,0 % | Preiskachel ohne Partner |
+| 2 | 1,0 % | keine Preiskachel in Reichweite |
+| 1 | 0,5 % | Produktkachel ohne Preis |
+
+Die Vermutung war falsch. Weder die Geometrie noch `BADGE_GAP_PT` tragen die
+Lücke: Zusammen erklären alle Paarungsfälle **16** der 101 nicht angekommenen
+Angaben. **85 davon — 84 % — stehen auf Seiten, auf denen kein einziger
+Sternpreis steht.**
+
+Das ist kein Streichpreis-Problem. Der Stern ist der einzige Anker des
+Extraktors; er trennt den Angebotspreis von jedem anderen Betrag der Seite
+(Grundpreis, Versandkosten, „4.7/5" Bewertung). Im Onlineshop-Teil setzt Lidl
+den Preis ohne ihn — auf Seite 42 steht `-16% 47.99` als Plakette und `39.99`
+als Preis, ohne Stern. Diese Seiten liefern deshalb **gar kein Angebot**, und
+eine Angabe ohne Angebot hat nichts, woran sie hängen könnte.
+
+`starless_page_audit` misst, was dort stünde — als obere Schranke, ohne etwas
+zu parsen: **31 Seiten ohne Sternpreis, 167 Kacheln mit brauchbarem Titel, 51
+Beträge, die der gedruckte Rabatt einer Plakette in Reichweite festnagelt**
+(dieselbe Beweisführung wie Runde 1 der #40-Regel, nur andersherum gelesen).
+Dreizehn dieser Seiten tragen überhaupt keine Ware, sondern Werbung (Reisen,
+Streaming, Stellenanzeigen). Von den übrigen sind fast alle **Non-Food** —
+Werkzeug, Kleidung, Möbel, Matratzen, Reinigung, Spielzeug; Lebensmittel
+stehen nur auf S24/S25 (Champagner, Gin, Portwein, Pastis, zusammen 13
+beweisbare Beträge).
+
+Wer hier Ertrag sucht, sucht ihn also nicht am Streichpreis, sondern an einem
+**zweiten Preisanker für sternlose Seiten** — und öffnet damit einen Prospektteil,
+der bisher bewusst draußen ist. Das ist eine Abdeckungsentscheidung, keine
+Regelkorrektur, und deshalb hier nicht gebaut.
 
 Die Zahlen hält `lidl_regular_price_audit_counts_source_against_result` an der
-Fixture-Seite fest (10 gedruckt, 10 an einer Kachel, 8 zugeteilt).
+Fixture-Seite fest (10 gedruckt, 10 an einer Kachel, 8 zugeteilt); dass die
+Aufteilung vollständig ist und über Läufe gleich bleibt, sichern
+`every_printed_crossed_out_price_gets_a_reason` und
+`the_loss_table_is_the_same_on_every_run`.
 
 ### REWE veröffentlicht ihn fast nicht
 

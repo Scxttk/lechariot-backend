@@ -71,16 +71,42 @@ fn line(chain: &str, market: &str, offers: usize, source: &str, taken: usize, ve
 /// das, was ein Angebot bekommt. Die Lücke dazwischen ist Absicht und kein
 /// Verlust: `assign_regular_prices` verwirft jede Plakette, die auf zwei
 /// Preise passt.
+///
+/// Die Tabelle darunter beantwortet die Frage, die `printed` gegen `owned`
+/// offenlässt: **warum** eine gedruckte Angabe nie an einer Kachel ankommt.
+/// Ein Prospekt wechselt wöchentlich; mit `STREICHPREIS_XML` liest die Probe
+/// eine eingefrorene Textebene und ist damit wiederholbar (`STREICHPREIS_XML_
+/// DUMP` schreibt sie).
 fn lidl() {
     println!("\n=== Lidl (Prospekt, PLZ {LIDL_ZIP}) ===");
-    let (flyer, xml) = match lidl_prospekt::fetch_bbox_layout(LIDL_ZIP) {
-        Ok(v) => v,
-        Err(e) => {
-            println!("FEHLER: {e:#}");
-            line("Lidl", LIDL_ZIP, 0, "?", 0, "FEHLER");
-            return;
-        }
+    let frozen = std::env::var("STREICHPREIS_XML").ok();
+    let (flyer, xml) = match frozen {
+        Some(path) => match std::fs::read_to_string(&path) {
+            Ok(text) => {
+                println!("Textebene aus {path} — kein Abruf");
+                (lidl_prospekt::Flyer::default(), std::sync::Arc::new(text))
+            }
+            Err(e) => {
+                println!("FEHLER: {path}: {e}");
+                line("Lidl", LIDL_ZIP, 0, "?", 0, "FEHLER");
+                return;
+            }
+        },
+        None => match lidl_prospekt::fetch_bbox_layout(LIDL_ZIP) {
+            Ok(v) => v,
+            Err(e) => {
+                println!("FEHLER: {e:#}");
+                line("Lidl", LIDL_ZIP, 0, "?", 0, "FEHLER");
+                return;
+            }
+        },
     };
+    if let Ok(path) = std::env::var("STREICHPREIS_XML_DUMP") {
+        match std::fs::write(&path, xml.as_bytes()) {
+            Ok(()) => println!("Textebene nach {path} geschrieben"),
+            Err(e) => println!("Textebene nicht geschrieben: {e}"),
+        }
+    }
     println!(
         "Prospekt gültig {} bis {}, {} Seiten",
         flyer.offer_start_date.as_deref().unwrap_or("?"),
@@ -98,9 +124,54 @@ fn lidl() {
          {} zugeteilt",
         audit.offers, audit.printed, audit.owned, audit.assigned
     );
+
+    println!("Die {} gedruckten Angaben nach Grund:", audit.printed);
+    let verbucht: usize = audit.losses.iter().map(|l| l.count).sum();
+    for l in &audit.losses {
+        let anteil = 100.0 * l.count as f64 / audit.printed.max(1) as f64;
+        println!("  {:>4}  {:>5.1} %  {}", l.count, anteil, l.reason);
+        println!("VERLUST\tLidl\t{}\t{}", l.count, l.reason);
+    }
+    if verbucht != audit.printed {
+        println!("  ACHTUNG: {verbucht} verbucht, {} gedruckt", audit.printed);
+    }
+    // Die größte Klasse ist keine Streichpreis-Frage: Diese Seiten liefern
+    // gar kein Angebot. Was dort stünde, als obere Schranke.
+    let starless = lidl_prospekt::starless_page_audit(&xml);
+    let produkte: usize = starless.iter().map(|p| p.products).sum();
+    let beweisbar: usize = starless.iter().map(|p| p.provable_prices).sum();
+    println!(
+        "{} Seiten ohne jeden Sternpreis: {produkte} Kacheln mit Titel, {beweisbar} Beträge \
+         durch einen gedruckten Rabatt festgenagelt",
+        starless.len()
+    );
+    for p in &starless {
+        println!(
+            "STERNLOS\tS{}\t{}\t{}\t{}",
+            p.page, p.products, p.provable_prices, p.headline
+        );
+    }
+
     if std::env::var("STREICHPREIS_DUMP").is_ok() {
-        for text in &audit.samples {
-            println!("  | {}", text.chars().take(140).collect::<String>());
+        for l in &audit.losses {
+            let mut seiten: std::collections::BTreeMap<usize, usize> = Default::default();
+            for (page, _) in &l.islands {
+                *seiten.entry(*page).or_default() += 1;
+            }
+            println!(
+                "  --- {} ({} Angaben auf {} Seiten) ---",
+                l.reason,
+                l.count,
+                seiten.len()
+            );
+            let mut top: Vec<_> = seiten.iter().collect();
+            top.sort_by_key(|(page, n)| (std::cmp::Reverse(**n), **page));
+            let top: Vec<String> =
+                top.iter().take(10).map(|(p, n)| format!("S{p}×{n}")).collect();
+            println!("      Seiten: {}", top.join(" "));
+            for (page, text) in &l.islands {
+                println!("  | S{page:<3} {text}");
+            }
         }
     }
     let verdict = if audit.assigned > 0 { "gebaut" } else { "OHNE STREICHPREIS" };

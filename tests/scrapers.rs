@@ -1550,3 +1550,90 @@ fn lidl_regular_price_audit_counts_source_against_result() {
         assert!(alt > preis, "{}: {alt} ist kein alter Preis zu {preis}", offer.title);
     }
 }
+
+/// Die Verlustrechnung verbucht jede gedruckte Angabe — und zwar genau einmal.
+///
+/// `printed` gegen `owned` sagt nur, **dass** die Hälfte der gedruckten
+/// Streichpreise nie an einer Kachel ankommt, nicht warum. Die Aufteilung
+/// nach Grund ist die Antwort, und sie taugt nur, wenn sie vollständig ist:
+/// Eine Klasse, die still ein Drittel verschluckt, verschiebt die
+/// Rangfolge — und danach wird entschieden, wo gebaut wird.
+#[test]
+fn every_printed_crossed_out_price_gets_a_reason() {
+    let audit = scrapers::lidl_prospekt::regular_price_audit(
+        include_str!("fixtures/lidl/prospekt_streichpreis.xml"),
+        "LIDL_1988",
+        Some("2026-07-27"),
+        Some("2026-08-01"),
+    );
+    assert!(audit.printed > 0, "Fixture ohne Streichpreise");
+    assert_eq!(
+        audit.losses.iter().map(|l| l.count).sum::<usize>(),
+        audit.printed,
+        "die Gründe summieren sich nicht auf die gedruckten Angaben: {:?}",
+        audit
+            .losses
+            .iter()
+            .map(|l| (&l.reason, l.count))
+            .collect::<Vec<_>>()
+    );
+    // Jede Klasse trägt ihre Belege, sonst lässt sich die Zahl nicht ansehen.
+    for l in &audit.losses {
+        assert!(!l.islands.is_empty(), "{} ohne Beleg", l.reason);
+    }
+}
+
+/// Dieselbe Textebene, dieselbe Tabelle — dieselbe Forderung wie an den
+/// Extraktor selbst (#69).
+///
+/// Die Verlustrechnung geht über `cluster`, und dort hing schon einmal eine
+/// `HashMap` mit eigenem Hash-Seed. Eine Messung, die bei byte-gleicher
+/// Eingabe mal so und mal so ausfällt, taugt nicht als Entscheidungsgrundlage.
+#[test]
+fn the_loss_table_is_the_same_on_every_run() {
+    let xml = include_str!("fixtures/lidl/prospekt_streichpreis.xml");
+    let tabelle = || {
+        scrapers::lidl_prospekt::regular_price_audit(
+            xml,
+            "LIDL_1988",
+            Some("2026-07-27"),
+            Some("2026-08-01"),
+        )
+        .losses
+        .iter()
+        .map(|l| (l.reason.clone(), l.count))
+        .collect::<Vec<_>>()
+    };
+    let first = tabelle();
+    assert!(!first.is_empty());
+    for run in 1..=20 {
+        assert_eq!(first, tabelle(), "Lauf {run} zählte anders");
+    }
+}
+
+/// Die Seiten ohne Sternpreis sind ein eigener Befund, kein misslungenes Paar.
+///
+/// Gemessen am Prospekt vom 10.08.2026: 85 der 101 nicht angekommenen
+/// Streichpreis-Angaben stehen auf 18 Seiten, auf denen **kein einziger**
+/// Sternpreis steht. Lidl setzt den Preis im Onlineshop-Teil ohne ihn
+/// („39.99" statt „39.99*"), und der Stern ist der einzige Anker des
+/// Extraktors. Diese Seiten liefern deshalb gar kein Angebot — sie sind kein
+/// Streichpreis-Problem, sondern eine Abdeckungsfrage.
+#[test]
+fn a_page_without_a_star_price_is_counted_as_its_own_reason() {
+    let audit = scrapers::lidl_prospekt::regular_price_audit(
+        include_str!("fixtures/lidl/prospekt_streichpreis.xml"),
+        "LIDL_1988",
+        Some("2026-07-27"),
+        Some("2026-08-01"),
+    );
+    // Die Fixture ist eine Sternpreis-Seite: Dort darf die Klasse nicht
+    // auftauchen, sonst zählt sie etwas anderes als ihren Namen.
+    assert!(
+        !audit
+            .losses
+            .iter()
+            .any(|l| l.reason == "Seite ohne jeden Sternpreis"),
+        "Sternpreis-Seite als sternlos verbucht"
+    );
+}
