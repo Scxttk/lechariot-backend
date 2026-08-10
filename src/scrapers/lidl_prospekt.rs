@@ -31,7 +31,7 @@
 //! `-bbox-layout` (Wortkoordinaten), Kachelbildung über Abstände und eine
 //! Zuordnung Produkt <-> Preis. Details bei [`extract_offers`].
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::process::Command;
 use std::sync::LazyLock;
 
@@ -97,6 +97,11 @@ const MAX_PRICE: f64 = 100.0;
 /// Streich- und Grundpreise nicht. Das ist der verlässlichste Anker.
 static PRICE_STAR: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(\d{1,3}[.,]\d{2})\s*\*").unwrap());
+/// Ein Betrag ohne Stern. Nur für [`starless_page_audit`] — der Extraktor
+/// selbst rührt ihn nicht an, weil ohne Stern jeder Grundpreis und jede
+/// Versandkostenangabe mitkäme.
+static BARE_AMOUNT: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b(\d{1,3}[.,]\d{2})\b").unwrap());
 /// „1 kg = 6.23", „1 l = -.68" (Lidl schreibt Beträge unter 1 € mit
 /// Bindestrich) und „1 kg = 13.29/11.50" für Artikel in mehreren Größen.
 static BASE_PRICE: LazyLock<Regex> = LazyLock::new(|| {
@@ -500,7 +505,7 @@ const BOILERPLATE: &[&str] = &[
 
 // -------------------------------------------------------------- Prospekt-JSON
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Deserialize)]
 pub struct Flyer {
     #[serde(default, rename = "offerStartDate")]
     pub offer_start_date: Option<String>,
@@ -1076,7 +1081,10 @@ fn word_text(line: &str) -> Option<String> {
 
 /// Textinseln zu Kacheln verschmelzen: alles, was näher als
 /// [`CLUSTER_GAP_PT`] beieinander liegt, gehört zusammen (Union-Find).
-fn cluster(islands: Vec<Island>) -> Vec<Island> {
+///
+/// Zurück kommen die Kacheln **und** die Zuordnung Insel → Kachel: `.1[i]` ist
+/// der Index der Kachel, in der Insel `i` gelandet ist.
+fn cluster(islands: Vec<Island>) -> (Vec<Island>, Vec<usize>) {
     let n = islands.len();
     let mut parent: Vec<usize> = (0..n).collect();
     fn find(parent: &mut [usize], mut i: usize) -> usize {
@@ -1131,12 +1139,28 @@ fn cluster(islands: Vec<Island>) -> Vec<Island> {
             }
         }
     }
+    // Welche Kachel jede Textinsel bekommen hat. Die Verlustrechnung in
+    // [`extract_offers_shots_and_open`] fragt von der Insel aus zurück: Eine
+    // Plakette steht auf einer Insel, entschieden wird über ihre Kachel.
+    let tile_of_root: HashMap<usize, usize> = roots_in_order
+        .iter()
+        .enumerate()
+        .map(|(tile, root)| (*root, tile))
+        .collect();
+    let membership: Vec<usize> = (0..n)
+        .map(|i| {
+            let root = find(&mut parent, i);
+            tile_of_root[&root]
+        })
+        .collect();
+
     // Lesereihenfolge der Seite: die Kachel, deren erste Insel oben links
     // steht, kommt zuerst.
-    roots_in_order
-        .into_iter()
-        .filter_map(|root| groups.remove(&root))
-        .collect()
+    let tiles = roots_in_order
+        .iter()
+        .filter_map(|root| groups.remove(root))
+        .collect();
+    (tiles, membership)
 }
 
 // ------------------------------------------------------------ Rollenerkennung
@@ -1549,6 +1573,23 @@ pub struct RegularPriceAudit {
     /// Die Textinseln hinter `printed`, damit sich die Zahl ansehen lässt
     /// statt geglaubt zu werden.
     pub samples: Vec<String>,
+    /// `printed` nach Grund aufgeteilt, die größte Klasse zuerst. Beantwortet
+    /// die Frage, die `printed` gegen `owned` offenlässt: **warum** eine
+    /// gedruckte Angabe nie an einer Kachel ankommt.
+    pub losses: Vec<RegularPriceLoss>,
+}
+
+/// Eine Klasse gedruckter Streichpreis-Angaben, nach dem Zustand der Kachel,
+/// auf der sie stehen.
+#[derive(Debug, Clone)]
+pub struct RegularPriceLoss {
+    /// Der Grund, siehe die Konstanten in `verlust`.
+    pub reason: String,
+    /// Angaben dieser Klasse, Textinsel für Textinsel gezählt.
+    pub count: usize,
+    /// Jede Textinsel dieser Klasse mit ihrer Seite — vollständig, damit sich
+    /// sehen lässt, ob die Klasse auf wenigen Seiten klumpt.
+    pub islands: Vec<(usize, String)>,
 }
 
 /// Streichpreise zählen: gedruckt gegen übernommen.
@@ -1581,13 +1622,124 @@ pub fn regular_price_audit(
             samples.push(text);
         }
     }
+    let mut by_reason: BTreeMap<&'static str, RegularPriceLoss> = BTreeMap::new();
+    for row in &stats.losses {
+        let entry = by_reason
+            .entry(row.reason)
+            .or_insert_with(|| RegularPriceLoss {
+                reason: row.reason.to_string(),
+                count: 0,
+                islands: Vec::new(),
+            });
+        entry.count += row.plaques;
+        entry.islands.push((row.page, row.island.clone()));
+    }
+    // Die größte Klasse zuerst; bei Gleichstand der Name, damit zwei Läufe
+    // über denselben Prospekt dieselbe Tabelle ergeben.
+    let mut losses: Vec<RegularPriceLoss> = by_reason.into_values().collect();
+    losses.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.reason.cmp(&b.reason)));
+
     RegularPriceAudit {
         offers: offers.len(),
         printed,
         owned: stats.candidates,
         assigned: offers.iter().filter(|o| o.regular_price.is_some()).count(),
         samples,
+        losses,
     }
+}
+
+/// Eine Prospektseite, auf der kein einziger Sternpreis steht.
+///
+/// Der Extraktor hängt am Stern: Er trennt den Angebotspreis von allem
+/// anderen, was als Betrag auf der Seite steht (Grundpreis, Versandkosten,
+/// Bewertung). Im Onlineshop-Teil setzt Lidl den Preis ohne ihn — „39.99"
+/// statt „39.99*" — und damit fällt die ganze Seite aus.
+#[derive(Debug, Clone)]
+pub struct StarlessPage {
+    /// 1-basierte Seitenzahl.
+    pub page: usize,
+    /// Kacheln mit brauchbarem Titel — die Produkte, die dort stehen.
+    pub products: usize,
+    /// Beträge, die eine Plakette der Nachbarschaft **beweist**: Der
+    /// gedruckte Rabatt geht mit genau diesem Betrag auf und mit keinem
+    /// anderen in Reichweite. Dieselbe Beweisführung wie Runde 1 von
+    /// [`assign_regular_prices`], nur andersherum gelesen.
+    pub provable_prices: usize,
+    /// Die größte Schrift der Seite — bei Lidl die Ressortüberschrift, und
+    /// damit die Auskunft, ob dort Lebensmittel stehen.
+    pub headline: String,
+}
+
+/// Was auf den Seiten ohne Sternpreis stünde — als **obere Schranke**, ohne
+/// etwas zu parsen.
+///
+/// Die Zahl beantwortet die Frage, ob sich für diese Seiten ein zweiter Anker
+/// überhaupt lohnt. Sie ist bewusst großzügig: Gezählt wird jeder Betrag, den
+/// ein gedruckter Rabatt festnagelt, ohne Rücksicht darauf, ob daraus später
+/// ein Titel, ein Bild und eine Kategorie würden.
+pub fn starless_page_audit(xml: &str) -> Vec<StarlessPage> {
+    let mut out = Vec::new();
+    for (page_index, islands) in parse_bbox_layout(xml).into_iter().enumerate() {
+        let (tiles, _) = cluster(islands);
+        if tiles.iter().any(|t| PRICE_STAR.is_match(&t.text())) {
+            continue;
+        }
+        let products = tiles
+            .iter()
+            .filter(|t| {
+                t.font_pt() >= MIN_NAME_PT
+                    && is_plausible_title(&title_of(t))
+                    && !is_layout_text(&title_of(t))
+            })
+            .count();
+
+        let mut provable = 0;
+        for tile in &tiles {
+            let text = tile.text();
+            for c in regular_candidates(std::slice::from_ref(&text)) {
+                let Some(percent) = c.percent else { continue };
+                let mut fits: Vec<f64> = tiles
+                    .iter()
+                    .filter(|o| o.gap(tile) < BADGE_GAP_PT)
+                    .flat_map(|o| {
+                        BARE_AMOUNT
+                            .captures_iter(&o.text())
+                            .filter_map(|m| parse_amount(m.get(1)?.as_str()))
+                            .collect::<Vec<_>>()
+                    })
+                    .filter(|p| printed_discount(c.value, *p) == Some(percent))
+                    .collect();
+                fits.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                fits.dedup();
+                // Genau ein Betrag geht auf: Dann ist er bewiesen. Zwei sind
+                // ein Münzwurf, keiner ist nichts.
+                if fits.len() == 1 {
+                    provable += 1;
+                }
+            }
+        }
+
+        let headline = tiles
+            .iter()
+            .max_by(|a, b| {
+                a.font_pt()
+                    .partial_cmp(&b.font_pt())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            // Ohne Pipe: Die Zeile landet in einer Markdown-Tabelle in der
+            // Workflow-Zusammenfassung, und ein „|" im Prospekttext bricht sie.
+            .map(|t| t.text().replace('|', "/").chars().take(60).collect())
+            .unwrap_or_default();
+
+        out.push(StarlessPage {
+            page: page_index + 1,
+            products,
+            provable_prices: provable,
+            headline,
+        });
+    }
+    out
 }
 
 /// Rechenprobe: Der Prospekt nennt Packungsgröße **und** Grundpreis, also
@@ -1670,6 +1822,43 @@ fn debug_enabled() -> bool {
     std::env::var("LIDL_PROSPEKT_DEBUG").is_ok_and(|v| v == "1")
 }
 
+/// Die Rolle, die eine Kachel auf ihrer Seite bekommen hat, mit ihrem Index
+/// in der jeweiligen Liste.
+#[derive(Debug, Clone, Copy)]
+enum Role {
+    Price(usize),
+    Product(usize),
+    Badge(usize),
+}
+
+/// Die Gründe, aus denen eine gedruckte Streichpreis-Angabe nie an einer
+/// verwertbaren Kachel ankommt — die Klassen der Verlustrechnung.
+///
+/// Es sind Zustände der **Kachel**, in der die Insel mit der Plakette gelandet
+/// ist, nicht der Plakette selbst: Über den Streichpreis entscheidet, was aus
+/// der Kachel geworden ist.
+mod verlust {
+    /// Die Kachel kommt zur Zuteilung — kein Verlust.
+    pub const VERWERTBAR: &str = "an einer verwertbaren Kachel";
+    /// Die Plakette liegt weiter als [`super::BADGE_GAP_PT`] von jeder
+    /// Preiskachel entfernt. Ihr Preis steht anderswo auf der Seite.
+    pub const OHNE_BESITZER: &str = "keine Preiskachel in Reichweite";
+    /// Die Plakette hat eine Preiskachel, aber die hat weder einen
+    /// Produktpartner gefunden noch trägt sie ihren Namen selbst.
+    pub const PREIS_OHNE_PARTNER: &str = "Preiskachel ohne Partner";
+    /// Die Plakette sitzt auf einer Produktkachel, die keinen Preis bekommen
+    /// hat — dann gibt es nichts, wovon abgestrichen werden könnte.
+    pub const PRODUKT_OHNE_PREIS: &str = "Produktkachel ohne Preis";
+    /// Auf der ganzen Seite steht kein einziger Sternpreis. Das ist kein
+    /// Zuteilungsproblem: Diese Seiten liefern überhaupt kein Angebot, und
+    /// die Plakette hat nichts, woran sie hängen könnte. Betrifft den
+    /// Onlineshop-Teil des Prospekts, der den Preis ohne Stern setzt
+    /// („39.99" statt „39.99*").
+    pub const SEITE_OHNE_STERNPREIS: &str = "Seite ohne jeden Sternpreis";
+    /// Die Kachel kam zur Zuteilung, ist aber am Titel gescheitert.
+    pub const KEIN_TITEL: &str = "Kachel ohne brauchbaren Titel";
+}
+
 #[derive(Default)]
 struct Stats {
     anchors: usize,
@@ -1685,6 +1874,20 @@ struct Stats {
     /// Zahl in der fertigen Liste — als Trend genügt das, und die genaue Zahl
     /// steht in der Zeile darüber.
     regular: usize,
+    /// Jede gedruckte Streichpreis-Angabe mit ihrem Grund: Seite, Grund,
+    /// Anzahl der Angaben auf dieser Textinsel, ihr Text. Vollständig und
+    /// nicht als Stichprobe — 201 Zeilen je Prospekt, und ohne den Rest lässt
+    /// sich nicht sehen, ob eine Klasse auf wenigen Seiten klumpt.
+    losses: Vec<LossRow>,
+}
+
+/// Eine verbuchte Angabe der Verlustrechnung.
+#[derive(Debug, Clone)]
+struct LossRow {
+    page: usize,
+    reason: &'static str,
+    plaques: usize,
+    island: String,
 }
 
 impl Stats {
@@ -1827,7 +2030,16 @@ fn extract_offers_shots_and_open(
             None => (valid_from, valid_until),
         };
 
-        let tiles = cluster(islands);
+        // Die Plaketten der **rohen** Textinseln, bevor das Clustern sie
+        // zusammenzieht. Dieselbe Zählweise wie in [`regular_price_audit`],
+        // damit die Verlustrechnung unten gegen `printed` aufgeht.
+        let island_texts: Vec<String> = islands.iter().map(Island::text).collect();
+        let island_plaques: Vec<usize> = island_texts
+            .iter()
+            .map(|t| regular_candidates(std::slice::from_ref(t)).len())
+            .collect();
+
+        let (tiles, membership) = cluster(islands);
         // Die Rechtecke aller Kacheln, bevor sie in Preise und Produkte
         // aufgeteilt werden — sie begrenzen die Bildstreifen nach oben.
         let page_rects: Vec<(f64, f64, f64, f64)> =
@@ -1835,8 +2047,13 @@ fn extract_offers_shots_and_open(
         let mut prices = Vec::new();
         let mut products = Vec::new();
         let mut badges = Vec::new();
+        // Die Rolle jeder Kachel, in der Reihenfolge von [`cluster`]: Die
+        // Verlustrechnung geht von der Insel über `membership` hierher und
+        // von hier zu dem, was aus der Kachel geworden ist.
+        let mut roles: Vec<Role> = Vec::with_capacity(page_rects.len());
         for tile in tiles {
             if PRICE_STAR.is_match(&tile.text()) {
+                roles.push(Role::Price(prices.len()));
                 prices.push(tile);
             } else if tile.font_pt() >= MIN_NAME_PT
                 && is_plausible_title(&title_of(&tile))
@@ -1846,8 +2063,10 @@ fn extract_offers_shots_and_open(
                 // Auf einer Fleisch-Kachel steht neben dem Namen auch
                 // „Frischluftstall", und danach zu verwerfen hätte
                 // „METZGERFRISCH Frisches Rinder-Hackfleisch" mitgerissen.
+                roles.push(Role::Product(products.len()));
                 products.push(tile);
             } else {
+                roles.push(Role::Badge(badges.len()));
                 badges.push(tile);
             }
         }
@@ -1913,6 +2132,26 @@ fn extract_offers_shots_and_open(
                     .min_by(|a, c| a.0.partial_cmp(&c.0).unwrap_or(std::cmp::Ordering::Equal))
                     .filter(|(gap, _)| *gap < BADGE_GAP_PT)
                     .map(|(_, j)| j)
+            })
+            .collect();
+
+        // Der Preis, den jede Produktkachel bekommen hat — für die
+        // Verlustrechnung: Eine Plakette auf der Produktkachel teilt das
+        // Schicksal des Preises, mit dem das Produkt gepaart wurde.
+        let mut price_of_product: Vec<Option<usize>> = vec![None; products.len()];
+        for (i, j) in &matched {
+            price_of_product[*i] = Some(*j);
+        }
+        // Was aus jeder Preiskachel wird. Vorbelegt mit dem, was schon
+        // feststeht; die Schleife unten korrigiert auf `KEIN_TITEL`, wo die
+        // Kachel zwar zur Zuteilung kommt, aber am Titel scheitert.
+        let mut price_fate: Vec<&'static str> = (0..prices.len())
+            .map(|j| {
+                if used_price[j] || self_contained.contains(&j) {
+                    verlust::VERWERTBAR
+                } else {
+                    verlust::PREIS_OHNE_PARTNER
+                }
             })
             .collect();
 
@@ -1985,6 +2224,7 @@ fn extract_offers_shots_and_open(
             let title = tile_title(product);
             if !is_plausible_title(&title) || is_layout_text(&title) || is_layout_remnant(&title) {
                 stats.bad_title += usable.len();
+                price_fate[j] = verlust::KEIN_TITEL;
                 if debug_enabled() {
                     eprintln!(
                         "  [S{}] kein Titel aus: {:?}",
@@ -2109,6 +2349,32 @@ fn extract_offers_shots_and_open(
                     flyer_page: Some(page_index as i64 + 1),
                 });
             }
+        }
+
+        // Verlustrechnung: Jede gedruckte Streichpreis-Angabe der Seite
+        // bekommt einen Grund. Erst hier, weil `price_fate` bis zum Ende der
+        // Schleife oben wächst.
+        for (isl, plaques) in island_plaques.iter().enumerate().filter(|(_, n)| **n > 0) {
+            let reason = match roles[membership[isl]] {
+                Role::Price(j) => price_fate[j],
+                // Eine Seite ganz ohne Sternpreis ist ein eigener Befund und
+                // kein misslungenes Paar: Dort ist nichts zu paaren.
+                _ if prices.is_empty() => verlust::SEITE_OHNE_STERNPREIS,
+                Role::Product(i) => match price_of_product[i] {
+                    Some(j) => price_fate[j],
+                    None => verlust::PRODUKT_OHNE_PREIS,
+                },
+                Role::Badge(b) => match badge_owner[b] {
+                    Some(j) => price_fate[j],
+                    None => verlust::OHNE_BESITZER,
+                },
+            };
+            stats.losses.push(LossRow {
+                page: page_index + 1,
+                reason,
+                plaques: *plaques,
+                island: island_texts[isl].chars().take(160).collect(),
+            });
         }
     }
 
@@ -4215,7 +4481,7 @@ mod tests {
         let xml = run_pdftotext(std::path::Path::new(&pdf), "-bbox-layout").expect("pdftotext");
         println!("seite\tx0\ty0\tx1\ty1\trolle\tsterne\thoehe\ttitel\ttext");
         for (p, islands) in parse_bbox_layout(&xml).into_iter().enumerate() {
-            for tile in cluster(islands) {
+            for tile in cluster(islands).0 {
                 let text = tile.text();
                 let title = tile_title(&tile);
                 let rolle = if PRICE_STAR.is_match(&text) {

@@ -111,6 +111,35 @@ jobs:
             echo "(Lidl: Angaben in der Textebene des Prospekts, REWE: Angebote mit "
             echo "Betrag in \`priceData.regularPrice\`, EDEKA: Wort- und Durchstreichungsfunde). "
             echo "**übernommen** = Angebote mit \`regular_price\` nach der Extraktion."
+            echo ""
+            # Warum die Hälfte der gedruckten Lidl-Angaben nie an einer Kachel
+            # ankommt. Ohne diese Aufteilung sagt „201 gegen 101" nur, dass
+            # etwas fehlt, und nicht, wo man ansetzen müsste.
+            if grep -q '^VERLUST' probe/probe.log 2>/dev/null; then
+              echo "### Lidl: die gedruckten Angaben nach Grund"
+              echo ""
+              echo "| Angaben | Grund |"
+              echo "|---:|---|"
+              awk -F'\t' '$1 == "VERLUST" { printf "| %s | %s |\n", $3, $4 }' probe/probe.log
+              echo ""
+            fi
+            # Die Seiten, auf denen kein einziger Sternpreis steht: Der Stern
+            # ist der einzige Anker des Extraktors, und im Onlineshop-Teil
+            # setzt Lidl den Preis ohne ihn. Diese Seiten liefern gar kein
+            # Angebot — eine Abdeckungs-, keine Streichpreisfrage.
+            if grep -q '^STERNLOS' probe/probe.log 2>/dev/null; then
+              echo "### Lidl: Seiten ohne jeden Sternpreis"
+              echo ""
+              echo "| Seite | Kacheln mit Titel | Beträge mit Rabattbeweis | Größte Schrift |"
+              echo "|---|---:|---:|---|"
+              awk -F'\t' '$1 == "STERNLOS" && ($3 > 0 || $4 > 0) {
+                printf "| %s | %s | %s | %s |\n", $2, $3, $4, $5
+              }' probe/probe.log
+              echo ""
+              echo "**Beträge mit Rabattbeweis** = obere Schranke dessen, was ein zweiter "
+              echo "Anker dort holen könnte: Beträge, für die der gedruckte Rabatt einer "
+              echo "Plakette in Reichweite genau aufgeht — und mit keinem anderen Betrag."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7
