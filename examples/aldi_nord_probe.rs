@@ -11,7 +11,11 @@
 //! Deshalb variiert diese Fassung **einen** Faktor pro Arm, gegen dieselbe URL,
 //! im selben Prozess:
 //!
-//! * `reqwest-heute` — der Weg des Scrapers, unverändert.
+//! * `scraper-weg` — was `aldi_nord::fetch_offers` gerade tut. Bis zur
+//!   Reparatur war das der einzelne reqwest-Versuch, seither `util::curl_get`.
+//! * `reqwest-alt` — der Weg vor der Reparatur, nachgebaut: ein Versuch,
+//!   zwei Header, kein Sec-Fetch. Nur so bleibt der Vergleich messbar,
+//!   nachdem der Scraper selbst umgezogen ist.
 //! * `reqwest-header` — derselbe Client, aber mit dem vollen Browser-Header-Satz
 //!   (Sec-Fetch-Quartett). Trennt „TLS-Fingerprint" von „Header".
 //! * `curl-scraper` — `util::curl_get`, der Weg von Netto/ALDI SÜD/EDEKA.
@@ -57,19 +61,25 @@ fn main() -> Result<()> {
     for runde in 1..=runden {
         println!("=== Runde {runde}/{runden} ===");
 
-        // Arm A: der Weg, der im Nightly vom 11.08. jedes Mal 403 bekam.
+        // Arm A: was der Scraper heute tut.
         match aldi_nord::fetch_offers(&markt) {
-            Ok(offers) => println!("  reqwest-heute   OK, {} Angebote", offers.len()),
-            Err(e) => println!("  reqwest-heute   FEHLER {}", kurz(&format!("{e:#}"))),
+            Ok(offers) => println!("  scraper-weg     OK, {} Angebote", offers.len()),
+            Err(e) => println!("  scraper-weg     FEHLER {}", kurz(&format!("{e:#}"))),
         }
 
-        // Arm B: derselbe TLS-Stack, aber die Header eines Browsers.
+        // Arm B: der Weg, der im Nightly vom 11.08. jedes Mal 403 bekam.
+        match reqwest_alt(OFFERS_URL) {
+            Ok((status, len)) => println!("  reqwest-alt     HTTP {status}, {len} B"),
+            Err(e) => println!("  reqwest-alt     FEHLER {}", kurz(&format!("{e:#}"))),
+        }
+
+        // Arm C: derselbe TLS-Stack, aber die Header eines Browsers.
         match reqwest_mit_headern(OFFERS_URL) {
             Ok((status, len)) => println!("  reqwest-header  HTTP {status}, {len} B"),
             Err(e) => println!("  reqwest-header  FEHLER {}", kurz(&format!("{e:#}"))),
         }
 
-        // Arm C: der Weg von Netto/ALDI SÜD/EDEKA, samt Wiederholungen.
+        // Arm D: der Weg von Netto/ALDI SÜD/EDEKA, samt Wiederholungen.
         match util::curl_get(OFFERS_URL, DOCUMENT_HEADERS) {
             Ok(html) => {
                 println!("  curl-scraper    OK, {} B, Angebote={}", html.len(), zaehle(&html, &markt.id));
@@ -78,7 +88,7 @@ fn main() -> Result<()> {
             Err(e) => println!("  curl-scraper    FEHLER {}", kurz(&format!("{e:#}"))),
         }
 
-        // Arm D: curl, aber mit den Akamai-Cookies der Startseite im Gepäck.
+        // Arm E: curl, aber mit den Akamai-Cookies der Startseite im Gepäck.
         match curl_mit_cookie_jar(runde) {
             Ok((home, offers, body)) => {
                 println!("  curl-cookie     Start HTTP {home} -> Angebote HTTP {}, {} B, Angebote={}",
@@ -121,6 +131,20 @@ fn zwei_markets() -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Der Abruf, wie ihn `aldi_nord::load` vor der Reparatur machte: ein
+/// reqwest-Versuch mit zwei Headern, ohne Wiederholung. Wörtlich aus dem Stand
+/// vor diesem PR übernommen, damit der Vergleich messbar bleibt.
+fn reqwest_alt(url: &str) -> Result<(u16, usize)> {
+    util::polite_pause(url);
+    let res = util::blocking_client()?
+        .get(url)
+        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        .header("Accept-Language", "de-DE,de;q=0.9")
+        .send()?;
+    let status = res.status().as_u16();
+    Ok((status, res.text()?.len()))
 }
 
 /// reqwest mit dem vollen Header-Satz einer Dokument-Navigation. Liefert
