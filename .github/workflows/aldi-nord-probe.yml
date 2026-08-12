@@ -18,11 +18,11 @@ on:
         description: "Wie oft beide Arme nacheinander messen"
         required: false
         default: "3"
-  # Solange die Datei nicht auf master liegt, kennt `workflow_dispatch` sie
-  # nicht (GitHub sucht Dispatch-Ziele nur im Default-Branch). Der Push-Auslöser
-  # ist auf den Messzweig eingegrenzt und fliegt vor dem Merge wieder raus.
-  push:
-    branches: [aldi-nord-akamai-curl]
+
+# Gemessen wurde vor dem Merge über einen auf den Zweig eingegrenzten
+# Push-Auslöser: `workflow_dispatch` findet nur Dateien, die schon auf dem
+# Default-Branch liegen. Läufe 31636710816, 31637056816, 31637826832 und
+# 31637969052 stammen daher; der Auslöser ist wieder raus.
 
 jobs:
   probe:
