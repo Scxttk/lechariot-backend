@@ -74,18 +74,41 @@ pub fn fetch_next_week(market: &Market) -> Vec<Offer> {
     }
 }
 
+/// Der Header-Satz einer Dokument-Navigation, wörtlich wie ihn `netto.rs` für
+/// dieselbe Akamai-Installation setzt.
+const DOCUMENT_HEADERS: &[(&str, &str)] = &[
+    ("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
+    ("Sec-Fetch-Site", "none"),
+    ("Sec-Fetch-Mode", "navigate"),
+    ("Sec-Fetch-Dest", "document"),
+    ("Sec-Fetch-User", "?1"),
+];
+
+/// Die Seite holen — über System-curl, mit Wiederholungen.
+///
+/// **Gemessen, nicht vermutet (Issue #82).** aldi-nord.de weist Anfragen
+/// sporadisch mit 403 ab; im Nightly vom 11.08.2026 traf es über 40 Minuten
+/// jede einzelne, während Netto, ALDI SÜD und EDEKA im selben Lauf durchkamen.
+/// Zwei Messungen vom Runner (Läufe 31636710816 und 31637056816, je drei
+/// Runden gegen dieselbe URL):
+///
+/// * Runde für Runde wechselt, wen es trifft — einmal reqwest (2 von 3),
+///   einmal System-curl (1 von 3, dort in allen drei Versuchen). Ein zweiter
+///   Lauf keine halbe Stunde später beantwortete **alle zwölf** Anfragen mit
+///   200, reqwest wie curl, mit und ohne Sec-Fetch-Header, mit und ohne
+///   Akamai-Cookies aus einer Startseiten-Navigation.
+/// * Es gibt also keine Client-Eigenschaft, die 403 von 200 trennt: Der Block
+///   hängt an IP und Zeitpunkt, nicht am TLS-Fingerprint wie bei Netto.
+///
+/// Was daraus folgt, ist nicht „anderer Client", sondern **Wiederholung**:
+/// `util::curl_get` versucht es dreimal mit drei Sekunden Abstand, der alte
+/// reqwest-Weg gab nach dem ersten 403 auf. Ein einzelner abgewiesener Versuch
+/// kostete bisher die ganze Kette — der Ketten-Wächter meldete anschließend
+/// zu Recht 0 Angebote. Nebenbei geht ALDI Nord damit denselben Weg wie die
+/// übrigen Akamai-Ketten, statt als einziger einen eigenen.
 fn load(url: &str) -> Result<String> {
-    util::polite_pause(url);
-    util::blocking_client()?
-        .get(url)
-        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-        .header("Accept-Language", "de-DE,de;q=0.9")
-        .send()
-        .with_context(|| util::ctx("ALDI Nord", "Angebote laden", url))?
-        .error_for_status()
-        .with_context(|| util::ctx("ALDI Nord", "Angebote laden (HTTP-Status)", url))?
-        .text()
-        .with_context(|| util::ctx("ALDI Nord", "Angebote lesen", url))
+    util::curl_get(url, DOCUMENT_HEADERS)
+        .with_context(|| util::ctx("ALDI Nord", "Angebote laden", url))
 }
 
 /// Ein Produkt, das die Aktionstage versprechen, aus dem aber kein Angebot
@@ -366,6 +389,51 @@ mod tests {
         let html = r#"<html><script id="__NEXT_DATA__" type="application/json" nonce="x">{"a":1}</script></html>"#;
         assert_eq!(extract_next_data(html), Some(r#"{"a":1}"#));
         assert_eq!(extract_next_data("<html></html>"), None);
+    }
+
+    /// Ein sporadisches 403 darf die Kette nicht mehr kosten (Issue #82).
+    ///
+    /// Der Server hier antwortet auf die ersten beiden Anfragen mit 403 und
+    /// erst auf die dritte mit der Seite — das ist die Quelle vom 11.08.2026
+    /// im Kleinen: Sie wies ab, ohne dass sich am Client etwas geändert hätte.
+    /// Der alte Weg (ein reqwest-Versuch, danach `error_for_status`) scheitert
+    /// an diesem Server; `util::curl_get` mit seinen drei Versuchen kommt durch.
+    #[test]
+    fn load_uebersteht_sporadische_403() {
+        let seite = format!(
+            "<html><script id=\"__NEXT_DATA__\" type=\"application/json\">{}</script></html>",
+            r#"{"a":1}"#
+        );
+        let base = spawn_flaky_server(2, seite.clone());
+        let html = load(&format!("{base}/angebote.html")).expect("dritter Versuch muss durchkommen");
+        assert_eq!(extract_next_data(&html), Some(r#"{"a":1}"#));
+    }
+
+    /// Lokaler HTTP-Server, der die ersten `abweisungen` Anfragen mit 403
+    /// beantwortet und danach die Seite ausliefert.
+    fn spawn_flaky_server(abweisungen: usize, body: String) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for (gesehen, stream) in listener.incoming().enumerate() {
+                let Ok(mut stream) = stream else { break };
+                let mut buf = [0u8; 8192];
+                let _ = stream.read(&mut buf);
+                let (status, inhalt) = if gesehen < abweisungen {
+                    ("403 Forbidden", "Access Denied".to_string())
+                } else {
+                    ("200 OK", body.clone())
+                };
+                let kopf = format!(
+                    "HTTP/1.1 {status}\r\ncontent-type: text/html\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                    inhalt.len()
+                );
+                let _ = stream.write_all(kopf.as_bytes());
+                let _ = stream.write_all(inhalt.as_bytes());
+            }
+        });
+        format!("http://{addr}")
     }
 
     /// Live-Test gegen aldi-nord.de: cargo test aldi_nord -- --ignored --nocapture

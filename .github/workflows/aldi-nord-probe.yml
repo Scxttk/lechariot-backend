@@ -39,6 +39,12 @@ jobs:
           cargo run --release --example aldi_nord_probe -- "${{ inputs.runden || 3 }}" 2>&1 \
             | tee "$AN_PROBE_OUT.txt"
 
+      # Der Nachweis nach der Reparatur: zwei echte Filialen, Angebote > 0.
+      - name: Zwei Filialen ueber den reparierten Weg
+        run: |
+          cargo run --release --example aldi_nord_probe -- markets 2>&1 \
+            | tee "$AN_PROBE_OUT-markets.txt"
+
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -46,4 +52,5 @@ jobs:
           path: |
             probe/
             probe.txt
+            probe-markets.txt
           retention-days: 3

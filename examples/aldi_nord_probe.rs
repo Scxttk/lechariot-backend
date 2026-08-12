@@ -11,13 +11,13 @@
 //! Deshalb variiert diese Fassung **einen** Faktor pro Arm, gegen dieselbe URL,
 //! im selben Prozess:
 //!
-//! * `reqwest-heute`     — der Weg des Scrapers, unverändert.
-//! * `reqwest-header`    — derselbe Client, aber mit dem vollen Browser-Header-Satz
-//!                         (Sec-Fetch-Quartett). Trennt „TLS-Fingerprint" von „Header".
-//! * `curl-scraper`      — `util::curl_get`, der Weg von Netto/ALDI SÜD/EDEKA.
-//! * `curl-cookie`       — curl, aber erst die Startseite, dann die Angebotsseite
-//!                         mit demselben Cookie-Jar. Ein Browser navigiert nie ohne
-//!                         die Akamai-Cookies (`bm_sz`, `_abck`), unsere Clients schon.
+//! * `reqwest-heute` — der Weg des Scrapers, unverändert.
+//! * `reqwest-header` — derselbe Client, aber mit dem vollen Browser-Header-Satz
+//!   (Sec-Fetch-Quartett). Trennt „TLS-Fingerprint" von „Header".
+//! * `curl-scraper` — `util::curl_get`, der Weg von Netto/ALDI SÜD/EDEKA.
+//! * `curl-cookie` — curl, aber erst die Startseite, dann die Angebotsseite mit
+//!   demselben Cookie-Jar. Ein Browser navigiert nie ohne die Akamai-Cookies
+//!   (`bm_sz`, `_abck`), unsere Clients schon.
 //!
 //! Jeder Arm läuft mehrere Runden; ausgegeben wird der beobachtete Status, nicht
 //! die Erwartung. Bei 403 wird der Antwortkörper mitgeschrieben — die
@@ -47,7 +47,11 @@ const DOCUMENT_HEADERS: &[(&str, &str)] = &[
 ];
 
 fn main() -> Result<()> {
-    let runden: usize = std::env::args().nth(1).and_then(|a| a.parse().ok()).unwrap_or(4);
+    let arg = std::env::args().nth(1).unwrap_or_default();
+    if arg == "markets" {
+        return zwei_markets();
+    }
+    let runden: usize = arg.parse().ok().unwrap_or(4);
     let markt = aldi_nord::national();
 
     for runde in 1..=runden {
@@ -97,6 +101,23 @@ fn main() -> Result<()> {
                 }
                 Err(e) => println!("  curl-vorschau   FEHLER {}", kurz(&format!("{e:#}"))),
             }
+        }
+    }
+    Ok(())
+}
+
+/// Der Nachweis für Issue #82: Holt der **reparierte** Scraper-Weg für zwei
+/// echte Filialen Angebote — und wie viele? Nur Lesen, kein Upload; die Zahl
+/// ist dieselbe, die der Nightly hochladen würde.
+fn zwei_markets() -> Result<()> {
+    for zip in ["10115", "01067"] {
+        match aldi_nord::find_market(zip)? {
+            Some(markt) => {
+                let offers = aldi_nord::fetch_offers(&markt)?;
+                println!("PLZ {zip}: {} ({}) -> {} Angebote", markt.name, markt.id, offers.len());
+                assert!(!offers.is_empty(), "PLZ {zip} lieferte 0 Angebote");
+            }
+            None => println!("PLZ {zip}: keine Filiale gefunden"),
         }
     }
     Ok(())
