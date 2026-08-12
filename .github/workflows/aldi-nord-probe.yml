@@ -18,6 +18,11 @@ on:
         description: "Wie oft beide Arme nacheinander messen"
         required: false
         default: "3"
+  # Solange die Datei nicht auf master liegt, kennt `workflow_dispatch` sie
+  # nicht (GitHub sucht Dispatch-Ziele nur im Default-Branch). Der Push-Auslöser
+  # ist auf den Messzweig eingegrenzt und fliegt vor dem Merge wieder raus.
+  push:
+    branches: [aldi-nord-akamai-curl]
 
 jobs:
   probe:
@@ -31,7 +36,7 @@ jobs:
 
       - name: reqwest gegen curl, dieselbe URL
         run: |
-          cargo run --release --example aldi_nord_probe -- "${{ inputs.runden }}" 2>&1 \
+          cargo run --release --example aldi_nord_probe -- "${{ inputs.runden || 3 }}" 2>&1 \
             | tee "$AN_PROBE_OUT.txt"
 
       - uses: actions/upload-artifact@v7
