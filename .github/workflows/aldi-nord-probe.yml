@@ -1,0 +1,44 @@
+name: ALDI-Nord-Probe (nur lesen)
+
+# Messgeschirr für Issue #82 — **nur GET, kein Schreibzugriff**, keine
+# Supabase-Secrets, kein Push.
+#
+# Warum in CI: Der Nightly vom 11.08. bekam von www.aldi-nord.de über 40
+# Minuten hinweg auf jeden Versuch 403, während Netto/ALDI SÜD/EDEKA im selben
+# Lauf durchkamen. Der Runner ist die Umgebung, in der der Scraper wirklich
+# läuft; von diesem Mac aus ist dieselbe Antwort nicht zu erwarten.
+#
+# Der Lauf lädt das per curl geholte HTML als Artefakt hoch — daraus wird die
+# Fixture für den Offline-Test.
+
+on:
+  workflow_dispatch:
+    inputs:
+      runden:
+        description: "Wie oft beide Arme nacheinander messen"
+        required: false
+        default: "3"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AN_PROBE_OUT: ${{ github.workspace }}/probe
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+
+      - name: reqwest gegen curl, dieselbe URL
+        run: |
+          cargo run --release --example aldi_nord_probe -- "${{ inputs.runden }}" 2>&1 \
+            | tee "$AN_PROBE_OUT.txt"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: aldi-nord-probe
+          path: |
+            probe/
+            probe.txt
+          retention-days: 3
