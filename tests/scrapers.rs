@@ -172,6 +172,43 @@ fn aldi_nord_complete_fixture_reports_nothing_missing() {
     assert!(missing.is_empty(), "unerwartet gemeldet: {missing:?}");
 }
 
+/// Die echte Seite, unverändert geparst — die Gegenprobe zu Issue #82.
+///
+/// Der Verdacht dort war eine geänderte Quelle (wie bei EDEKA am 08.08., #67).
+/// Diese Fixture ist ein wörtlicher Ausschnitt der Seite, die der Runner am
+/// 12.08.2026 geholt hat (Lauf 31637056816): dasselbe `__NEXT_DATA__`, der
+/// Aktionstag „Sa. 15.8." mit allen acht Produkten seiner `productIds`, nichts
+/// umgeschrieben. Der ganze Abzug ergab 246 Angebote — das Markup steht also,
+/// die Kette fiel am Abruf aus, nicht am Parser.
+#[test]
+fn aldi_nord_live_seite_vom_12_08_parst_unveraendert() {
+    let (offers, missing) = lechariot::scrapers::aldi_nord::parse_offers_reporting(
+        include_str!("fixtures/aldi_nord/angebote_live_20260812.html"),
+        "ALDI_NORD_DE",
+    )
+    .unwrap();
+    // Acht `productIds`, sieben Angebote: „Pesto" von BARILLA steht in der
+    // Quelle zweimal (1013067 und 10130820001, gleicher Preis, einmal
+    // „190-g-Glas", einmal nur „Glas"). Beide tragen dieselbe Angebots-ID aus
+    // Titel und Datum und fallen zu einer Zeile zusammen — gewollt, sonst
+    // stünde dasselbe Pesto zweimal in der App.
+    assert_eq!(offers.len(), 7);
+    assert!(missing.is_empty(), "unerwartet gemeldet: {missing:?}");
+
+    // Ein Angebot mit allem, worauf die App angewiesen ist.
+    let cola = offers.iter().find(|o| o.title.contains("Cola")).unwrap();
+    assert_eq!(cola.price, Some(0.65));
+    assert_eq!(cola.regular_price, Some(1.09));
+    assert_eq!(cola.subtitle.as_deref(), Some("0,33-L-Dose"));
+    assert_eq!(cola.valid_from.as_deref(), Some("2026-08-15"));
+    assert_eq!(cola.valid_until.as_deref(), Some("2026-08-15"));
+
+    // Und eins ohne Streichpreis, damit die Fixture nicht nur den Sonderfall trägt.
+    let broetchen = offers.iter().find(|o| o.title.contains("Chia-Brötchen")).unwrap();
+    assert_eq!(broetchen.price, Some(0.25));
+    assert_eq!(broetchen.regular_price, None);
+}
+
 // ---------------------------------------------------------------- ALDI Süd
 
 #[test]

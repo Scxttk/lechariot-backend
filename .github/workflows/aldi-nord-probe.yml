@@ -1,0 +1,56 @@
+name: ALDI-Nord-Probe (nur lesen)
+
+# Messgeschirr für Issue #82 — **nur GET, kein Schreibzugriff**, keine
+# Supabase-Secrets, kein Push.
+#
+# Warum in CI: Der Nightly vom 11.08. bekam von www.aldi-nord.de über 40
+# Minuten hinweg auf jeden Versuch 403, während Netto/ALDI SÜD/EDEKA im selben
+# Lauf durchkamen. Der Runner ist die Umgebung, in der der Scraper wirklich
+# läuft; von diesem Mac aus ist dieselbe Antwort nicht zu erwarten.
+#
+# Der Lauf lädt das per curl geholte HTML als Artefakt hoch — daraus wird die
+# Fixture für den Offline-Test.
+
+on:
+  workflow_dispatch:
+    inputs:
+      runden:
+        description: "Wie oft beide Arme nacheinander messen"
+        required: false
+        default: "3"
+
+# Gemessen wurde vor dem Merge über einen auf den Zweig eingegrenzten
+# Push-Auslöser: `workflow_dispatch` findet nur Dateien, die schon auf dem
+# Default-Branch liegen. Läufe 31636710816, 31637056816, 31637826832 und
+# 31637969052 stammen daher; der Auslöser ist wieder raus.
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AN_PROBE_OUT: ${{ github.workspace }}/probe
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@v2
+
+      - name: reqwest gegen curl, dieselbe URL
+        run: |
+          cargo run --release --example aldi_nord_probe -- "${{ inputs.runden || 3 }}" 2>&1 \
+            | tee "$AN_PROBE_OUT.txt"
+
+      # Der Nachweis nach der Reparatur: zwei echte Filialen, Angebote > 0.
+      - name: Zwei Filialen ueber den reparierten Weg
+        run: |
+          cargo run --release --example aldi_nord_probe -- markets 2>&1 \
+            | tee "$AN_PROBE_OUT-markets.txt"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: aldi-nord-probe
+          path: |
+            probe/
+            probe.txt
+            probe-markets.txt
+          retention-days: 3
