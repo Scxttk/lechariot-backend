@@ -848,7 +848,13 @@ pub struct Enrichment {
 ///
 /// Kennt die Tabelle das Wort nicht, heißt der Begriff manchmal einfach schon
 /// wie das Regal (`backwaren`, `obst`) — dann entscheidet der Name.
-fn kategorie_fuer_begriff(begriff: &str) -> Option<&'static str> {
+///
+/// **Öffentlich, weil die App dieselbe Antwort braucht.** Ein Artikel ohne
+/// Wochenangebot hat keinen Treffer und damit kein Regal (App-#157); geraten
+/// wird dort nicht, sondern derselbe Begriff gefragt wie hier. Die Antwort
+/// reist als Feld `warengruppe` im Wörterbuch mit — `examples/warengruppen.rs`
+/// schreibt sie, `tests/warengruppen.rs` hält sie an dieser Funktion fest.
+pub fn kategorie_fuer_begriff(begriff: &str) -> Option<&'static str> {
     RULES
         .iter()
         .filter(|(kw, _, _)| keyword_matches(begriff, kw))
