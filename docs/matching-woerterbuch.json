@@ -22,7 +22,8 @@
     "russisch brot",
     "knäckebrot",
     "knäckebrote"
-   ]
+   ],
+   "warengruppe": "Backwaren"
   },
   "toast": {
    "exact": [
@@ -31,7 +32,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Backwaren"
   },
   "baguette": {
    "exact": [
@@ -42,7 +44,8 @@
     "baguette"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Backwaren"
   },
   "knäckebrot": {
    "exact": [
@@ -54,7 +57,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "milch": {
    "exact": [
@@ -87,7 +91,8 @@
     "käsescheiben",
     "quark",
     "camembert"
-   ]
+   ],
+   "warengruppe": "Molkerei & Eier"
   },
   "butter": {
    "exact": [
@@ -112,7 +117,8 @@
     "buttermilch",
     "butterkeks",
     "nut butter"
-   ]
+   ],
+   "warengruppe": "Molkerei & Eier"
   },
   "käse": {
    "exact": [
@@ -168,7 +174,8 @@
     "käselaugenstange",
     "käseschnecke",
     "mascarpone joghurt"
-   ]
+   ],
+   "warengruppe": "Molkerei & Eier"
   },
   "frischkäse": {
    "exact": [
@@ -179,7 +186,8 @@
    "prefix": [
     "frischkäse"
    ],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "mozzarella": {
    "exact": [
@@ -192,7 +200,8 @@
    "prefix": [
     "mozzarella"
    ],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "feta": {
    "exact": [
@@ -202,7 +211,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "quark": {
    "exact": [
@@ -219,7 +229,8 @@
    "block": [
     "quarkbällchen",
     "quarktasche"
-   ]
+   ],
+   "warengruppe": "Molkerei & Eier"
   },
   "joghurt": {
    "exact": [
@@ -235,7 +246,8 @@
    "prefix": [
     "joghurt"
    ],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "sahne": {
    "exact": [
@@ -255,7 +267,8 @@
    "block": [
     "sahnetorte",
     "sahnebonbon"
-   ]
+   ],
+   "warengruppe": "Molkerei & Eier"
   },
   "eier": {
    "exact": [
@@ -272,7 +285,8 @@
     "eierlikör",
     "eiernudeln",
     "eierkuchen"
-   ]
+   ],
+   "warengruppe": "Molkerei & Eier"
   },
   "tomaten": {
    "exact": [
@@ -296,7 +310,8 @@
     "tomatenketchup",
     "tomatensaft",
     "tomatensuppe"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "gurke": {
    "exact": [
@@ -315,7 +330,8 @@
     "gewürzgurken",
     "essiggurken",
     "gurkensticks"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "paprika": {
    "exact": [
@@ -329,7 +345,8 @@
    "block": [
     "paprikachips",
     "paprikasauce"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "salat": {
    "exact": [
@@ -363,7 +380,8 @@
     "salatmayonnaise",
     "salatgurke",
     "salatgurken"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "zwiebeln": {
    "exact": [
@@ -382,7 +400,8 @@
     "zwiebelringe",
     "zwiebelkuchen",
     "zwiebelmettwurst"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "knoblauch": {
    "exact": [
@@ -393,7 +412,8 @@
    "block": [
     "knoblauchbaguette",
     "knoblauchsauce"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "kartoffeln": {
    "exact": [
@@ -417,7 +437,8 @@
     "kartoffelecken",
     "kartoffelsnacks",
     "kartoffelprodukt"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "möhren": {
    "exact": [
@@ -432,7 +453,8 @@
     "möhren"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "äpfel": {
    "exact": [
@@ -451,7 +473,8 @@
     "apfelkuchen",
     "apfelessig",
     "apfelringe"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "bananen": {
    "exact": [
@@ -462,7 +485,8 @@
    "prefix": [],
    "block": [
     "bananenmilch"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "zitronen": {
    "exact": [
@@ -475,7 +499,8 @@
    "block": [
     "zitronensaft",
     "zitronenlimonade"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "orangen": {
    "exact": [
@@ -489,7 +514,8 @@
    "block": [
     "orangensaft",
     "orangenlimonade"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "beeren": {
    "exact": [
@@ -505,7 +531,8 @@
    "block": [
     "erdbeermarmelade",
     "erdbeerjoghurt"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "erdbeeren": {
    "exact": [
@@ -517,7 +544,8 @@
     "erdbeermarmelade",
     "erdbeerjoghurt",
     "erdbeerkonfitüre"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "himbeeren": {
    "exact": [
@@ -525,7 +553,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "heidelbeeren": {
    "exact": [
@@ -534,7 +563,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "brombeeren": {
    "exact": [
@@ -542,7 +572,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "johannisbeeren": {
    "exact": [
@@ -550,7 +581,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "trauben": {
    "exact": [
@@ -565,7 +597,8 @@
    "block": [
     "traubensaft",
     "traubenzucker"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "melone": {
    "exact": [
@@ -579,7 +612,8 @@
     "melone"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "pfirsich": {
    "exact": [
@@ -605,7 +639,8 @@
    "block": [
     "pflaumentomaten",
     "minipflaumen"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "avocado": {
    "exact": [
@@ -614,7 +649,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "zucchini": {
    "exact": [
@@ -622,7 +658,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "aubergine": {
    "exact": [
@@ -631,7 +668,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "brokkoli": {
    "exact": [
@@ -656,7 +694,8 @@
     "brokkoli"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "pilze": {
    "exact": [
@@ -673,7 +712,8 @@
    "block": [
     "pilzpfanne",
     "pilzsauce"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "hackfleisch": {
    "exact": [
@@ -692,7 +732,8 @@
    ],
    "block": [
     "hacksteaks"
-   ]
+   ],
+   "warengruppe": "Fleisch & Wurst"
   },
   "hähnchen": {
    "exact": [
@@ -718,7 +759,8 @@
     "schweinemedaillons",
     "rindfleisch",
     "rindermedaillons"
-   ]
+   ],
+   "warengruppe": "Fleisch & Wurst"
   },
   "pute": {
    "exact": [
@@ -736,7 +778,8 @@
    ],
    "block": [
     "putenwurst"
-   ]
+   ],
+   "warengruppe": "Fleisch & Wurst"
   },
   "kondensmilch": {
    "exact": [
@@ -744,7 +787,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "kokosmilch": {
    "exact": [
@@ -753,7 +797,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "lamm": {
    "exact": [
@@ -766,7 +811,8 @@
    "prefix": [
     "lammkeule"
    ],
-   "block": []
+   "block": [],
+   "warengruppe": "Fleisch & Wurst"
   },
   "schwein": {
    "exact": [
@@ -800,7 +846,8 @@
    "prefix": [
     "schweine"
    ],
-   "block": []
+   "block": [],
+   "warengruppe": "Fleisch & Wurst"
   },
   "rind": {
    "exact": [
@@ -833,7 +880,8 @@
     "hacksteaks",
     "putensteaks",
     "steakhouse"
-   ]
+   ],
+   "warengruppe": "Fleisch & Wurst"
   },
   "bratwurst": {
    "exact": [
@@ -849,7 +897,8 @@
    "prefix": [
     "bratwurst"
    ],
-   "block": []
+   "block": [],
+   "warengruppe": "Fleisch & Wurst"
   },
   "wurst": {
    "exact": [
@@ -913,7 +962,8 @@
    ],
    "block": [
     "twister"
-   ]
+   ],
+   "warengruppe": "Fleisch & Wurst"
   },
   "fisch": {
    "exact": [
@@ -968,7 +1018,8 @@
     "putenbrustfilet",
     "lachsschinken",
     "lachsrolle"
-   ]
+   ],
+   "warengruppe": "Fisch"
   },
   "nudeln": {
    "exact": [
@@ -1000,7 +1051,8 @@
     "pasta sauce",
     "pastasauce",
     "pizza pasta"
-   ]
+   ],
+   "warengruppe": "Vorräte & Kochen"
   },
   "reis": {
    "exact": [
@@ -1021,7 +1073,8 @@
     "reisdrink",
     "puffreis",
     "wassereis"
-   ]
+   ],
+   "warengruppe": "Vorräte & Kochen"
   },
   "mehl": {
    "exact": [
@@ -1036,7 +1089,8 @@
     "mehl"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "zucker": {
    "exact": [
@@ -1052,7 +1106,8 @@
     "traubenzucker",
     "vanillezucker",
     "zuckerrübensirup"
-   ]
+   ],
+   "warengruppe": "Vorräte & Kochen"
   },
   "salz": {
    "exact": [
@@ -1065,7 +1120,8 @@
    "block": [
     "salzstangen",
     "salzbrezeln"
-   ]
+   ],
+   "warengruppe": "Vorräte & Kochen"
   },
   "öl": {
    "exact": [
@@ -1085,7 +1141,8 @@
     "oel"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "essig": {
    "exact": [
@@ -1100,7 +1157,8 @@
    ],
    "block": [
     "essiggurken"
-   ]
+   ],
+   "warengruppe": "Vorräte & Kochen"
   },
   "müsli": {
    "exact": [
@@ -1120,7 +1178,8 @@
    "prefix": [],
    "block": [
     "müsliriegel"
-   ]
+   ],
+   "warengruppe": "Vorräte & Kochen"
   },
   "marmelade": {
    "exact": [
@@ -1143,7 +1202,8 @@
    "block": [
     "eisbecher",
     "biscuits"
-   ]
+   ],
+   "warengruppe": "Vorräte & Kochen"
   },
   "kaffee": {
    "exact": [
@@ -1168,7 +1228,8 @@
     "eiskaffee",
     "kaffeeweißer",
     "haferdrink"
-   ]
+   ],
+   "warengruppe": "Getränke"
   },
   "tee": {
    "exact": [
@@ -1187,7 +1248,8 @@
    "prefix": [],
    "block": [
     "eistee"
-   ]
+   ],
+   "warengruppe": "Getränke"
   },
   "wasser": {
    "exact": [
@@ -1199,7 +1261,8 @@
     "wasser"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Getränke"
   },
   "saft": {
    "exact": [
@@ -1215,7 +1278,8 @@
     "schorle"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Getränke"
   },
   "limonade": {
    "exact": [
@@ -1243,7 +1307,8 @@
     "limonade"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Getränke"
   },
   "bier": {
    "exact": [
@@ -1274,7 +1339,8 @@
     "trauben",
     "tafeltrauben",
     "brötchen hell"
-   ]
+   ],
+   "warengruppe": "Alkohol"
   },
   "wein": {
    "exact": [
@@ -1323,7 +1389,8 @@
     "weinsauerkraut",
     "weintrauben",
     "weinessig"
-   ]
+   ],
+   "warengruppe": "Alkohol"
   },
   "schokolade": {
    "exact": [
@@ -1349,7 +1416,8 @@
    "block": [
     "schokoladenpudding",
     "trinkschokolade"
-   ]
+   ],
+   "warengruppe": "Süßes & Snacks"
   },
   "kekse": {
    "exact": [
@@ -1370,7 +1438,8 @@
    "block": [
     "reiswaffeln",
     "maiswaffeln"
-   ]
+   ],
+   "warengruppe": "Süßes & Snacks"
   },
   "chips": {
    "exact": [
@@ -1390,7 +1459,8 @@
     "chips"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Süßes & Snacks"
   },
   "eis": {
    "exact": [
@@ -1416,7 +1486,8 @@
     "eistee",
     "eiswürfel",
     "eiskaffee"
-   ]
+   ],
+   "warengruppe": "Tiefkühl"
   },
   "pizza": {
    "exact": [
@@ -1430,7 +1501,8 @@
    "block": [
     "pizzabrötchen",
     "pizzakäse"
-   ]
+   ],
+   "warengruppe": "Tiefkühl"
   },
   "tiefkühlgemüse": {
    "exact": [
@@ -1454,7 +1526,8 @@
    ],
    "block": [
     "gemüsebrühe"
-   ]
+   ],
+   "warengruppe": "Tiefkühl"
   },
   "pommes": {
    "exact": [
@@ -1468,7 +1541,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Tiefkühl"
   },
   "tofu": {
    "exact": [
@@ -1482,7 +1556,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "eintopf": {
    "exact": [
@@ -1498,7 +1573,8 @@
     "suppe"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "konserven": {
    "exact": [
@@ -1528,7 +1604,8 @@
    "prefix": [],
    "block": [
     "antipasti creme"
-   ]
+   ],
+   "warengruppe": "Vorräte & Kochen"
   },
   "soßen": {
    "exact": [
@@ -1558,7 +1635,8 @@
     "ketchup"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "gewürze": {
    "exact": [
@@ -1579,7 +1657,8 @@
    "prefix": [],
    "block": [
     "gewürzgurken"
-   ]
+   ],
+   "warengruppe": "Vorräte & Kochen"
   },
   "backwaren": {
    "exact": [
@@ -1620,7 +1699,8 @@
     "gebäck"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Backwaren"
   },
   "windeln/hygiene": {
    "exact": [
@@ -1638,7 +1718,8 @@
    "prefix": [],
    "block": [
     "stofftaschentücher"
-   ]
+   ],
+   "warengruppe": "Drogerie"
   },
   "spirituosen": {
    "exact": [
@@ -1678,7 +1759,8 @@
     "limes"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Alkohol"
   },
   "pudding": {
    "exact": [
@@ -1699,7 +1781,8 @@
    "prefix": [
     "pudding"
    ],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "nüsse": {
    "exact": [
@@ -1725,7 +1808,8 @@
     "cashewkerne",
     "walnusskerne"
    ],
-   "block": []
+   "block": [],
+   "warengruppe": "Süßes & Snacks"
   },
   "margarine": {
    "exact": [
@@ -1738,7 +1822,8 @@
     "margarine"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "fertiggericht": {
    "exact": [
@@ -1767,7 +1852,8 @@
    "prefix": [],
    "block": [
     "tortilla"
-   ]
+   ],
+   "warengruppe": "Vorräte & Kochen"
   },
   "schoten/hülsen": {
    "exact": [
@@ -1780,7 +1866,8 @@
     "schoten"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "protein/fitness": {
    "exact": [
@@ -1817,7 +1904,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Fleisch & Wurst"
   },
   "naturtofu": {
    "exact": [
@@ -1837,7 +1925,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "fruchtsaft": {
    "exact": [
@@ -1848,7 +1937,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "cola": {
    "exact": [
@@ -1861,7 +1951,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Getränke"
   },
   "haargel": {
    "exact": [
@@ -1874,7 +1965,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "gesichtsmaske": {
    "exact": [
@@ -1931,7 +2023,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "kohletabletten": {
    "exact": [
@@ -1941,7 +2034,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "kondome": {
    "exact": [
@@ -1961,7 +2055,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "klobürste": {
    "exact": [
@@ -1972,7 +2067,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Haushalt"
   },
   "möbelpolitur": {
    "exact": [
@@ -1994,7 +2090,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Backwaren"
   },
   "schokobrötchen": {
    "exact": [
@@ -2004,7 +2101,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Backwaren"
   },
   "knoblauchpulver": {
    "exact": [
@@ -2014,7 +2112,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "mandelaroma": {
    "exact": [
@@ -2025,7 +2124,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Süßes & Snacks"
   },
   "vanillesoße": {
    "exact": [
@@ -2035,7 +2135,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "krabbenchips": {
    "exact": [
@@ -2045,7 +2146,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Süßes & Snacks"
   },
   "geschenk": {
    "exact": [
@@ -2102,7 +2204,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Haushalt"
   },
   "waschmittel": {
    "exact": [
@@ -2114,7 +2217,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Haushalt"
   },
   "spülmittel": {
    "exact": [
@@ -2124,7 +2228,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Haushalt"
   },
   "besteck": {
    "exact": [
@@ -2148,7 +2253,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Haushalt"
   },
   "backform": {
    "exact": [
@@ -2160,7 +2266,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Haushalt"
   },
   "küchenhelfer": {
    "exact": [
@@ -2173,7 +2280,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Haushalt"
   },
   "schere": {
    "exact": [
@@ -2195,7 +2303,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Sonstiges"
   },
   "luftballon": {
    "exact": [
@@ -2218,7 +2327,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Sonstiges"
   },
   "büroklammern": {
    "exact": [
@@ -2241,7 +2351,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Tierbedarf"
   },
   "katzenfutter": {
    "exact": [
@@ -2252,7 +2363,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Tierbedarf"
   },
   "vogelfutter": {
    "exact": [
@@ -2277,7 +2389,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Sonstiges"
   },
   "blumentopf": {
    "exact": [
@@ -2289,7 +2402,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Sonstiges"
   },
   "zimmerpflanze": {
    "exact": [
@@ -2301,7 +2415,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Sonstiges"
   },
   "gartenwerkzeug": {
    "exact": [
@@ -2315,7 +2430,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Sonstiges"
   },
   "schrauben": {
    "exact": [
@@ -2398,7 +2514,8 @@
    "block": [
     "schale",
     "schalen"
-   ]
+   ],
+   "warengruppe": "Sonstiges"
   },
   "müllbeutel": {
    "exact": [
@@ -2410,7 +2527,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Haushalt"
   },
   "alufolie": {
    "exact": [
@@ -2432,7 +2550,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Haushalt"
   },
   "putzlappen": {
    "exact": [
@@ -2459,7 +2578,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Haushalt"
   },
   "servietten": {
    "exact": [
@@ -2480,7 +2600,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Haushalt"
   },
   "streichhölzer": {
    "exact": [
@@ -2501,7 +2622,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Haushalt"
   },
   "glühbirne": {
    "exact": [
@@ -2512,7 +2634,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "strohhalme": {
    "exact": [
@@ -2535,7 +2658,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Haushalt"
   },
   "stifte": {
    "exact": [
@@ -2571,7 +2695,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "duschgel": {
    "exact": [
@@ -2582,7 +2707,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "shampoo": {
    "exact": [
@@ -2593,7 +2719,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "deo": {
    "exact": [
@@ -2605,7 +2732,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "zahnpasta": {
    "exact": [
@@ -2617,7 +2745,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "handcreme": {
    "exact": [
@@ -2629,7 +2758,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "sonnencreme": {
    "exact": [
@@ -2640,7 +2770,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "rasierer": {
    "exact": [
@@ -2652,7 +2783,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "wattepads": {
    "exact": [
@@ -2675,7 +2807,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "schmerzmittel": {
    "exact": [
@@ -2698,7 +2831,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "tampons": {
    "exact": [
@@ -2710,7 +2844,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "makeup": {
    "exact": [
@@ -2733,7 +2868,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "mayonnaise": {
    "exact": [
@@ -2746,7 +2882,8 @@
    "prefix": [],
    "block": [
     "salatmayonnaise"
-   ]
+   ],
+   "warengruppe": "Vorräte & Kochen"
   },
   "senf": {
    "exact": [
@@ -2760,7 +2897,8 @@
    "block": [
     "senfkörner",
     "feigensenf"
-   ]
+   ],
+   "warengruppe": "Vorräte & Kochen"
   },
   "sojasauce": {
    "exact": [
@@ -2771,7 +2909,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "pesto": {
    "exact": [
@@ -2781,7 +2920,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "hummus": {
    "exact": [
@@ -2791,7 +2931,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "grillsauce": {
    "exact": [
@@ -2804,7 +2945,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "ingwer": {
    "exact": [
@@ -2817,7 +2959,8 @@
    "block": [
     "ingwertee",
     "ingwershot"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "koriander": {
    "exact": [
@@ -2854,7 +2997,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "chili": {
    "exact": [
@@ -2879,7 +3023,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Kinder"
   },
   "maultaschen": {
    "exact": [
@@ -2890,7 +3035,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Sonstiges"
   },
   "wraps": {
    "exact": [
@@ -2901,7 +3047,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "hamburger": {
    "exact": [
@@ -2914,7 +3061,8 @@
    "prefix": [],
    "block": [
     "hamburgerbrötchen"
-   ]
+   ],
+   "warengruppe": "Fleisch & Wurst"
   },
   "hartkäse": {
    "exact": [
@@ -2926,7 +3074,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "kräuterfrischkäse": {
    "exact": [
@@ -2937,7 +3086,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "panettone": {
    "exact": [
@@ -2958,7 +3108,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Süßes & Snacks"
   },
   "trüffel": {
    "exact": [
@@ -2979,7 +3130,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Süßes & Snacks"
   },
   "kokoswasser": {
    "exact": [
@@ -2988,7 +3140,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Getränke"
   },
   "pfefferminztee": {
    "exact": [
@@ -3012,7 +3165,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Alkohol"
   },
   "blutorangen": {
    "exact": [
@@ -3022,7 +3176,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "chicorée": {
    "exact": [
@@ -3043,7 +3198,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "kiwi": {
    "exact": [
@@ -3054,7 +3210,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "guave": {
    "exact": [
@@ -3077,7 +3234,8 @@
    "prefix": [],
    "block": [
     "haselnusscreme"
-   ]
+   ],
+   "warengruppe": "Süßes & Snacks"
   },
   "kastanien": {
    "exact": [
@@ -3125,7 +3283,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "mangold": {
    "exact": [
@@ -3134,7 +3293,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "preiselbeeren": {
    "exact": [
@@ -3147,7 +3307,8 @@
    "prefix": [],
    "block": [
     "preiselbeersauce"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "quinoa": {
    "exact": [
@@ -3172,7 +3333,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "schwarzwurzel": {
    "exact": [
@@ -3191,7 +3353,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "weizengras": {
    "exact": [
@@ -3202,7 +3365,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Alkohol"
   },
   "zitronengras": {
    "exact": [
@@ -3211,7 +3375,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "portulak": {
    "exact": [
@@ -3241,7 +3406,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "lauch": {
    "exact": [
@@ -3262,7 +3428,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "ahornsirup": {
    "exact": [
@@ -3308,7 +3475,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "semmelbrösel": {
    "exact": [
@@ -3417,7 +3585,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "pinienkerne": {
    "exact": [
@@ -3428,7 +3597,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "kokosflocken": {
    "exact": [
@@ -3438,7 +3608,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "mandelmus": {
    "exact": [
@@ -3449,7 +3620,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Süßes & Snacks"
   },
   "marzipan": {
    "exact": [
@@ -3471,7 +3643,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Süßes & Snacks"
   },
   "lebensmittelfarbe": {
    "exact": [
@@ -3492,7 +3665,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "bratensauce": {
    "exact": [
@@ -3507,7 +3681,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Fleisch & Wurst"
   },
   "fischsauce": {
    "exact": [
@@ -3518,7 +3693,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "marinade": {
    "exact": [
@@ -3539,7 +3715,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "kartoffelpüree": {
    "exact": [
@@ -3549,7 +3726,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "knödel": {
    "exact": [
@@ -3571,7 +3749,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "hühnerfrikassee": {
    "exact": [
@@ -3581,7 +3760,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Fleisch & Wurst"
   },
   "cornflakes": {
    "exact": [
@@ -3592,7 +3772,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "couscous": {
    "exact": [
@@ -3601,7 +3782,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "grieß": {
    "exact": [
@@ -3625,7 +3807,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "spätzle": {
    "exact": [
@@ -3646,7 +3829,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "chiasamen": {
    "exact": [
@@ -3665,7 +3849,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "tempeh": {
    "exact": [
@@ -3674,7 +3859,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "bonbons": {
    "exact": [
@@ -3687,7 +3873,8 @@
    "prefix": [],
    "block": [
     "sahnebonbon"
-   ]
+   ],
+   "warengruppe": "Süßes & Snacks"
   },
   "kaugummi": {
    "exact": [
@@ -3696,7 +3883,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Süßes & Snacks"
   },
   "lollis": {
    "exact": [
@@ -3727,7 +3915,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Süßes & Snacks"
   },
   "nougatcreme": {
    "exact": [
@@ -3737,7 +3926,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Drogerie"
   },
   "dörrobst": {
    "exact": [
@@ -3802,7 +3992,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Getränke"
   },
   "tonicwater": {
    "exact": [
@@ -3813,7 +4004,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Getränke"
   },
   "kaffeepads": {
    "exact": [
@@ -3824,7 +4016,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Getränke"
   },
   "schnaps": {
    "exact": [
@@ -3870,7 +4063,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Backwaren"
   },
   "croissant": {
    "exact": [
@@ -3881,7 +4075,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Backwaren"
   },
   "pizzateig": {
    "exact": [
@@ -3895,7 +4090,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Tiefkühl"
   },
   "roggenbrot": {
    "exact": [
@@ -3931,7 +4127,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Getränke"
   },
   "hüttenkäse": {
    "exact": [
@@ -3942,7 +4139,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "magerquark": {
    "exact": [
@@ -3951,7 +4149,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "raclettekäse": {
    "exact": [
@@ -3960,7 +4159,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "reibekäse": {
    "exact": [
@@ -3972,7 +4172,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "ricotta": {
    "exact": [
@@ -3993,7 +4194,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "sojajoghurt": {
    "exact": [
@@ -4003,7 +4205,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "kaffeerahm": {
    "exact": [
@@ -4013,7 +4216,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Getränke"
   },
   "bacon": {
    "exact": [
@@ -4026,7 +4230,8 @@
    "prefix": [],
    "block": [
     "twister"
-   ]
+   ],
+   "warengruppe": "Fleisch & Wurst"
   },
   "fleischwurst": {
    "exact": [
@@ -4038,7 +4243,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Fleisch & Wurst"
   },
   "kassler": {
    "exact": [
@@ -4064,7 +4270,8 @@
    "block": [
     "schinkenwurst",
     "bierschinken"
-   ]
+   ],
+   "warengruppe": "Fleisch & Wurst"
   },
   "muscheln": {
    "exact": [
@@ -4118,7 +4325,8 @@
    "block": [
     "steakhouse",
     "hacksteaks"
-   ]
+   ],
+   "warengruppe": "Fleisch & Wurst"
   },
   "birnen": {
    "exact": [
@@ -4130,7 +4338,8 @@
    "prefix": [],
    "block": [
     "birnenkompott"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "feigen": {
    "exact": [
@@ -4153,7 +4362,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "kaki": {
    "exact": [
@@ -4200,7 +4410,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "quitten": {
    "exact": [
@@ -4241,7 +4452,8 @@
     "grünkohl",
     "rosenkohl",
     "blumenkohl"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "kürbis": {
    "exact": [
@@ -4256,7 +4468,8 @@
    "block": [
     "kürbiskerne",
     "kürbissuppe"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "lauchzwiebeln": {
    "exact": [
@@ -4268,7 +4481,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "pastinaken": {
    "exact": [
@@ -4330,7 +4544,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "basilikum": {
    "exact": [
@@ -4394,7 +4609,8 @@
     "süsskartoffel chips",
     "suesskartoffel chips",
     "süßkartoffelchips"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "essiggurken": {
    "exact": [
@@ -4407,7 +4623,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "kartoffelsalat": {
    "exact": [
@@ -4415,7 +4632,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "nudelsalat": {
    "exact": [
@@ -4423,7 +4641,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "krautsalat": {
    "exact": [
@@ -4434,7 +4653,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "fleischsalat": {
    "exact": [
@@ -4443,7 +4663,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Fleisch & Wurst"
   },
   "röstzwiebeln": {
    "exact": [
@@ -4452,7 +4673,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "tomatensauce": {
    "exact": [
@@ -4466,7 +4688,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "traubensaft": {
    "exact": [
@@ -4474,7 +4697,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "zitronensaft": {
    "exact": [
@@ -4483,7 +4707,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "tomatensaft": {
    "exact": [
@@ -4491,7 +4716,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "vanillezucker": {
    "exact": [
@@ -4500,7 +4726,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "traubenzucker": {
    "exact": [
@@ -4509,7 +4736,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "brühe": {
    "exact": [
@@ -4522,7 +4750,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Vorräte & Kochen"
   },
   "salatdressing": {
    "exact": [
@@ -4535,7 +4764,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "eiswürfel": {
    "exact": [
@@ -4544,7 +4774,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Tiefkühl"
   },
   "kartoffelchips": {
    "exact": [
@@ -4554,7 +4785,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "kartoffelknödel": {
    "exact": [
@@ -4567,7 +4799,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Obst & Gemüse"
   },
   "müsliriegel": {
    "exact": [
@@ -4577,7 +4810,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Süßes & Snacks"
   },
   "salzbrezeln": {
    "exact": [
@@ -4587,7 +4821,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Backwaren"
   },
   "maiswaffeln": {
    "exact": [
@@ -4595,7 +4830,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Süßes & Snacks"
   },
   "milcheis": {
    "exact": [
@@ -4605,7 +4841,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Molkerei & Eier"
   },
   "kuchen": {
    "exact": [
@@ -4619,7 +4856,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Backwaren"
   },
   "fleisch": {
    "exact": [],
@@ -4627,7 +4865,8 @@
     "frikadellen"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Fleisch & Wurst"
   },
   "obst": {
    "exact": [
@@ -4652,7 +4891,8 @@
     "radler",
     "naturradler",
     "obstgarten"
-   ]
+   ],
+   "warengruppe": "Obst & Gemüse"
   },
   "kakao": {
    "exact": [
@@ -4664,7 +4904,8 @@
     "kakao"
    ],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Getränke"
   },
   "ente": {
    "exact": [
@@ -4674,7 +4915,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "warengruppe": "Fleisch & Wurst"
   }
  },
  "marken": {
