@@ -393,6 +393,12 @@ impl Req {
 /// gleichzeitig etwas wollen, stand der Mock. Kein Produktionsfehler — aber
 /// er hätte den Test unmöglich gemacht, der den Upload im Lauf prüft.
 fn spawn_mock() -> (String, Arc<Mutex<Vec<Req>>>) {
+    spawn_mock_with_stored("[]")
+}
+
+/// Wie `spawn_mock`, beantwortet GET-Anfragen aber mit einem vorgegebenen
+/// Rumpf — das ist der Bestand, den der Wochenabgleich vorfindet.
+fn spawn_mock_with_stored(stored: &'static str) -> (String, Arc<Mutex<Vec<Req>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
     let log: Arc<Mutex<Vec<Req>>> = Arc::new(Mutex::new(Vec::new()));
@@ -435,12 +441,16 @@ fn spawn_mock() -> (String, Arc<Mutex<Vec<Req>>>) {
                     reader.read_exact(&mut body).unwrap();
                 }
                 log2.lock().unwrap().push(Req {
-                    method,
+                    method: method.clone(),
                     target,
                     headers,
                     body: String::from_utf8_lossy(&body).into_owned(),
                 });
-                let resp = "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 2\r\n\r\n[]";
+                let answer = if method == "GET" { stored } else { "[]" };
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{answer}",
+                    answer.len()
+                );
                 if reader.get_mut().write_all(resp.as_bytes()).is_err() {
                     break;
                 }
@@ -739,10 +749,11 @@ fn push_batches_deletes_and_upserts() {
     run_push(&db_path, &base_url).unwrap();
 
     let reqs = log.lock().unwrap().clone();
-    // 1x DELETE (stale), 2x POST offers (100 + 50), 2x POST price_history.
-    // Der Regions-Upsert, der hier bis Migration v16 als sechster stand, ist
-    // weg — die Tabelle gibt es nicht mehr.
-    assert_eq!(reqs.len(), 5, "Requests: {reqs:#?}");
+    // 1x DELETE (stale), 2x POST offers (100 + 50), 1x GET (Wochenabgleich),
+    // 2x POST price_history. Der Regions-Upsert, der hier bis Migration v16
+    // als sechster stand, ist weg — die Tabelle gibt es nicht mehr.
+    let kinds: Vec<&str> = reqs.iter().map(|r| r.method.as_str()).collect();
+    assert_eq!(kinds, ["DELETE", "POST", "POST", "GET", "POST", "POST"], "Requests: {kinds:?}");
 
     let del = &reqs[0];
     assert_eq!(del.method, "DELETE");
@@ -773,6 +784,13 @@ fn push_batches_deletes_and_upserts() {
                 "{}", b.target);
         assert_eq!(b.header("prefer"), Some("resolution=merge-duplicates"));
     }
+    // Der Abgleich fragt genau EINE Filiale und EINE Woche ab — und weil der
+    // Mock nichts zurückgibt, folgt kein zweites DELETE.
+    let get = &reqs[3];
+    assert_eq!(get.method, "GET");
+    assert!(get.target.contains("market_id=eq.m1"), "{}", get.target);
+    assert!(get.target.contains("valid_from=eq.2026-07-13"), "{}", get.target);
+
     let rows1: Vec<SupabaseRow> = parse_rows(&b1.body);
     let rows2: Vec<SupabaseRow> = parse_rows(&b2.body);
     assert_eq!(rows1.len(), 100);
@@ -1397,4 +1415,92 @@ fn a_leaflet_crop_is_uploaded_to_the_bucket() {
             .any(|(k, v)| k.eq_ignore_ascii_case("x-upsert") && v == "true"),
         "x-upsert fehlt"
     );
+}
+
+// ------------------------------------------------- Wochenabgleich (#84)
+
+/// Der Fall aus der Produktion, in klein: In der Woche stehen fünf Zeilen,
+/// der Lauf findet nur noch drei. Die beiden übrigen führt die Quelle nicht
+/// mehr — sie müssen weg, und zwar nur sie.
+///
+/// Am 20.08. waren es 166 gespeicherte gegen 104 gefundene Zeilen bei
+/// ALDI SÜD; drei der übrigen waren Angebote der Vorwoche zum alten Preis.
+#[test]
+fn a_week_loses_what_the_run_no_longer_finds() {
+    let db_path = temp_db("woche-abgleich");
+    seed_db(&db_path, 3); // Produkt 000..002
+    let (base_url, log) = spawn_mock_with_stored(
+        r#"[{"id":1,"product":"Produkt 000"},
+            {"id":2,"product":"Produkt 001"},
+            {"id":3,"product":"Produkt 002"},
+            {"id":4,"product":"Aperol 11 % 700 ml"},
+            {"id":5,"product":"Stremellachs 125 g, Natur"}]"#,
+    );
+
+    run_push(&db_path, &base_url).unwrap();
+
+    let reqs = log.lock().unwrap().clone();
+    let deletes: Vec<&Req> = reqs.iter().filter(|r| r.method == "DELETE").collect();
+    // Erstes DELETE: die alten Wochen wie bisher. Zweites: der Abgleich.
+    assert_eq!(deletes.len(), 2, "Requests: {:?}", reqs.iter().map(|r| &r.target).collect::<Vec<_>>());
+    let decoded = deletes[1].target.replace("%28", "(").replace("%29", ")").replace("%2C", ",");
+    assert!(decoded.contains("id=in.(4,5)"), "{}", deletes[1].target);
+    // Gelöscht wird über die Zeilen-ID, nicht über den Produktnamen — sonst
+    // müssten Komma, Prozentzeichen und Umlaut durch die URL.
+    assert!(!decoded.contains("product"), "{}", deletes[1].target);
+}
+
+/// Ein Scrape, der nur die halbe Quelle gesehen hat, sieht von hier aus
+/// genauso aus wie ein Prospekt, aus dem die halbe Woche verschwunden ist.
+/// Im Zweifel bleibt die Zeile stehen: Ein Rest kostet eine Nacht, ein
+/// falsches Löschen kostet der App den halben Markt.
+#[test]
+fn half_a_week_missing_is_a_warning_not_a_delete() {
+    let db_path = temp_db("woche-wachhund");
+    seed_db(&db_path, 3);
+    let (base_url, log) = spawn_mock_with_stored(
+        r#"[{"id":1,"product":"Produkt 000"},
+            {"id":2,"product":"Produkt 001"},
+            {"id":3,"product":"Produkt 002"},
+            {"id":4,"product":"Fremd 1"},
+            {"id":5,"product":"Fremd 2"},
+            {"id":6,"product":"Fremd 3"},
+            {"id":7,"product":"Fremd 4"}]"#,
+    );
+
+    run_push(&db_path, &base_url).unwrap();
+
+    let reqs = log.lock().unwrap().clone();
+    let deletes: Vec<&Req> = reqs.iter().filter(|r| r.method == "DELETE").collect();
+    assert_eq!(deletes.len(), 1, "nur das Löschen alter Wochen, kein Abgleich");
+    assert!(!deletes[0].target.contains("id=in."), "{}", deletes[0].target);
+}
+
+/// Der Abgleich läuft je Filiale und Woche. Zwei Filialen derselben Kette in
+/// einer PLZ dürfen sich nicht gegenseitig abräumen — derselbe Fehler, gegen
+/// den seit v13 schon das Löschen alter Wochen gefiltert wird.
+#[test]
+fn the_week_check_asks_per_branch_and_week() {
+    let db_path = temp_db("woche-je-filiale");
+    let _ = std::fs::remove_file(&db_path);
+    {
+        let conn = db::open(&db_path).unwrap();
+        for id in ["m1", "m2"] {
+            db::upsert_market(&conn, &Market::new(id, "REWE Teststadt")).unwrap();
+            let mut o = offer("Gouda", Some(1.99));
+            o.market_id = id.to_string();
+            o.id = Offer::build_id(id, "Gouda", Some("2026-07-13"));
+            db::upsert_offer(&conn, &o).unwrap();
+        }
+    }
+    let (base_url, log) = spawn_mock();
+
+    run_push(&db_path, &base_url).unwrap();
+
+    let reqs = log.lock().unwrap().clone();
+    let gets: Vec<&Req> = reqs.iter().filter(|r| r.method == "GET").collect();
+    assert_eq!(gets.len(), 2, "je Filiale eine Abfrage: {gets:#?}");
+    assert!(gets.iter().any(|r| r.target.contains("market_id=eq.m1")), "{gets:#?}");
+    assert!(gets.iter().any(|r| r.target.contains("market_id=eq.m2")), "{gets:#?}");
+    assert!(gets.iter().all(|r| r.target.contains("valid_from=eq.2026-07-13")), "{gets:#?}");
 }
