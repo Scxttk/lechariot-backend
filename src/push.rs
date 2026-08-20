@@ -14,6 +14,11 @@ use crate::{db, enrich, storage, units};
 
 pub const BATCH_SIZE: usize = 100;
 
+/// Seitengröße beim Lesen aus `offers`. PostgREST gibt ohne Range höchstens
+/// 1000 Zeilen zurück; ein Lidl-Prospekt liegt mit 751 Zeilen je Filiale und
+/// Woche knapp darunter, also wird ausdrücklich geblättert statt gehofft.
+const BATCH_SIZE_READ: usize = 1000;
+
 /// Zeile im Supabase-Schema (schema.sql + migration_v2.sql + migration_v16).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SupabaseRow {
@@ -781,6 +786,132 @@ pub fn upsert_offer_rows(
     Ok(())
 }
 
+/// Hochgeladene Produktnamen nach (Filiale, Woche) — der Sollstand, gegen den
+/// [`reconcile_week`] die Tabelle abgleicht.
+fn pushed_by_week(rows: &[SupabaseRow]) -> BTreeMap<(&str, &str), HashSet<&str>> {
+    let mut by_week: BTreeMap<(&str, &str), HashSet<&str>> = BTreeMap::new();
+    for row in rows {
+        let Some(valid_from) = row.valid_from.as_deref() else { continue };
+        by_week
+            .entry((row.market_id.as_str(), valid_from))
+            .or_default()
+            .insert(row.product.as_str());
+    }
+    by_week
+}
+
+/// Zeile, wie sie beim Abgleich aus `offers` zurückkommt. `id` ist der
+/// Zähler der Tabelle, nicht der Schlüssel des Scrapers — über ihn wird
+/// gelöscht, damit Produktnamen mit Komma, Anführungszeichen oder Umlaut
+/// nicht durch eine URL müssen.
+#[derive(Debug, Deserialize)]
+struct StoredRow {
+    id: i64,
+    product: String,
+}
+
+/// Wie viel einer gespeicherten Woche ein einzelner Lauf höchstens abräumen
+/// darf. Darüber wird gewarnt statt gelöscht: Dass über die Hälfte eines
+/// Prospekts mitten in der Woche verschwindet, ist der unwahrscheinlichere
+/// Fall — ein Scrape, der nur die halbe Quelle gesehen hat, der häufigere.
+const MAX_SURPLUS_SHARE: f64 = 0.5;
+
+/// Angebote entfernen, die in dieser Woche gespeichert sind, im Lauf aber
+/// nicht mehr vorkamen.
+///
+/// Das Löschen weiter oben nimmt nur **ältere** Wochen (`valid_from.lt.`).
+/// Das reicht, solange die Quelle Gültigkeitsdaten liefert — ALDI SÜD tut das
+/// nicht, `aldi_sued.rs` stempelt deshalb pauschal Mo–Sa der laufenden Woche.
+/// Fällt dort ein Artikel unter der Woche aus dem Katalog, trug ihn die App
+/// bis Samstag weiter: Am 20.08. standen 166 Zeilen in der Tabelle, der Lauf
+/// hatte 104 gefunden, und drei der übrigen waren Angebote der Vorwoche zum
+/// alten Preis (Aperol 9,49 statt 13,99). Siehe #84.
+///
+/// Gelöscht wird ausschließlich in der einen (Filiale, Woche), die dieser
+/// Lauf gerade hochgeladen hat — Nachbarfilialen und andere Wochen bleiben
+/// unberührt, auch die Vorschau auf die Folgewoche.
+fn reconcile_week(
+    client: &reqwest::blocking::Client,
+    cfg: &PushConfig,
+    chain: &str,
+    market_id: &str,
+    valid_from: &str,
+    pushed: &HashSet<&str>,
+) -> Result<usize> {
+    let url = format!("{}/rest/v1/offers", cfg.base_url);
+    let auth = |req: reqwest::blocking::RequestBuilder| {
+        req.header("apikey", &cfg.api_key)
+            .header("Authorization", format!("Bearer {}", cfg.api_key))
+    };
+
+    // Seitenweise lesen: PostgREST liefert ohne Range höchstens 1000 Zeilen,
+    // und ein Lidl-Prospekt kommt dem nahe (751 Zeilen je Filiale und Woche).
+    let mut stored: Vec<StoredRow> = Vec::new();
+    loop {
+        let offset = stored.len();
+        let resp = auth(client.get(&url))
+            .query(&[
+                ("select", "id,product"),
+                ("market_id", &format!("eq.{market_id}")),
+                ("valid_from", &format!("eq.{valid_from}")),
+                ("order", "id.asc"),
+                ("offset", &offset.to_string()),
+                ("limit", &BATCH_SIZE_READ.to_string()),
+            ])
+            .send()
+            .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
+        if !resp.status().is_success() {
+            // check_response bricht in diesem Zweig immer ab; das `map` steht
+            // nur da, damit der Rückgabetyp derselbe bleibt.
+            return check_response(&format!("[{chain}] Woche {valid_from} lesen"), resp).map(|()| 0);
+        }
+        let page: Vec<StoredRow> = resp
+            .json()
+            .with_context(|| format!("[{chain}] Antwort auf die Wochenabfrage lesen"))?;
+        let done = page.len() < BATCH_SIZE_READ;
+        stored.extend(page);
+        if done {
+            break;
+        }
+    }
+
+    let surplus: Vec<&StoredRow> =
+        stored.iter().filter(|row| !pushed.contains(row.product.as_str())).collect();
+    if surplus.is_empty() {
+        return Ok(0);
+    }
+
+    if surplus.len() as f64 > stored.len() as f64 * MAX_SURPLUS_SHARE {
+        eprintln!(
+            "WARNUNG [{chain}] {market_id}: {} von {} Zeilen der Woche {valid_from} kamen im Lauf nicht vor \
+             — das ist zu viel für eine Katalogänderung, es wird nichts gelöscht. \
+             Lief der Scrape vollständig durch?",
+            surplus.len(),
+            stored.len(),
+        );
+        return Ok(0);
+    }
+
+    for batch in surplus.chunks(BATCH_SIZE) {
+        let ids = batch.iter().map(|row| row.id.to_string()).collect::<Vec<_>>().join(",");
+        let resp = auth(client.delete(&url))
+            .query(&[("id", format!("in.({ids})"))])
+            .send()
+            .with_context(|| format!("Supabase nicht erreichbar ({})", cfg.base_url))?;
+        check_response(&format!("[{chain}] Abgelaufene Zeilen der Woche {valid_from} löschen"), resp)?;
+    }
+
+    // Mit Namen, nicht nur mit Zahl: Wer im Nightly-Log liest, dass 62 Zeilen
+    // verschwunden sind, will an den ersten dreien sehen, ob das plausibel ist.
+    let sample: Vec<&str> = surplus.iter().take(3).map(|row| row.product.as_str()).collect();
+    println!(
+        "  [{chain}] {market_id}: {} Zeile(n) der Woche {valid_from} entfernt, die der Lauf nicht mehr fand (z. B. {}).",
+        surplus.len(),
+        sample.join(", "),
+    );
+    Ok(surplus.len())
+}
+
 pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
     let mut groups = load_grouped(opts)?;
     if groups.is_empty() {
@@ -898,6 +1029,16 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
         upsert_offer_rows(&client, cfg, rows, &format!("[{chain}]"))?;
         total += rows.len();
         println!("  [{chain}] {} Angebote hochgeladen ({}).", rows.len(), skipped_note(g));
+
+        // Und jetzt die Gegenrichtung: Was in DIESER Woche steht, der Lauf aber
+        // nicht mehr gefunden hat, muss weg. Ein Fehlschlag hier lässt den Push
+        // stehen — die frischen Zeilen sind oben schon drin, und ein Rest, der
+        // eine Nacht länger liegt, ist kein Grund, die Kette rot zu melden.
+        for ((market_id, valid_from), products) in pushed_by_week(rows) {
+            if let Err(e) = reconcile_week(&client, cfg, chain, market_id, valid_from, &products) {
+                eprintln!("WARNUNG [{chain}] {market_id}/{valid_from}: Wochenabgleich fehlgeschlagen: {e:#}");
+            }
+        }
     }
 
     // Preis-Historie best-effort mitschreiben: Fehler (z. B. Tabelle noch
