@@ -403,7 +403,10 @@ mod tests {
         assert_eq!(keys_cat("Dinkel-Bürli", "Bäckerei"), vec!["backwaren"]);
         assert_eq!(keys_cat("Kreatinpulver", "Sportnahrung"), vec!["protein/fitness"]);
         assert_eq!(keys_cat("Grissotti 200 g, Sesam", "Chips & Knabbereien"), vec!["chips"]);
-        assert_eq!(keys_cat("Fruchtgummi 175 g, Quaxi", "Lakritz & Fruchtgummi"), vec!["schokolade"]);
+        assert_eq!(
+            keys_cat("Fruchtgummi 175 g, Quaxi", "Lakritz & Fruchtgummi"),
+            vec!["schokolade", "fruchtgummi"]
+        );
         // Bis Tranche 4 war „nudeln" die feinste Antwort — und sie kam über
         // die Kategorie, nicht über den Titel. Jetzt trägt der Titel selbst
         // einen Begriff, und der Fall sagt, was er immer meinte.
@@ -472,8 +475,12 @@ mod tests {
         hat("BBQ Ribs", "schwein");
         hat("Rouladen vom Rind", "rind");
         hat("Wade vom Jungbullen", "rind");
-        hat("Lauch", "brokkoli");
-        hat("Bio Staudensellerie", "brokkoli");
+        // Bis zur Runde vom 25.08. trugen beide `brokkoli` — der Begriff war
+        // der Sammelplatz fürs übrige Gemüse. Er ist es nicht mehr (die
+        // Begründung steht in der Tranche 12 des Eval-Skripts); die Zeilen
+        // behalten ihren eigenen Begriff, und der ist der genauere.
+        hat("Lauch", "lauch");
+        hat("Bio Staudensellerie", "sellerie");
         hat("Grapefruit", "obst");
         hat("Passionsfrucht", "obst");
         hat("Petersilie", "gewürze");
@@ -627,8 +634,8 @@ mod tests {
         // unberührt: `käse` darf es nicht sein.
         let laugen = keys("Laugenstange mit Käse");
         assert!(!laugen.contains(&"käse".to_string()), "{laugen:?}");
-        assert_eq!(laugen, vec!["backwaren"]);
-        assert_eq!(keys("Gouda am Stück"), vec!["käse"], "echter Käse bleibt");
+        assert_eq!(laugen, vec!["backwaren", "laugengebäck"]);
+        assert_eq!(keys("Gouda am Stück"), vec!["käse", "gouda"], "echter Käse bleibt");
 
         // `arla → milch` war mehrdeutig: Arla macht Milch UND Käse UND Butter.
         // Statt der Marke stehen jetzt die Produktlinien im Wörterbuch —
@@ -640,7 +647,7 @@ mod tests {
     #[test]
     fn regressionsfaelle() {
         assert_eq!(keys("Nadler Edle Matjesfilets"), vec!["fisch"]);
-        assert_eq!(keys("Tomatenmark"), vec!["konserven"]);
+        assert_eq!(keys("Tomatenmark"), vec!["konserven", "dosentomaten"]);
         // Wörterbuch-Runde 2026-07-31, Op 6: Diese Zeile war nicht bloß ein
         // toter Eintrag, sondern die eine echte Abweichung zwischen den
         // Maschinen — Rust blockte hier, Python nicht (Details bei
@@ -650,7 +657,7 @@ mod tests {
         assert!(ts.contains(&"fisch".to_string()) && !ts.contains(&"salat".to_string()), "{ts:?}");
         assert!(keys("Kirschtomaten").contains(&"tomaten".to_string()));
         assert!(keys("Milka Schokolade").contains(&"schokolade".to_string()));
-        assert!(keys("Chicorée").contains(&"brokkoli".to_string()));
+        assert!(keys("Chicorée").contains(&"chicorée".to_string()));
         assert!(keys("Mini-Pak-Choi").contains(&"obst".to_string()));
         // Aus der Feedback-Schleife (docs/feedback-auswertung.md): „Käse“ traf
         // ein Schinken-Käse-Croissant. `croissant` steht seither auf der
@@ -708,20 +715,21 @@ mod tests {
         assert!(!keys("Milch-Schnitte").contains(&"milch".to_string()));
         // Aus dem Alle-Regionen-Audit (2026-07-22, frische KW nach Neu-Scrape):
         // echte Food-Lücken geschlossen.
-        assert!(keys("Zwetschgen, lose").contains(&"pfirsich".to_string()));
-        // Wörterbuch-Runde 2026-07-31, Op 4 — die Antwort auf die alte
-        // `pflaumen`-Frage: Der Begriff fehlt nicht, `pfirsich` fasst
-        // Steinobst bewusst zusammen. Der Defekt war die Kollision mit
-        // Pflaumentomaten; die zwei Blockeinträge lösen genau sie.
+        assert!(keys("Zwetschgen, lose").contains(&"pflaumen".to_string()));
+        // Die alte `pflaumen`-Frage, seit dem 25.08. andersherum beantwortet:
+        // `pfirsich` fasste Steinobst zusammen, und elf Meldungen in dreißig
+        // Tagen sagten, dass wer Pfirsich sucht keine Aprikosen meint. Die
+        // Sorten haben jetzt eigene Begriffe. Was bleibt, ist die Kollision
+        // mit Pflaumentomaten — die Blockeinträge wandern mit der Sorte.
         let minipfl = keys("Minipflaumen Tomaten");
-        assert!(!minipfl.contains(&"pfirsich".to_string()), "{minipfl:?}");
+        assert!(!minipfl.contains(&"pflaumen".to_string()), "{minipfl:?}");
         assert!(minipfl.contains(&"tomaten".to_string()));
         let pfltom = keys("Mini Pflaumentomaten");
-        assert!(!pfltom.contains(&"pfirsich".to_string()), "{pfltom:?}");
+        assert!(!pfltom.contains(&"pflaumen".to_string()), "{pfltom:?}");
         assert!(pfltom.contains(&"tomaten".to_string()));
         // Gegenprobe: echtes Steinobst behält `pfirsich`.
-        assert_eq!(keys("Pflaumen"), vec!["pfirsich"]);
-        assert_eq!(keys("Zwetschgen*"), vec!["pfirsich"]);
+        assert_eq!(keys("Pflaumen"), vec!["pflaumen"]);
+        assert_eq!(keys("Zwetschgen*"), vec!["pflaumen"]);
         // Wörterbuch-Runde 2026-07-31, Op 7: Zwei Blocklisten führten je einen
         // Fließtext statt eines Wortes („kartoffelchips fällt unter chips",
         // „buttergemüse zulässig") — tote Einträge, denn eine Blockliste
@@ -958,7 +966,7 @@ mod tests {
         // Gegenproben: Das Veto muss bleiben, wo es gebaut wurde.
         assert_eq!(
             match_keys("Dtsch. Zwetschgen, lose", None, Some("Obst, Gemüse, Pflanzen")),
-            vec!["pfirsich"]
+            vec!["pflaumen"]
         );
         assert!(match_keys("Jacobs Krönung", None, Some("Kaffee, Tee, Süßwaren"))
             .contains(&"kaffee".to_string()));
@@ -1140,11 +1148,11 @@ mod tests {
     #[test]
     fn artikelzeichen_tranche_4() {
         assert_eq!(keys("NESCAFÉ Farmers Origins Kaffeekapseln*"), vec!["kaffee", "kaffeepads"]);
-        assert_eq!(keys("GORDON'S London Dry Gin*"), vec!["spirituosen", "schnaps"]);
+        assert_eq!(keys("GORDON'S London Dry Gin*"), vec!["spirituosen", "schnaps", "gin"]);
         assert_eq!(keys("NATURGUT Bio Mie-Nudeln*"), vec!["nudeln", "glasnudeln"]);
 
         // Gegenproben: die groben Begriffe bleiben, wo nichts Feineres passt.
-        assert_eq!(keys("Barilla Spaghetti No. 5"), vec!["nudeln"]);
+        assert_eq!(keys("Barilla Spaghetti No. 5"), vec!["nudeln", "spaghetti"]);
         assert_eq!(keys("Dallmayr prodomo gemahlen"), vec!["kaffee"]);
     }
 
@@ -1321,7 +1329,7 @@ mod tests {
         for (titel, tag) in [
             ("ERASCO Eintopf", "eintopf"),
             ("Reines Sonnenblumenöl 1 l", "öl"),
-            ("Blumenkohl Stück", "brokkoli"),
+            ("Blumenkohl Stück", "blumenkohl"),
             ("Meica Bratmaxe", "bratwurst"),
             ("SOLVEL Pflanzenmargarine", "margarine"),
         ] {
@@ -1413,7 +1421,7 @@ mod tests {
         // in der Kategorie schlägt das „Pflanzen" (Fund 2026-07-22).
         assert_eq!(
             match_keys("Dtsch. Zwetschgen, lose", None, Some("Obst, Gemüse, Pflanzen")),
-            vec!["pfirsich"]
+            vec!["pflaumen"]
         );
         assert_eq!(
             match_keys("Duschbad", None, Some("Drogerie, Tiernahrung")),
