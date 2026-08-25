@@ -1076,6 +1076,7 @@ V["tomaten"] = (V["tomaten"][0], V["tomaten"][1],
 V["konserven"] = (V["konserven"][0], V["konserven"][1], V["konserven"][2] + [
     "ganze bohnen","bohnenkaffee","schoko","chips","popchips","wraps","brötchen"])
 
+
 # Sorte → Topf. Reist als Feld `oberbegriff` im Wörterbuch mit: Die App
 # braucht die Beziehung, sobald eine Sorte noch keine eigene Zeichnung hat —
 # dann trägt sie das Bild ihres Topfes, statt auf das Kategoriezeichen
@@ -1119,6 +1120,43 @@ for _topf, _sorten in _SORTEN.items():
 V["brokkoli"] = (["brokkoli","broccoli"], ["brokkoli"], [])
 V["pfirsich"] = (["pfirsich","pfirsiche","flachpfirsiche"], ["pfirsiche"],
                  ["pflaumentomaten","minipflaumen"])
+
+# --- Runde 2026-08-25b: Sperren für den Direkttreffer ----------------------
+#
+# **Eine Sperrliste hat ab jetzt zwei Leser.** Sie hat immer schon gesagt, was
+# ein Titel *nicht* ist — „Milch-Schnitte" ist keine Milch —, aber die App
+# fragte sie nur, wenn das Suchwort **nicht** im Titel stand. Genau dort, wo
+# es wörtlich dasteht, ging der Treffer ungeprüft durch. Das sind 30 der 186
+# Feedback-Fälle aus dreißig Tagen und die am häufigsten gemeldeten
+# überhaupt: „Milch-Schnitte" (3×), „Leckermäulchen Milch-Quark" (3×),
+# „Faire Milch Gouda" (2×), „Brot-Aufstrich" (2×).
+#
+# Die App-Seite dieser Runde lässt die Sperren auch für den Titeltreffer
+# gelten. Hier stehen nur die Einträge, die den gemeldeten Zeilen noch
+# fehlten — jeder ist eine gemeldete Zeile, keine Vorsorge.
+V["milch"] = (V["milch"][0], V["milch"][1], V["milch"][2] + [
+    "gouda",     # „LINDENHOF Faire Milch Gouda jung"
+    "dessert",   # „SACHSENMILCH Buttermilch-Dessert"
+])
+# „Brot-Aufstrich" wird zu „brot aufstrich" normalisiert und lief deshalb an
+# der Sperre `brotaufstrich` vorbei — dieselbe Bindestrich-Falle wie bei
+# „Milch-Schnitte". Eine Sperrliste vergleicht Wörter, und aus einem sind
+# hier zwei geworden.
+V["brot"] = (V["brot"][0], V["brot"][1], V["brot"][2] + ["brot aufstrich"])
+V["sahne"] = (V["sahne"][0], V["sahne"][1], V["sahne"][2] + [
+    "toffees",        # „MUH-MUHS Sahne-Toffees"
+    "fruchtjoghurt",  # „K-CLASSIC Sahne-Fruchtjoghurt"
+    "hering",         # „NADLER Sahne Hering filets"
+])
+V["feta"] = (V["feta"][0], V["feta"][1], V["feta"][2] + ["käsekrainer"])
+# Umgekehrt herum, und das war beim Untertranchieren am 25.08. verkehrt
+# angesetzt: „Tafelschokolade 100 g, Joghurt" **ist** eine Tafelschokolade,
+# die Sorte heißt nur Joghurt. Gesperrt gehört sie bei `joghurt`, nicht bei
+# `tafelschokolade` — sonst verliert die Schokolade ihren eigenen Begriff.
+V["tafelschokolade"] = (V["tafelschokolade"][0], V["tafelschokolade"][1],
+                        [b for b in V["tafelschokolade"][2] if b != "joghurt"])
+V["joghurt"] = (V["joghurt"][0], V["joghurt"][1],
+                V["joghurt"][2] + ["tafelschokolade"])
 
 
 # Non-Food-Begriffe im Titel (fängt Non-Food in Food-Kategorien wie „Wochenangebote")

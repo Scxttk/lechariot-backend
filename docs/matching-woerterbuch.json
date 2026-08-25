@@ -21,7 +21,8 @@
     "aufbackbrötchen?",
     "russisch brot",
     "knäckebrot",
-    "knäckebrote"
+    "knäckebrote",
+    "brot aufstrich"
    ],
    "warengruppe": "Backwaren"
   },
@@ -90,7 +91,9 @@
     "bergkäse",
     "käsescheiben",
     "quark",
-    "camembert"
+    "camembert",
+    "gouda",
+    "dessert"
    ],
    "warengruppe": "Molkerei & Eier"
   },
@@ -229,7 +232,9 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": [],
+   "block": [
+    "käsekrainer"
+   ],
    "warengruppe": "Molkerei & Eier"
   },
   "quark": {
@@ -264,7 +269,9 @@
    "prefix": [
     "joghurt"
    ],
-   "block": [],
+   "block": [
+    "tafelschokolade"
+   ],
    "warengruppe": "Molkerei & Eier"
   },
   "sahne": {
@@ -284,7 +291,10 @@
    "prefix": [],
    "block": [
     "sahnetorte",
-    "sahnebonbon"
+    "sahnebonbon",
+    "toffees",
+    "fruchtjoghurt",
+    "hering"
    ],
    "warengruppe": "Molkerei & Eier"
   },
@@ -6551,7 +6561,6 @@
    "prefix": [],
    "block": [
     "müllermilch",
-    "joghurt",
     "schokoladenpudding",
     "trinkschokolade"
    ],

@@ -1255,6 +1255,54 @@ mod tests {
     /// **Pflegerunde 2026-08-08**, Feedback-Runde vom 05.08. plus das
     /// proaktive Audit. Jeder Fall mit Gegenprobe: das gemeldete Produkt
     /// verliert den Begriff, ein echter Treffer behält ihn.
+    /// **Pflegerunde 2026-08-25b**, die Sperren für den Direkttreffer.
+    ///
+    /// Diese Einträge wirken erst zusammen mit der App-Seite: Dort gilt die
+    /// Sperrliste ab jetzt auch dann, wenn das Suchwort wörtlich im Titel
+    /// steht. Hier steht nur, dass das Wörterbuch die gemeldeten Zeilen
+    /// überhaupt kennt — jede mit Gegenprobe, damit die Sperre nicht die
+    /// echten Treffer mitnimmt.
+    #[test]
+    fn pflegerunde_2026_08_25b() {
+        let hat = |titel: &str, tag: &str| {
+            assert!(keys(titel).contains(&tag.to_string()), "{titel:?} sollte {tag} tragen");
+        };
+        let ohne = |titel: &str, tag: &str| {
+            assert!(!keys(titel).contains(&tag.to_string()), "{titel:?} trägt {tag} noch");
+        };
+
+        // Zwei Meldungen: Ein Gouda ist kein Milchprodukt, das jemand kauft,
+        // wenn er Milch sucht — auch wenn die Molkerei „Faire Milch" heißt.
+        ohne("LINDENHOF Faire Milch Gouda jung", "milch");
+        hat("LINDENHOF Faire Milch Gouda jung", "gouda");
+        ohne("SACHSENMILCH Buttermilch-Dessert", "milch");
+        hat("Frische Vollmilch 3,5 %", "milch");
+        hat("MILBONA Haltbare Milch, laktosefrei", "milch");
+
+        // „Brot-Aufstrich" wird zu zwei Wörtern normalisiert; die alte Sperre
+        // `brotaufstrich` war eines. Zwei Meldungen.
+        ohne("POPP Brot-Aufstrich", "brot");
+        ohne("Brot-Aufstrich", "brot");
+        hat("Bauernbrot geschnitten", "brot");
+        hat("Vollkornbrötchen 6 Stück", "brot");
+
+        ohne("MUH-MUHS Sahne-Toffees", "sahne");
+        ohne("K-CLASSIC Sahne-Fruchtjoghurt", "sahne");
+        ohne("NADLER Sahne Hering filets XXL", "sahne");
+        hat("NADLER Sahne Hering filets XXL", "hering");
+        hat("Schlagsahne 200 g", "sahne");
+        hat("Crème fraîche 150 g", "sahne");
+
+        ohne("K-CLASSIC Feta-Käsekrainer", "feta");
+        hat("SALAKIS Schafskäse", "feta");
+
+        // Andersherum als am 25.08. angesetzt: Die Tafel **ist** Schokolade,
+        // die Sorte heißt nur Joghurt.
+        hat("Tafelschokolade 100 g, Joghurt", "tafelschokolade");
+        ohne("Tafelschokolade 100 g, Joghurt", "joghurt");
+        hat("Zott Sahnejoghurt 500 g", "joghurt");
+    }
+
     #[test]
     fn pflegerunde_2026_08_08() {
         let hat = |titel: &str, tag: &str| {
