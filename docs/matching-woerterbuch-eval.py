@@ -821,6 +821,306 @@ _BLOCK4 = {
 for _t,_bl in _BLOCK4.items():
     V[_t] = (V[_t][0], V[_t][1], V[_t][2]+_bl)
 
+# --- Tranche 12: Sorten unter den Sammeltöpfen (2026-08-25) ----------------
+#
+# **Das gemeldete Leiden.** „Ich habe Brokkoli gesucht und bekomme gefühlt
+# alles andere an Gemüse" (Tester, 25.08.). Nachgemessen an den 19.831 heute
+# gültigen Angeboten: Wer `brokkoli` sucht, bekommt **1 Brokkoli und 16 andere
+# Gemüse** — Porree, Radieschen, Rote Bete, Chinakohl, Staudensellerie. Wer
+# „Frankfurter" sucht, bekommt alle 216 Wurstangebote. Das ist kein
+# Einzelfall, sondern die Bauart: Ein Begriff wie `wurst` sammelt 45 Synonyme
+# ein, und die App bildet jedes davon auf den ganzen Topf ab.
+#
+# **Warum der Topf trotzdem bleibt.** Fürs *Taggen* ist er richtig: Wer
+# „Wurst" auf die Liste schreibt, will Salami und Wiener sehen. Falsch ist
+# er nur in der Gegenrichtung — vom Suchwort zurück auf den Begriff. Deshalb
+# wird hier nichts weggenommen, sondern **untergehängt**: Jede Sorte bekommt
+# einen eigenen Begriff, und dasselbe Wort bleibt im Topf stehen. Ein Angebot
+# trägt danach beide Tags (`salami` *und* `wurst`), die Abdeckung kann nur
+# steigen, und der Marken-Fallback wird nicht verdeckt — genau daran wäre die
+# additive Variante sonst gestorben: „GALBANI Mascarpone" kam über die Marke
+# zu `käse`, ein Begriff `mascarpone` allein hätte ihm den Topf genommen.
+#
+# Welches Ende der Suchende meint, entscheidet die App (`MatchDictionary`,
+# App-Seite dieser Runde): Zeigt ein Wort auf mehrere Begriffe, gewinnt der
+# mit der kürzeren Synonymliste. Dieselbe Regel, nach der `ItemGlyphTerm`
+# längst das Bild aussucht.
+#
+# Aufnahmekriterium war nicht „klingt sinnvoll", sondern: Die Sorte steht mit
+# eigenen Zeilen im Korpus, und die Wörter stammen aus diesen Zeilen.
+_SORTEN = {
+ "wurst": {
+  # 25 Zeilen tragen „Salami" im Titel; „Pizza Salami" ist eine Pizza und
+  # bleibt es auch — sie kommt über den Topf `wurst` weiter mit.
+  "salami":["salami","edelsalami","salametti","ringsalami","minisalami",
+            "knüppelsalami","bauernsalami","chorizo","salchichon","sucuk"],
+  "würstchen":["würstchen","wiener","bockwurst","bockwürste","knacker",
+               "knackwurst","frankfurter","weißwurst","weißwürste","chipolata",
+               "salsiccia","krainer","käsekrainer","käsewiener","brotzeitwürstchen"],
+  "leberwurst":["leberwurst","teewurst","rotwurst","blutwurst","zungenwurst",
+                "streichwurst","leberpastete","pastete"],
+  "leberkäse":["leberkäse","leberkäs","fleischkäse"],
+  "mett":["mett","hackepeter","mettwurst","zwiebelmettwurst"],
+  "cabanossi":["cabanossi","kabanossi","landjäger","pfefferbeißer","bierbeißer"],
+  "krakauer":["krakauer","schinkenkrakauer","currykrakauer"],
+  "aufschnitt":["aufschnitt","frischwurstaufschnitt","wurstaufschnitt"],
+  "sülze":["sülze"],
+  "currywurst":["currywurst"],
+  # Bestehende Begriffe, denen die Wörter aus dem Korpus fehlten.
+  "schinken":["hinterschinken","kochhinterschinken","krustenschinken",
+              "wacholderschinken","bauernschinken","heißrauchschinken",
+              "kesselschinken","nussschinken","schinkenwürfel","prosciutto","jamon"],
+  "bacon":["schinkenspeck","markenspeck","bauchspeck","räucherspeck"],
+ },
+ "käse": {
+  "gouda":["gouda"],
+  "emmentaler":["emmentaler","emmental"],
+  "camembert":["camembert","brie","weichkäse","tortenbrie"],
+  "grillkäse":["grillkäse","halloumi","ofenkäse","pfannenkäse","backkäse"],
+  # „pecorino" und „hartkäse" bleiben bei `hartkäse` — der Begriff gibt es
+  # schon, und zwei Einträge für dasselbe Wort sind eine Stelle zu viel.
+  "parmesan":["parmesan","parmigiano","grana","grana padano"],
+  "schnittkäse":["schnittkäse","käsescheiben","scheibenkäse","tilsiter","appenzeller"],
+  "schmelzkäse":["schmelzkäse","schmelzkäsezubereitung","scheibletten"],
+  "bergkäse":["bergkäse"],
+  "butterkäse":["butterkäse"],
+  "cheddar":["cheddar"],
+  "mascarpone":["mascarpone"],
+  "ziegenkäse":["ziegenkäse","ziegenfrischkäse"],
+  "harzer":["harzer","handkäse","sauermilchkäse"],
+ },
+ "wein": {
+  "sekt":["sekt","prosecco","secco","spumante","schaumwein","champagner",
+          "frizzante","jahrgangssekt","fruchtsecco","cremant"],
+  "rotwein":["rotwein","primitivo","merlot","chianti","dornfelder","zweigelt",
+             "lambrusco","trollinger","portugieser","amarone","spätburgunder"],
+  "weißwein":["weißwein","riesling","chardonnay","sauvignon","grauburgunder",
+              "weißburgunder","pinot grigio","silvaner","ribolla"],
+  "roséwein":["rosé","rosato","roséwein","weißherbst"],
+ },
+ "spirituosen": {
+  # Ohne „bourbon": „Bourbon Vanilleschote" ist Vanille, und `matching.rs`
+  # hält genau diese Zeile fest.
+  "whisky":["whisky","whiskey","scotch","single malt"],
+  "gin":["gin"],
+  "rum":["rum"],
+  "vodka":["vodka","wodka"],
+  "likör":["likör","likoer","kräuterlikör","eierlikör","sahnelikör",
+           "cremelikör","magenbitter"],
+  "aperitif":["aperol","aperitivo","martini","vermouth","campari","lillet"],
+  "weinbrand":["weinbrand","brandy","cognac","edelbrand"],
+  "tequila":["tequila"],
+ },
+ "bier": {
+  "pils":["pils","pilsener","pilsner"],
+  "radler":["radler","naturradler","biermischgetränk"],
+  "weizenbier":["weißbier","weissbier","hefeweizen"],
+  "helles":["helles","vollbier","kellerbier","landbier","märzen","festbier","lager"],
+  "schwarzbier":["schwarzbier","porter"],
+ },
+ "fisch": {
+  "lachs":["lachs","lachsfilet","lachsfilets","räucherlachs","wildlachs",
+           "lachsforelle","grilllachs","lachsfiletseite","lachsfiletportionen"],
+  "thunfisch":["thunfisch","thunfischfilet","thunfischfilets"],
+  "garnelen":["garnelen","garnele","shrimps","prawns","scampi"],
+  "hering":["hering","heringsfilets","brathering","bratheringe","matjes","sprotten"],
+  "fischstäbchen":["fischstäbchen","schlemmerfilet","backfisch"],
+  "forelle":["forelle"],
+  "kabeljau":["kabeljau","seelachs","pangasius","rotbarsch","scholle","schollenfilet"],
+  "dorade":["dorade","doraden","wolfsbarsch","makrele","makrelenfilet"],
+ },
+ "schwein": {
+  "nackensteak":["nackensteak","nackensteaks","kammsteak","kammsteaks",
+                 "schweinenackensteak","rückensteak","rückensteaks"],
+  "kassler":["kasseler"],
+  "schweinebauch":["schweinebauch","krustenbauch","schälrippe","schälrippchen",
+                   "spareribs","spare ribs"],
+ },
+ "brokkoli": {
+  # Der Fall des Testers. `kohlrabi`, `lauch`, `sellerie` und `maiskolben`
+  # gab es längst — es fehlte die feinere Auflösung des Suchworts, nicht der
+  # Begriff. Neu sind nur die drei ohne eigenen Eintrag.
+  "blumenkohl":["blumenkohl"],
+  "radieschen":["radieschen"],
+  "chinakohl":["chinakohl","pak choi"],
+  "rote bete":["rote bete"],
+ },
+ "pfirsich": {
+  # Elf Meldungen in 30 Tagen, alle dieselbe Form: „Pfirsich" gesucht,
+  # Aprikosen/Pflaumen/Kirschen bekommen.
+  "aprikosen":["aprikosen","zuckeraprikosen"],
+  "pflaumen":["pflaumen","zwetschgen","mirabellen"],
+  "kirschen":["kirschen","sauerkirschen"],
+  "nektarinen":["nektarinen","plattnektarinen"],
+ },
+ "obst": {
+  "mango":["mango"],
+  "ananas":["ananas"],
+  "grapefruit":["grapefruit","grapefruits"],
+  "passionsfrucht":["passionsfrucht","maracuja"],
+ },
+ "konserven": {
+  "mais":["mais","sonnenmais","maiskörner"],
+  "bohnen":["bohnen","buschbohnen","brechbohnen","kidneybohnen","weiße bohnen"],
+  "linsen":["linsen"],
+  "kichererbsen":["kichererbsen"],
+  "oliven":["oliven"],
+  "datteln":["datteln"],
+  "antipasti":["antipasti"],
+  # Damit die Dose auffindbar bleibt, nachdem `tomaten` sie abgibt.
+  "dosentomaten":["passierte tomaten","tomatenmark"],
+ },
+ "limonade": {
+  "eistee":["eistee","ice tea","icetea"],
+  "spezi":["spezi","cola-mix","colamix","mezzo mix"],
+  "brause":["brause","erfrischungsgetränk"],
+ },
+ "schokolade": {
+  "fruchtgummi":["fruchtgummi","lakritz","goldbären","lachgummi","kaubonbons",
+                 "kaudragees","lollies","lollipops","weingummi"],
+  # „konfekt" bewusst NICHT: „LANGNESE Konfekt" ist Eis, und der Begriff
+  # `eis` kam über die Marke — ein Treffer im Titel hätte ihn verdrängt.
+  "pralinen":["pralinen","pralinés"],
+  "schokoriegel":["schokoriegel"],
+  "tafelschokolade":["tafelschokolade","tafel"],
+ },
+ "backwaren": {
+  "kuchen":["rührkuchen","streuselkuchen","minikuchen","brownies"],
+  "donut":["donut","donuts","doonuts"],
+  "muffins":["muffins","muffin"],
+  "berliner":["berliner","pfannkuchen"],
+  "flammkuchen":["flammkuchen","flammkuchenböden"],
+  "backmischung":["backmischung","backmischungen"],
+  "laugengebäck":["laugengebäck","laugenstange","laugencroissant","brezen"],
+ },
+ "kaffee": {
+  "kaffeepads":["coffee pads","kaffee-kapseln"],
+  "espresso":["espresso"],
+  "cappuccino":["cappuccino","latte macchiato","milchkaffee"],
+  "kaffeebohnen":["kaffeebohnen","ganze bohnen","bohnenkaffee"],
+  "löslicher kaffee":["löslicher kaffee","instantkaffee","malzkaffee"],
+ },
+ "nudeln": {
+  "spaghetti":["spaghetti"],
+  "lasagne":["lasagne"],
+  "gnocchi":["gnocchi"],
+  "penne":["penne","fusilli","maccaroni","bandnudeln","rigatoni"],
+ },
+ "eis": {
+  "stieleis":["stieleis","eis am stiel"],
+  "eiscreme":["eiscreme","eiskonfekt","gelato","plombir"],
+  "mochi":["mochi"],
+ },
+}
+
+# Sperren, die erst die neue Auflösung braucht — je Zeile der Titel, der sie
+# erzwungen hat.
+_SORTEN_BLOCK = {
+ "salami":["pizza","steinofenpizza","ofenfrische"],   # „Pizza Salami" ist eine Pizza
+ "würstchen":["schnitzel"],                            # „Schweineschnitzel Wiener Art"
+ "tafelschokolade":["müllermilch","joghurt"],          # „Tafelschokolade 100 g, Joghurt" ist die Sorte
+ "brause":["brausetabletten"],
+ # Kaffeebohnen sind keine Konserve: „DALLMAYR Crema d'Oro Ganze Bohnen" und
+ # „JACOBS Ganze Bohnen" trugen `konserven`, weil „bohnen" im exact steht.
+ "bohnen":["ganze bohnen","bohnenkaffee","kaffee"],
+ # „Bona Vita Schoko Linsen" und „FUNNY-FRISCH Linsen- oder Popchips".
+ "linsen":["schoko","chips","popchips"],
+ # „EDEKA Weizen-Mais Wraps", „Mais-Hähnchenschenkel".
+ "mais":["wraps","hähnchenschenkel"],
+ # „Tomaten-Oliven-Brötchen" ist ein Brötchen.
+ "oliven":["brötchen"],
+}
+
+# Komposita-Suffixe der Sorten. Ohne sie fällt „Geflügelwürstchen" zwar in den
+# Topf `wurst`, aber nicht auf die Sorte, die jemand sucht.
+_SORTEN_SUFFIX = {
+ "salami":["salami"],
+ "würstchen":["würstchen"],
+ "schinken":["schinken"],
+ "aufschnitt":["aufschnitt"],
+ "bratwurst":["bratwurst"],
+}
+
+# Fremdes Fleisch am `steak`-Suffix. Gemessen am Korpus vom 25.08.: „XXL
+# Schweine Steak", „Schweinekammsteaks", „Hähnchen-Ministeaks", „Puten-
+# Ministeaks" und „Thunfisch-Steaks" trugen alle `rind`; vier davon stehen
+# als Meldung in `match_feedback`. Gesperrt wird das Tier, nicht das Steak —
+# „Hackfleisch gemischt vom Rind und Schwein" behält `rind` deshalb, weil
+# dort „schwein" und nicht „schweine" steht.
+V["rind"] = (V["rind"][0], V["rind"][1], V["rind"][2] + [
+    "schweine","schweinenackensteak","schweinekammsteaks","schweinerücken",
+    "hähnchen","hähnchensteaks","puten","thunfisch","schinken","geflügel",
+])
+# „Balisto 8er-Pack 148 g, Korn" ist ein Schokoriegel und stand unter
+# `spirituosen`, weil `korn` im exact steht.
+V["spirituosen"] = (V["spirituosen"][0], V["spirituosen"][1],
+                    V["spirituosen"][2] + ["balisto"])
+# Meldung vom 25.08.: „Stracciatella di Burrata" ist Käse. `stracciatella`
+# steht im exact von `eis` und bleibt dort — die Burrata ist die Ausnahme.
+V["eis"] = (V["eis"][0], V["eis"][1], V["eis"][2] + ["burrata"])
+# „BERGGOLD Kokos Flocken" sind Backzutat, kein Müsli; das Suffix `flocken`
+# holte sie.
+V["müsli"] = (V["müsli"][0], V["müsli"][1], V["müsli"][2] + ["kokos"])
+# „Tortilla Wraps" sind Wraps. `tortilla` steht im exact von `chips` und
+# fängt sie; drei Meldungen.
+V["chips"] = (V["chips"][0], V["chips"][1], V["chips"][2] + ["wraps"])
+# „POPP Pikanter Brotaufstrich" ist herzhaft, keine Marmelade — zwei
+# Meldungen. `brotaufstrich` bleibt im exact, die Sorte entscheidet.
+V["marmelade"] = (V["marmelade"][0], V["marmelade"][1],
+                  V["marmelade"][2] + ["pikanter","pikant","herzhafter"])
+# „K-CLASSIC Passierte Tomaten" ist Konserve; die Phrase steht in
+# `konserven`, fehlte aber in der Sperrliste von `tomaten`.
+V["tomaten"] = (V["tomaten"][0], V["tomaten"][1],
+                V["tomaten"][2] + ["passierte tomaten","gehackte tomaten"])
+# Dieselben Sperren gelten für den Topf, aus dem die Sorte kommt.
+V["konserven"] = (V["konserven"][0], V["konserven"][1], V["konserven"][2] + [
+    "ganze bohnen","bohnenkaffee","schoko","chips","popchips","wraps","brötchen"])
+
+# Sorte → Topf. Reist als Feld `oberbegriff` im Wörterbuch mit: Die App
+# braucht die Beziehung, sobald eine Sorte noch keine eigene Zeichnung hat —
+# dann trägt sie das Bild ihres Topfes, statt auf das Kategoriezeichen
+# durchzufallen. Rust liest das Feld nicht; unbekannte Felder überliest der
+# Lader.
+OBER = {sorte: topf for topf, sorten in _SORTEN.items() for sorte in sorten}
+
+# **Die Sorte erbt die Sperren ihres Topfes.** Ohne diese Zeile kostet jede
+# neue Sorte genau die Sperren, die den Topf richtig machen — gefunden von
+# `matching.rs` am eigenen Bestand: „SCHÖFFERHOFER Grapefruit" ist Bier (bei
+# `obst` gesperrt), „Antipasti Creme" ist Aufstrich (bei `konserven`
+# gesperrt). Ein Begriff, der eine Sorte von etwas ist, darf nicht mehr
+# fangen als das, wovon er die Sorte ist.
+for _topf, _sorten in _SORTEN.items():
+    for _sorte, _woerter in _sorten.items():
+        _alt = V.get(_sorte, ([], [], []))
+        _erbe = [b for b in V[_topf][2] if b not in _alt[2]]
+        V[_sorte] = (_alt[0] + [w for w in _woerter if w not in _alt[0]],
+                     _alt[1] + _SORTEN_SUFFIX.get(_sorte, []),
+                     _alt[2] + _SORTEN_BLOCK.get(_sorte, []) + _erbe)
+        # Dasselbe Wort bleibt im Topf: sonst verliert das Angebot den groben
+        # Tag und mit ihm den Marken-Fallback, der ihn vorher gesetzt hat.
+        _te, _ts, _tb = V[_topf]
+        V[_topf] = (_te + [w for w in _woerter if w not in _te], _ts, _tb)
+
+# **Zwei Sorten Topf, und nur eine darf einer bleiben.**
+#
+# `wurst` ist eine Warengruppe: Wer sie sucht, will Salami und Wiener sehen,
+# und der Topf behält deshalb jedes Wort. `brokkoli` und `pfirsich` sind das
+# Gegenteil — sie heißen wie ein einzelnes Produkt und haben sich nur
+# zugelegt, was daneben im Regal lag. Niemand, der „Brokkoli" tippt, meint
+# Porree, und der Tester vom 25.08. hat genau das gemeldet: ein Brokkoli und
+# sechzehn andere Gemüse. Elf Meldungen desselben Musters stehen unter
+# „Pfirsich" (Aprikosen, Pflaumen, Kirschen, Zwetschgen).
+#
+# Hier wird deshalb weggenommen, nicht untergehängt. Die Zeilen verlieren
+# nichts: Jedes ausgezogene Wort hat einen eigenen Begriff — `kohlrabi`,
+# `lauch`, `sellerie`, `maiskolben`, `chicorée` gab es längst, `blumenkohl`,
+# `radieschen`, `chinakohl`, `rote bete` kommen oben dazu. Ein Oberbegriff
+# „Gemüse" fehlt bewusst: Das Regal beantwortet die Warengruppe.
+V["brokkoli"] = (["brokkoli","broccoli"], ["brokkoli"], [])
+V["pfirsich"] = (["pfirsich","pfirsiche","flachpfirsiche"], ["pfirsiche"],
+                 ["pflaumentomaten","minipflaumen"])
+
+
 # Non-Food-Begriffe im Titel (fängt Non-Food in Food-Kategorien wie „Wochenangebote")
 # Vier Teile trafen mitten im Wort und warfen Essen aus dem Katalog. Jede
 # Klammer ist am ganzen Korpus gemessen (Audit 2026-08-08):
@@ -1012,7 +1312,9 @@ def schreibe_json():
     fand die alte. Das Wörterbuch schreiben und das Wörterbuch messen sind
     zwei Dinge; das erste darf nicht am zweiten hängen.
     """
-    json.dump({"begriffe":{t:{"exact":e,"suffix":s,"prefix":PRAEFIX.get(t,[]),"block":b} for t,(e,s,b) in V.items()},"marken":MARKEN,"kategorien":KAT,"nonfood_cat":NONFOOD_CAT.pattern,"nonfood_terms":NONFOOD_TERMS.pattern,"food_cat":FOOD_CAT.pattern},
+    json.dump({"begriffe":{t:{"exact":e,"suffix":s,"prefix":PRAEFIX.get(t,[]),"block":b,
+                             **({"oberbegriff":OBER[t]} if t in OBER else {})}
+                          for t,(e,s,b) in V.items()},"marken":MARKEN,"kategorien":KAT,"nonfood_cat":NONFOOD_CAT.pattern,"nonfood_terms":NONFOOD_TERMS.pattern,"food_cat":FOOD_CAT.pattern},
               open(os.path.join(os.path.dirname(__file__),"matching-woerterbuch.json"),"w"), ensure_ascii=False, indent=1)
 
 

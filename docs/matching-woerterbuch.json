@@ -148,7 +148,25 @@
     "mascarpone",
     "pecorino",
     "appenzeller",
-    "harzer"
+    "harzer",
+    "emmental",
+    "brie",
+    "weichkäse",
+    "tortenbrie",
+    "grillkäse",
+    "ofenkäse",
+    "pfannenkäse",
+    "backkäse",
+    "parmigiano",
+    "grana padano",
+    "schnittkäse",
+    "scheibenkäse",
+    "schmelzkäsezubereitung",
+    "scheibletten",
+    "ziegenkäse",
+    "ziegenfrischkäse",
+    "handkäse",
+    "sauermilchkäse"
    ],
    "suffix": [
     "käse",
@@ -309,7 +327,9 @@
     "tomatensauce",
     "tomatenketchup",
     "tomatensaft",
-    "tomatensuppe"
+    "tomatensuppe",
+    "passierte tomaten",
+    "gehackte tomaten"
    ],
    "warengruppe": "Obst & Gemüse"
   },
@@ -619,21 +639,10 @@
    "exact": [
     "pfirsich",
     "pfirsiche",
-    "nektarinen",
-    "aprikosen",
-    "flachpfirsiche",
-    "kirschen",
-    "pflaumen",
-    "plattnektarinen",
-    "zwetschgen",
-    "mirabellen",
-    "sauerkirschen"
+    "flachpfirsiche"
    ],
    "suffix": [
-    "pfirsiche",
-    "aprikosen",
-    "nektarinen",
-    "pflaumen"
+    "pfirsiche"
    ],
    "prefix": [],
    "block": [
@@ -674,21 +683,7 @@
   "brokkoli": {
    "exact": [
     "brokkoli",
-    "broccoli",
-    "blumenkohl",
-    "kohlrabi",
-    "chicorée",
-    "chicoree",
-    "radieschen",
-    "porree",
-    "chinakohl",
-    "pak-choi",
-    "zuckermais",
-    "rote bete",
-    "ingwerstücke",
-    "lauch",
-    "sellerie",
-    "staudensellerie"
+    "broccoli"
    ],
    "suffix": [
     "brokkoli"
@@ -836,7 +831,16 @@
     "krustenbraten",
     "bauchrippe",
     "wammerl",
-    "ribs"
+    "ribs",
+    "nackensteak",
+    "kammsteak",
+    "kammsteaks",
+    "schweinenackensteak",
+    "rückensteak",
+    "rückensteaks",
+    "schweinebauch",
+    "schälrippe",
+    "spareribs"
    ],
    "suffix": [
     "kotelett",
@@ -879,7 +883,17 @@
     "schweinesteaks",
     "hacksteaks",
     "putensteaks",
-    "steakhouse"
+    "steakhouse",
+    "schweine",
+    "schweinenackensteak",
+    "schweinekammsteaks",
+    "schweinerücken",
+    "hähnchen",
+    "hähnchensteaks",
+    "puten",
+    "thunfisch",
+    "schinken",
+    "geflügel"
    ],
    "warengruppe": "Fleisch & Wurst"
   },
@@ -945,7 +959,38 @@
     "krainer",
     "käsekrainer",
     "fleischkäse",
-    "leberkäs"
+    "leberkäs",
+    "ringsalami",
+    "minisalami",
+    "knüppelsalami",
+    "bauernsalami",
+    "chorizo",
+    "salchichon",
+    "sucuk",
+    "knackwurst",
+    "käsewiener",
+    "brotzeitwürstchen",
+    "teewurst",
+    "rotwurst",
+    "blutwurst",
+    "zungenwurst",
+    "streichwurst",
+    "zwiebelmettwurst",
+    "kabanossi",
+    "frischwurstaufschnitt",
+    "wurstaufschnitt",
+    "hinterschinken",
+    "kochhinterschinken",
+    "krustenschinken",
+    "wacholderschinken",
+    "bauernschinken",
+    "heißrauchschinken",
+    "kesselschinken",
+    "nussschinken",
+    "prosciutto",
+    "jamon",
+    "bauchspeck",
+    "räucherspeck"
    ],
    "suffix": [
     "wurst",
@@ -992,7 +1037,27 @@
     "makrelen",
     "prawns",
     "octopus",
-    "oktopus"
+    "oktopus",
+    "lachsfilets",
+    "lachsforelle",
+    "grilllachs",
+    "lachsfiletseite",
+    "lachsfiletportionen",
+    "thunfischfilet",
+    "thunfischfilets",
+    "scampi",
+    "heringsfilets",
+    "brathering",
+    "bratheringe",
+    "sprotten",
+    "schlemmerfilet",
+    "backfisch",
+    "pangasius",
+    "rotbarsch",
+    "scholle",
+    "schollenfilet",
+    "wolfsbarsch",
+    "makrelenfilet"
    ],
    "suffix": [
     "fisch",
@@ -1037,7 +1102,10 @@
     "ramyun",
     "teigwaren",
     "eierspätzle",
-    "kritharaki"
+    "kritharaki",
+    "maccaroni",
+    "bandnudeln",
+    "rigatoni"
    ],
    "suffix": [
     "nudeln"
@@ -1177,7 +1245,8 @@
    ],
    "prefix": [],
    "block": [
-    "müsliriegel"
+    "müsliriegel",
+    "kokos"
    ],
    "warengruppe": "Vorräte & Kochen"
   },
@@ -1201,7 +1270,10 @@
    "prefix": [],
    "block": [
     "eisbecher",
-    "biscuits"
+    "biscuits",
+    "pikanter",
+    "pikant",
+    "herzhafter"
    ],
    "warengruppe": "Vorräte & Kochen"
   },
@@ -1217,7 +1289,17 @@
     "caffe",
     "barista",
     "kaffeegetränk",
-    "entkoffeiniert"
+    "entkoffeiniert",
+    "coffee pads",
+    "kaffee-kapseln",
+    "cappuccino",
+    "latte macchiato",
+    "milchkaffee",
+    "ganze bohnen",
+    "bohnenkaffee",
+    "löslicher kaffee",
+    "instantkaffee",
+    "malzkaffee"
    ],
    "suffix": [
     "kaffee"
@@ -1301,7 +1383,12 @@
     "ginger ale",
     "mate",
     "softdrink",
-    "spezi"
+    "spezi",
+    "ice tea",
+    "icetea",
+    "cola-mix",
+    "colamix",
+    "brause"
    ],
    "suffix": [
     "limonade"
@@ -1328,7 +1415,14 @@
     "hefeweizen",
     "bock",
     "pilsner",
-    "hell"
+    "hell",
+    "naturradler",
+    "weissbier",
+    "vollbier",
+    "kellerbier",
+    "landbier",
+    "festbier",
+    "porter"
    ],
    "suffix": [
     "bier"
@@ -1376,7 +1470,17 @@
     "weißherbst",
     "frizzante",
     "spritz",
-    "sprizz"
+    "sprizz",
+    "spumante",
+    "schaumwein",
+    "dornfelder",
+    "amarone",
+    "spätburgunder",
+    "weißburgunder",
+    "pinot grigio",
+    "silvaner",
+    "ribolla",
+    "roséwein"
    ],
    "suffix": [
     "wein",
@@ -1407,7 +1511,14 @@
     "tiramisu",
     "fruchtgummi",
     "fruchtkaramellen",
-    "karamellen"
+    "karamellen",
+    "goldbären",
+    "lachgummi",
+    "kaudragees",
+    "lollies",
+    "weingummi",
+    "pralinés",
+    "tafel"
    ],
    "suffix": [
     "schokolade"
@@ -1459,7 +1570,9 @@
     "chips"
    ],
    "prefix": [],
-   "block": [],
+   "block": [
+    "wraps"
+   ],
    "warengruppe": "Süßes & Snacks"
   },
   "eis": {
@@ -1476,7 +1589,10 @@
     "raketeneis",
     "stracciatella",
     "eisfrüchte",
-    "stieleis"
+    "stieleis",
+    "eis am stiel",
+    "gelato",
+    "plombir"
    ],
    "suffix": [
     "eis"
@@ -1485,7 +1601,8 @@
    "block": [
     "eistee",
     "eiswürfel",
-    "eiskaffee"
+    "eiskaffee",
+    "burrata"
    ],
    "warengruppe": "Tiefkühl"
   },
@@ -1596,14 +1713,24 @@
     "artischocke",
     "artischocken",
     "antipasti",
-    "buschbohnen"
+    "buschbohnen",
+    "sonnenmais",
+    "maiskörner",
+    "weiße bohnen"
    ],
    "suffix": [
     "rotkohl"
    ],
    "prefix": [],
    "block": [
-    "antipasti creme"
+    "antipasti creme",
+    "ganze bohnen",
+    "bohnenkaffee",
+    "schoko",
+    "chips",
+    "popchips",
+    "wraps",
+    "brötchen"
    ],
    "warengruppe": "Vorräte & Kochen"
   },
@@ -1687,7 +1814,19 @@
     "baklava",
     "mohnhappen",
     "schweinsöhrchen",
-    "laugenstange"
+    "laugenstange",
+    "rührkuchen",
+    "streuselkuchen",
+    "minikuchen",
+    "brownies",
+    "donuts",
+    "doonuts",
+    "muffin",
+    "pfannkuchen",
+    "flammkuchen",
+    "backmischungen",
+    "laugencroissant",
+    "brezen"
    ],
    "suffix": [
     "kuchen",
@@ -1752,14 +1891,30 @@
     "cocktails",
     "bittergetränk",
     "aquavit",
-    "weizenkorn"
+    "weizenkorn",
+    "scotch",
+    "single malt",
+    "kräuterlikör",
+    "eierlikör",
+    "sahnelikör",
+    "cremelikör",
+    "magenbitter",
+    "aperitivo",
+    "martini",
+    "vermouth",
+    "lillet",
+    "weinbrand",
+    "brandy",
+    "cognac"
    ],
    "suffix": [
     "likör",
     "limes"
    ],
    "prefix": [],
-   "block": [],
+   "block": [
+    "balisto"
+   ],
    "warengruppe": "Alkohol"
   },
   "pudding": {
@@ -3161,11 +3316,21 @@
     "weisswein",
     "riesling",
     "chardonnay",
-    "grauburgunder"
+    "grauburgunder",
+    "sauvignon",
+    "weißburgunder",
+    "pinot grigio",
+    "silvaner",
+    "ribolla"
    ],
    "suffix": [],
    "prefix": [],
-   "block": [],
+   "block": [
+    "weinsauerkraut",
+    "weintrauben",
+    "weinessig"
+   ],
+   "oberbegriff": "wein",
    "warengruppe": "Alkohol"
   },
   "blutorangen": {
@@ -3661,11 +3826,23 @@
     "dosentomaten",
     "gehackte tomaten",
     "pizzatomaten",
-    "dosenobst"
+    "dosenobst",
+    "passierte tomaten",
+    "tomatenmark"
    ],
    "suffix": [],
    "prefix": [],
-   "block": [],
+   "block": [
+    "antipasti creme",
+    "ganze bohnen",
+    "bohnenkaffee",
+    "schoko",
+    "chips",
+    "popchips",
+    "wraps",
+    "brötchen"
+   ],
+   "oberbegriff": "konserven",
    "warengruppe": "Obst & Gemüse"
   },
   "bratensauce": {
@@ -4012,11 +4189,19 @@
     "kaffeepads",
     "senseo pads",
     "kaffeekapseln",
-    "padmaschine kapseln"
+    "padmaschine kapseln",
+    "coffee pads",
+    "kaffee-kapseln"
    ],
    "suffix": [],
    "prefix": [],
-   "block": [],
+   "block": [
+    "kaffeesahne",
+    "eiskaffee",
+    "kaffeeweißer",
+    "haferdrink"
+   ],
+   "oberbegriff": "kaffee",
    "warengruppe": "Getränke"
   },
   "schnaps": {
@@ -4190,11 +4375,31 @@
    "exact": [
     "grillkäse",
     "ofenkäse",
-    "backcamembert"
+    "backcamembert",
+    "halloumi",
+    "pfannenkäse",
+    "backkäse"
    ],
    "suffix": [],
    "prefix": [],
-   "block": [],
+   "block": [
+    "käsekuchen",
+    "frischkäse",
+    "croissant",
+    "leberkäse",
+    "laugenstange",
+    "laugengebäck",
+    "brezel",
+    "käsebrötchen",
+    "käsestange",
+    "käsegebäck",
+    "fleischkäse",
+    "twister",
+    "käselaugenstange",
+    "käseschnecke",
+    "mascarpone joghurt"
+   ],
+   "oberbegriff": "käse",
    "warengruppe": "Molkerei & Eier"
   },
   "sojajoghurt": {
@@ -4224,13 +4429,18 @@
     "bacon",
     "frühstücksspeck",
     "speck",
-    "pancetta"
+    "pancetta",
+    "schinkenspeck",
+    "markenspeck",
+    "bauchspeck",
+    "räucherspeck"
    ],
    "suffix": [],
    "prefix": [],
    "block": [
     "twister"
    ],
+   "oberbegriff": "wurst",
    "warengruppe": "Fleisch & Wurst"
   },
   "fleischwurst": {
@@ -4254,7 +4464,8 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": []
+   "block": [],
+   "oberbegriff": "schwein"
   },
   "schinken": {
    "exact": [
@@ -4263,14 +4474,29 @@
     "rohschinken",
     "serranoschinken",
     "parmaschinken",
-    "lachsschinken"
+    "lachsschinken",
+    "hinterschinken",
+    "kochhinterschinken",
+    "krustenschinken",
+    "wacholderschinken",
+    "bauernschinken",
+    "heißrauchschinken",
+    "kesselschinken",
+    "nussschinken",
+    "schinkenwürfel",
+    "prosciutto",
+    "jamon"
    ],
-   "suffix": [],
+   "suffix": [
+    "schinken"
+   ],
    "prefix": [],
    "block": [
     "schinkenwurst",
-    "bierschinken"
+    "bierschinken",
+    "twister"
    ],
+   "oberbegriff": "wurst",
    "warengruppe": "Fleisch & Wurst"
   },
   "muscheln": {
@@ -4852,11 +5078,16 @@
     "sahnetorte",
     "quarktasche",
     "kuchen",
-    "torte"
+    "torte",
+    "rührkuchen",
+    "streuselkuchen",
+    "minikuchen",
+    "brownies"
    ],
    "suffix": [],
    "prefix": [],
    "block": [],
+   "oberbegriff": "backwaren",
    "warengruppe": "Backwaren"
   },
   "fleisch": {
@@ -4880,7 +5111,8 @@
     "sungold",
     "grapefruit",
     "grapefruits",
-    "passionsfrucht"
+    "passionsfrucht",
+    "maracuja"
    ],
    "suffix": [],
    "prefix": [
@@ -4917,6 +5149,1662 @@
    "prefix": [],
    "block": [],
    "warengruppe": "Fleisch & Wurst"
+  },
+  "salami": {
+   "exact": [
+    "salami",
+    "edelsalami",
+    "salametti",
+    "ringsalami",
+    "minisalami",
+    "knüppelsalami",
+    "bauernsalami",
+    "chorizo",
+    "salchichon",
+    "sucuk"
+   ],
+   "suffix": [
+    "salami"
+   ],
+   "prefix": [],
+   "block": [
+    "pizza",
+    "steinofenpizza",
+    "ofenfrische",
+    "twister"
+   ],
+   "oberbegriff": "wurst",
+   "warengruppe": "Fleisch & Wurst"
+  },
+  "würstchen": {
+   "exact": [
+    "würstchen",
+    "wiener",
+    "bockwurst",
+    "bockwürste",
+    "knacker",
+    "knackwurst",
+    "frankfurter",
+    "weißwurst",
+    "weißwürste",
+    "chipolata",
+    "salsiccia",
+    "krainer",
+    "käsekrainer",
+    "käsewiener",
+    "brotzeitwürstchen"
+   ],
+   "suffix": [
+    "würstchen"
+   ],
+   "prefix": [],
+   "block": [
+    "schnitzel",
+    "twister"
+   ],
+   "oberbegriff": "wurst",
+   "warengruppe": "Fleisch & Wurst"
+  },
+  "leberwurst": {
+   "exact": [
+    "leberwurst",
+    "teewurst",
+    "rotwurst",
+    "blutwurst",
+    "zungenwurst",
+    "streichwurst",
+    "leberpastete",
+    "pastete"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "twister"
+   ],
+   "oberbegriff": "wurst",
+   "warengruppe": "Fleisch & Wurst"
+  },
+  "leberkäse": {
+   "exact": [
+    "leberkäse",
+    "leberkäs",
+    "fleischkäse"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "twister"
+   ],
+   "oberbegriff": "wurst",
+   "warengruppe": "Molkerei & Eier"
+  },
+  "mett": {
+   "exact": [
+    "mett",
+    "hackepeter",
+    "mettwurst",
+    "zwiebelmettwurst"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "twister"
+   ],
+   "oberbegriff": "wurst",
+   "warengruppe": "Fleisch & Wurst"
+  },
+  "cabanossi": {
+   "exact": [
+    "cabanossi",
+    "kabanossi",
+    "landjäger",
+    "pfefferbeißer",
+    "bierbeißer"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "twister"
+   ],
+   "oberbegriff": "wurst"
+  },
+  "krakauer": {
+   "exact": [
+    "krakauer",
+    "schinkenkrakauer",
+    "currykrakauer"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "twister"
+   ],
+   "oberbegriff": "wurst",
+   "warengruppe": "Fleisch & Wurst"
+  },
+  "aufschnitt": {
+   "exact": [
+    "aufschnitt",
+    "frischwurstaufschnitt",
+    "wurstaufschnitt"
+   ],
+   "suffix": [
+    "aufschnitt"
+   ],
+   "prefix": [],
+   "block": [
+    "twister"
+   ],
+   "oberbegriff": "wurst"
+  },
+  "sülze": {
+   "exact": [
+    "sülze"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "twister"
+   ],
+   "oberbegriff": "wurst",
+   "warengruppe": "Fleisch & Wurst"
+  },
+  "currywurst": {
+   "exact": [
+    "currywurst"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "twister"
+   ],
+   "oberbegriff": "wurst",
+   "warengruppe": "Fleisch & Wurst"
+  },
+  "gouda": {
+   "exact": [
+    "gouda"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "käsekuchen",
+    "frischkäse",
+    "croissant",
+    "leberkäse",
+    "laugenstange",
+    "laugengebäck",
+    "brezel",
+    "käsebrötchen",
+    "käsestange",
+    "käsegebäck",
+    "fleischkäse",
+    "twister",
+    "käselaugenstange",
+    "käseschnecke",
+    "mascarpone joghurt"
+   ],
+   "oberbegriff": "käse",
+   "warengruppe": "Molkerei & Eier"
+  },
+  "emmentaler": {
+   "exact": [
+    "emmentaler",
+    "emmental"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "käsekuchen",
+    "frischkäse",
+    "croissant",
+    "leberkäse",
+    "laugenstange",
+    "laugengebäck",
+    "brezel",
+    "käsebrötchen",
+    "käsestange",
+    "käsegebäck",
+    "fleischkäse",
+    "twister",
+    "käselaugenstange",
+    "käseschnecke",
+    "mascarpone joghurt"
+   ],
+   "oberbegriff": "käse"
+  },
+  "camembert": {
+   "exact": [
+    "camembert",
+    "brie",
+    "weichkäse",
+    "tortenbrie"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "käsekuchen",
+    "frischkäse",
+    "croissant",
+    "leberkäse",
+    "laugenstange",
+    "laugengebäck",
+    "brezel",
+    "käsebrötchen",
+    "käsestange",
+    "käsegebäck",
+    "fleischkäse",
+    "twister",
+    "käselaugenstange",
+    "käseschnecke",
+    "mascarpone joghurt"
+   ],
+   "oberbegriff": "käse",
+   "warengruppe": "Molkerei & Eier"
+  },
+  "parmesan": {
+   "exact": [
+    "parmesan",
+    "parmigiano",
+    "grana",
+    "grana padano"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "käsekuchen",
+    "frischkäse",
+    "croissant",
+    "leberkäse",
+    "laugenstange",
+    "laugengebäck",
+    "brezel",
+    "käsebrötchen",
+    "käsestange",
+    "käsegebäck",
+    "fleischkäse",
+    "twister",
+    "käselaugenstange",
+    "käseschnecke",
+    "mascarpone joghurt"
+   ],
+   "oberbegriff": "käse"
+  },
+  "schnittkäse": {
+   "exact": [
+    "schnittkäse",
+    "käsescheiben",
+    "scheibenkäse",
+    "tilsiter",
+    "appenzeller"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "käsekuchen",
+    "frischkäse",
+    "croissant",
+    "leberkäse",
+    "laugenstange",
+    "laugengebäck",
+    "brezel",
+    "käsebrötchen",
+    "käsestange",
+    "käsegebäck",
+    "fleischkäse",
+    "twister",
+    "käselaugenstange",
+    "käseschnecke",
+    "mascarpone joghurt"
+   ],
+   "oberbegriff": "käse",
+   "warengruppe": "Molkerei & Eier"
+  },
+  "schmelzkäse": {
+   "exact": [
+    "schmelzkäse",
+    "schmelzkäsezubereitung",
+    "scheibletten"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "käsekuchen",
+    "frischkäse",
+    "croissant",
+    "leberkäse",
+    "laugenstange",
+    "laugengebäck",
+    "brezel",
+    "käsebrötchen",
+    "käsestange",
+    "käsegebäck",
+    "fleischkäse",
+    "twister",
+    "käselaugenstange",
+    "käseschnecke",
+    "mascarpone joghurt"
+   ],
+   "oberbegriff": "käse",
+   "warengruppe": "Molkerei & Eier"
+  },
+  "bergkäse": {
+   "exact": [
+    "bergkäse"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "käsekuchen",
+    "frischkäse",
+    "croissant",
+    "leberkäse",
+    "laugenstange",
+    "laugengebäck",
+    "brezel",
+    "käsebrötchen",
+    "käsestange",
+    "käsegebäck",
+    "fleischkäse",
+    "twister",
+    "käselaugenstange",
+    "käseschnecke",
+    "mascarpone joghurt"
+   ],
+   "oberbegriff": "käse",
+   "warengruppe": "Molkerei & Eier"
+  },
+  "butterkäse": {
+   "exact": [
+    "butterkäse"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "käsekuchen",
+    "frischkäse",
+    "croissant",
+    "leberkäse",
+    "laugenstange",
+    "laugengebäck",
+    "brezel",
+    "käsebrötchen",
+    "käsestange",
+    "käsegebäck",
+    "fleischkäse",
+    "twister",
+    "käselaugenstange",
+    "käseschnecke",
+    "mascarpone joghurt"
+   ],
+   "oberbegriff": "käse",
+   "warengruppe": "Molkerei & Eier"
+  },
+  "cheddar": {
+   "exact": [
+    "cheddar"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "käsekuchen",
+    "frischkäse",
+    "croissant",
+    "leberkäse",
+    "laugenstange",
+    "laugengebäck",
+    "brezel",
+    "käsebrötchen",
+    "käsestange",
+    "käsegebäck",
+    "fleischkäse",
+    "twister",
+    "käselaugenstange",
+    "käseschnecke",
+    "mascarpone joghurt"
+   ],
+   "oberbegriff": "käse",
+   "warengruppe": "Molkerei & Eier"
+  },
+  "mascarpone": {
+   "exact": [
+    "mascarpone"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "käsekuchen",
+    "frischkäse",
+    "croissant",
+    "leberkäse",
+    "laugenstange",
+    "laugengebäck",
+    "brezel",
+    "käsebrötchen",
+    "käsestange",
+    "käsegebäck",
+    "fleischkäse",
+    "twister",
+    "käselaugenstange",
+    "käseschnecke",
+    "mascarpone joghurt"
+   ],
+   "oberbegriff": "käse",
+   "warengruppe": "Molkerei & Eier"
+  },
+  "ziegenkäse": {
+   "exact": [
+    "ziegenkäse",
+    "ziegenfrischkäse"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "käsekuchen",
+    "frischkäse",
+    "croissant",
+    "leberkäse",
+    "laugenstange",
+    "laugengebäck",
+    "brezel",
+    "käsebrötchen",
+    "käsestange",
+    "käsegebäck",
+    "fleischkäse",
+    "twister",
+    "käselaugenstange",
+    "käseschnecke",
+    "mascarpone joghurt"
+   ],
+   "oberbegriff": "käse",
+   "warengruppe": "Molkerei & Eier"
+  },
+  "harzer": {
+   "exact": [
+    "harzer",
+    "handkäse",
+    "sauermilchkäse"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "käsekuchen",
+    "frischkäse",
+    "croissant",
+    "leberkäse",
+    "laugenstange",
+    "laugengebäck",
+    "brezel",
+    "käsebrötchen",
+    "käsestange",
+    "käsegebäck",
+    "fleischkäse",
+    "twister",
+    "käselaugenstange",
+    "käseschnecke",
+    "mascarpone joghurt"
+   ],
+   "oberbegriff": "käse"
+  },
+  "sekt": {
+   "exact": [
+    "sekt",
+    "prosecco",
+    "secco",
+    "spumante",
+    "schaumwein",
+    "champagner",
+    "frizzante",
+    "jahrgangssekt",
+    "fruchtsecco",
+    "cremant"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "weinsauerkraut",
+    "weintrauben",
+    "weinessig"
+   ],
+   "oberbegriff": "wein",
+   "warengruppe": "Alkohol"
+  },
+  "rotwein": {
+   "exact": [
+    "rotwein",
+    "primitivo",
+    "merlot",
+    "chianti",
+    "dornfelder",
+    "zweigelt",
+    "lambrusco",
+    "trollinger",
+    "portugieser",
+    "amarone",
+    "spätburgunder"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "weinsauerkraut",
+    "weintrauben",
+    "weinessig"
+   ],
+   "oberbegriff": "wein",
+   "warengruppe": "Alkohol"
+  },
+  "roséwein": {
+   "exact": [
+    "rosé",
+    "rosato",
+    "roséwein",
+    "weißherbst"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "weinsauerkraut",
+    "weintrauben",
+    "weinessig"
+   ],
+   "oberbegriff": "wein",
+   "warengruppe": "Alkohol"
+  },
+  "whisky": {
+   "exact": [
+    "whisky",
+    "whiskey",
+    "scotch",
+    "single malt"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "balisto"
+   ],
+   "oberbegriff": "spirituosen",
+   "warengruppe": "Alkohol"
+  },
+  "gin": {
+   "exact": [
+    "gin"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "balisto"
+   ],
+   "oberbegriff": "spirituosen",
+   "warengruppe": "Alkohol"
+  },
+  "rum": {
+   "exact": [
+    "rum"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "balisto"
+   ],
+   "oberbegriff": "spirituosen",
+   "warengruppe": "Alkohol"
+  },
+  "vodka": {
+   "exact": [
+    "vodka",
+    "wodka"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "balisto"
+   ],
+   "oberbegriff": "spirituosen",
+   "warengruppe": "Alkohol"
+  },
+  "likör": {
+   "exact": [
+    "likör",
+    "likoer",
+    "kräuterlikör",
+    "eierlikör",
+    "sahnelikör",
+    "cremelikör",
+    "magenbitter"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "balisto"
+   ],
+   "oberbegriff": "spirituosen",
+   "warengruppe": "Alkohol"
+  },
+  "aperitif": {
+   "exact": [
+    "aperol",
+    "aperitivo",
+    "martini",
+    "vermouth",
+    "campari",
+    "lillet"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "balisto"
+   ],
+   "oberbegriff": "spirituosen"
+  },
+  "weinbrand": {
+   "exact": [
+    "weinbrand",
+    "brandy",
+    "cognac",
+    "edelbrand"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "balisto"
+   ],
+   "oberbegriff": "spirituosen",
+   "warengruppe": "Alkohol"
+  },
+  "tequila": {
+   "exact": [
+    "tequila"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "balisto"
+   ],
+   "oberbegriff": "spirituosen"
+  },
+  "pils": {
+   "exact": [
+    "pils",
+    "pilsener",
+    "pilsner"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "bierschinken",
+    "trauben",
+    "tafeltrauben",
+    "brötchen hell"
+   ],
+   "oberbegriff": "bier",
+   "warengruppe": "Alkohol"
+  },
+  "radler": {
+   "exact": [
+    "radler",
+    "naturradler",
+    "biermischgetränk"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "bierschinken",
+    "trauben",
+    "tafeltrauben",
+    "brötchen hell"
+   ],
+   "oberbegriff": "bier",
+   "warengruppe": "Alkohol"
+  },
+  "weizenbier": {
+   "exact": [
+    "weißbier",
+    "weissbier",
+    "hefeweizen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "bierschinken",
+    "trauben",
+    "tafeltrauben",
+    "brötchen hell"
+   ],
+   "oberbegriff": "bier",
+   "warengruppe": "Alkohol"
+  },
+  "helles": {
+   "exact": [
+    "helles",
+    "vollbier",
+    "kellerbier",
+    "landbier",
+    "märzen",
+    "festbier",
+    "lager"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "bierschinken",
+    "trauben",
+    "tafeltrauben",
+    "brötchen hell"
+   ],
+   "oberbegriff": "bier"
+  },
+  "schwarzbier": {
+   "exact": [
+    "schwarzbier",
+    "porter"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "bierschinken",
+    "trauben",
+    "tafeltrauben",
+    "brötchen hell"
+   ],
+   "oberbegriff": "bier"
+  },
+  "lachs": {
+   "exact": [
+    "lachs",
+    "lachsfilet",
+    "lachsfilets",
+    "räucherlachs",
+    "wildlachs",
+    "lachsforelle",
+    "grilllachs",
+    "lachsfiletseite",
+    "lachsfiletportionen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "fischsauce",
+    "schwein",
+    "schweine",
+    "lamm",
+    "lammfilets",
+    "kasseler",
+    "hähnchen",
+    "brustfilet",
+    "innenfilet",
+    "putenbrustfilet",
+    "lachsschinken",
+    "lachsrolle"
+   ],
+   "oberbegriff": "fisch",
+   "warengruppe": "Fisch"
+  },
+  "thunfisch": {
+   "exact": [
+    "thunfisch",
+    "thunfischfilet",
+    "thunfischfilets"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "fischsauce",
+    "schwein",
+    "schweine",
+    "lamm",
+    "lammfilets",
+    "kasseler",
+    "hähnchen",
+    "brustfilet",
+    "innenfilet",
+    "putenbrustfilet",
+    "lachsschinken",
+    "lachsrolle"
+   ],
+   "oberbegriff": "fisch",
+   "warengruppe": "Fisch"
+  },
+  "garnelen": {
+   "exact": [
+    "garnelen",
+    "garnele",
+    "shrimps",
+    "prawns",
+    "scampi"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "fischsauce",
+    "schwein",
+    "schweine",
+    "lamm",
+    "lammfilets",
+    "kasseler",
+    "hähnchen",
+    "brustfilet",
+    "innenfilet",
+    "putenbrustfilet",
+    "lachsschinken",
+    "lachsrolle"
+   ],
+   "oberbegriff": "fisch",
+   "warengruppe": "Fisch"
+  },
+  "hering": {
+   "exact": [
+    "hering",
+    "heringsfilets",
+    "brathering",
+    "bratheringe",
+    "matjes",
+    "sprotten"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "fischsauce",
+    "schwein",
+    "schweine",
+    "lamm",
+    "lammfilets",
+    "kasseler",
+    "hähnchen",
+    "brustfilet",
+    "innenfilet",
+    "putenbrustfilet",
+    "lachsschinken",
+    "lachsrolle"
+   ],
+   "oberbegriff": "fisch",
+   "warengruppe": "Fisch"
+  },
+  "fischstäbchen": {
+   "exact": [
+    "fischstäbchen",
+    "schlemmerfilet",
+    "backfisch"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "fischsauce",
+    "schwein",
+    "schweine",
+    "lamm",
+    "lammfilets",
+    "kasseler",
+    "hähnchen",
+    "brustfilet",
+    "innenfilet",
+    "putenbrustfilet",
+    "lachsschinken",
+    "lachsrolle"
+   ],
+   "oberbegriff": "fisch",
+   "warengruppe": "Tiefkühl"
+  },
+  "forelle": {
+   "exact": [
+    "forelle"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "fischsauce",
+    "schwein",
+    "schweine",
+    "lamm",
+    "lammfilets",
+    "kasseler",
+    "hähnchen",
+    "brustfilet",
+    "innenfilet",
+    "putenbrustfilet",
+    "lachsschinken",
+    "lachsrolle"
+   ],
+   "oberbegriff": "fisch",
+   "warengruppe": "Fisch"
+  },
+  "kabeljau": {
+   "exact": [
+    "kabeljau",
+    "seelachs",
+    "pangasius",
+    "rotbarsch",
+    "scholle",
+    "schollenfilet"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "fischsauce",
+    "schwein",
+    "schweine",
+    "lamm",
+    "lammfilets",
+    "kasseler",
+    "hähnchen",
+    "brustfilet",
+    "innenfilet",
+    "putenbrustfilet",
+    "lachsschinken",
+    "lachsrolle"
+   ],
+   "oberbegriff": "fisch"
+  },
+  "dorade": {
+   "exact": [
+    "dorade",
+    "doraden",
+    "wolfsbarsch",
+    "makrele",
+    "makrelenfilet"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "fischsauce",
+    "schwein",
+    "schweine",
+    "lamm",
+    "lammfilets",
+    "kasseler",
+    "hähnchen",
+    "brustfilet",
+    "innenfilet",
+    "putenbrustfilet",
+    "lachsschinken",
+    "lachsrolle"
+   ],
+   "oberbegriff": "fisch",
+   "warengruppe": "Fisch"
+  },
+  "nackensteak": {
+   "exact": [
+    "nackensteak",
+    "nackensteaks",
+    "kammsteak",
+    "kammsteaks",
+    "schweinenackensteak",
+    "rückensteak",
+    "rückensteaks"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [],
+   "oberbegriff": "schwein",
+   "warengruppe": "Fleisch & Wurst"
+  },
+  "schweinebauch": {
+   "exact": [
+    "schweinebauch",
+    "krustenbauch",
+    "schälrippe",
+    "schälrippchen",
+    "spareribs",
+    "spare ribs"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [],
+   "oberbegriff": "schwein",
+   "warengruppe": "Fleisch & Wurst"
+  },
+  "blumenkohl": {
+   "exact": [
+    "blumenkohl"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [],
+   "oberbegriff": "brokkoli",
+   "warengruppe": "Obst & Gemüse"
+  },
+  "radieschen": {
+   "exact": [
+    "radieschen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [],
+   "oberbegriff": "brokkoli",
+   "warengruppe": "Obst & Gemüse"
+  },
+  "chinakohl": {
+   "exact": [
+    "chinakohl",
+    "pak choi"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [],
+   "oberbegriff": "brokkoli"
+  },
+  "rote bete": {
+   "exact": [
+    "rote bete"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [],
+   "oberbegriff": "brokkoli"
+  },
+  "aprikosen": {
+   "exact": [
+    "aprikosen",
+    "zuckeraprikosen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "pflaumentomaten",
+    "minipflaumen"
+   ],
+   "oberbegriff": "pfirsich",
+   "warengruppe": "Obst & Gemüse"
+  },
+  "pflaumen": {
+   "exact": [
+    "pflaumen",
+    "zwetschgen",
+    "mirabellen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "pflaumentomaten",
+    "minipflaumen"
+   ],
+   "oberbegriff": "pfirsich",
+   "warengruppe": "Obst & Gemüse"
+  },
+  "kirschen": {
+   "exact": [
+    "kirschen",
+    "sauerkirschen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "pflaumentomaten",
+    "minipflaumen"
+   ],
+   "oberbegriff": "pfirsich",
+   "warengruppe": "Obst & Gemüse"
+  },
+  "nektarinen": {
+   "exact": [
+    "nektarinen",
+    "plattnektarinen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "pflaumentomaten",
+    "minipflaumen"
+   ],
+   "oberbegriff": "pfirsich",
+   "warengruppe": "Obst & Gemüse"
+  },
+  "mango": {
+   "exact": [
+    "mango"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "schöfferhofer",
+    "radler",
+    "naturradler",
+    "obstgarten"
+   ],
+   "oberbegriff": "obst",
+   "warengruppe": "Obst & Gemüse"
+  },
+  "ananas": {
+   "exact": [
+    "ananas"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "schöfferhofer",
+    "radler",
+    "naturradler",
+    "obstgarten"
+   ],
+   "oberbegriff": "obst",
+   "warengruppe": "Obst & Gemüse"
+  },
+  "grapefruit": {
+   "exact": [
+    "grapefruit",
+    "grapefruits"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "schöfferhofer",
+    "radler",
+    "naturradler",
+    "obstgarten"
+   ],
+   "oberbegriff": "obst",
+   "warengruppe": "Obst & Gemüse"
+  },
+  "passionsfrucht": {
+   "exact": [
+    "passionsfrucht",
+    "maracuja"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "schöfferhofer",
+    "radler",
+    "naturradler",
+    "obstgarten"
+   ],
+   "oberbegriff": "obst",
+   "warengruppe": "Obst & Gemüse"
+  },
+  "mais": {
+   "exact": [
+    "mais",
+    "sonnenmais",
+    "maiskörner"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "wraps",
+    "hähnchenschenkel",
+    "antipasti creme",
+    "ganze bohnen",
+    "bohnenkaffee",
+    "schoko",
+    "chips",
+    "popchips",
+    "wraps",
+    "brötchen"
+   ],
+   "oberbegriff": "konserven",
+   "warengruppe": "Obst & Gemüse"
+  },
+  "bohnen": {
+   "exact": [
+    "bohnen",
+    "buschbohnen",
+    "brechbohnen",
+    "kidneybohnen",
+    "weiße bohnen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "ganze bohnen",
+    "bohnenkaffee",
+    "kaffee",
+    "antipasti creme",
+    "ganze bohnen",
+    "bohnenkaffee",
+    "schoko",
+    "chips",
+    "popchips",
+    "wraps",
+    "brötchen"
+   ],
+   "oberbegriff": "konserven",
+   "warengruppe": "Vorräte & Kochen"
+  },
+  "linsen": {
+   "exact": [
+    "linsen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "schoko",
+    "chips",
+    "popchips",
+    "antipasti creme",
+    "ganze bohnen",
+    "bohnenkaffee",
+    "schoko",
+    "chips",
+    "popchips",
+    "wraps",
+    "brötchen"
+   ],
+   "oberbegriff": "konserven",
+   "warengruppe": "Vorräte & Kochen"
+  },
+  "kichererbsen": {
+   "exact": [
+    "kichererbsen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "antipasti creme",
+    "ganze bohnen",
+    "bohnenkaffee",
+    "schoko",
+    "chips",
+    "popchips",
+    "wraps",
+    "brötchen"
+   ],
+   "oberbegriff": "konserven",
+   "warengruppe": "Vorräte & Kochen"
+  },
+  "oliven": {
+   "exact": [
+    "oliven"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "brötchen",
+    "antipasti creme",
+    "ganze bohnen",
+    "bohnenkaffee",
+    "schoko",
+    "chips",
+    "popchips",
+    "wraps",
+    "brötchen"
+   ],
+   "oberbegriff": "konserven",
+   "warengruppe": "Vorräte & Kochen"
+  },
+  "datteln": {
+   "exact": [
+    "datteln"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "antipasti creme",
+    "ganze bohnen",
+    "bohnenkaffee",
+    "schoko",
+    "chips",
+    "popchips",
+    "wraps",
+    "brötchen"
+   ],
+   "oberbegriff": "konserven"
+  },
+  "antipasti": {
+   "exact": [
+    "antipasti"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "antipasti creme",
+    "ganze bohnen",
+    "bohnenkaffee",
+    "schoko",
+    "chips",
+    "popchips",
+    "wraps",
+    "brötchen"
+   ],
+   "oberbegriff": "konserven",
+   "warengruppe": "Vorräte & Kochen"
+  },
+  "eistee": {
+   "exact": [
+    "eistee",
+    "ice tea",
+    "icetea"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [],
+   "oberbegriff": "limonade",
+   "warengruppe": "Getränke"
+  },
+  "spezi": {
+   "exact": [
+    "spezi",
+    "cola-mix",
+    "colamix",
+    "mezzo mix"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [],
+   "oberbegriff": "limonade"
+  },
+  "brause": {
+   "exact": [
+    "brause",
+    "erfrischungsgetränk"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "brausetabletten"
+   ],
+   "oberbegriff": "limonade",
+   "warengruppe": "Getränke"
+  },
+  "fruchtgummi": {
+   "exact": [
+    "fruchtgummi",
+    "lakritz",
+    "goldbären",
+    "lachgummi",
+    "kaubonbons",
+    "kaudragees",
+    "lollies",
+    "lollipops",
+    "weingummi"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "schokoladenpudding",
+    "trinkschokolade"
+   ],
+   "oberbegriff": "schokolade",
+   "warengruppe": "Süßes & Snacks"
+  },
+  "pralinen": {
+   "exact": [
+    "pralinen",
+    "pralinés"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "schokoladenpudding",
+    "trinkschokolade"
+   ],
+   "oberbegriff": "schokolade",
+   "warengruppe": "Süßes & Snacks"
+  },
+  "schokoriegel": {
+   "exact": [
+    "schokoriegel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "schokoladenpudding",
+    "trinkschokolade"
+   ],
+   "oberbegriff": "schokolade",
+   "warengruppe": "Süßes & Snacks"
+  },
+  "tafelschokolade": {
+   "exact": [
+    "tafelschokolade",
+    "tafel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "müllermilch",
+    "joghurt",
+    "schokoladenpudding",
+    "trinkschokolade"
+   ],
+   "oberbegriff": "schokolade",
+   "warengruppe": "Süßes & Snacks"
+  },
+  "donut": {
+   "exact": [
+    "donut",
+    "donuts",
+    "doonuts"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [],
+   "oberbegriff": "backwaren"
+  },
+  "muffins": {
+   "exact": [
+    "muffins",
+    "muffin"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [],
+   "oberbegriff": "backwaren",
+   "warengruppe": "Süßes & Snacks"
+  },
+  "berliner": {
+   "exact": [
+    "berliner",
+    "pfannkuchen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [],
+   "oberbegriff": "backwaren"
+  },
+  "flammkuchen": {
+   "exact": [
+    "flammkuchen",
+    "flammkuchenböden"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [],
+   "oberbegriff": "backwaren",
+   "warengruppe": "Backwaren"
+  },
+  "backmischung": {
+   "exact": [
+    "backmischung",
+    "backmischungen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [],
+   "oberbegriff": "backwaren"
+  },
+  "laugengebäck": {
+   "exact": [
+    "laugengebäck",
+    "laugenstange",
+    "laugencroissant",
+    "brezen"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [],
+   "oberbegriff": "backwaren",
+   "warengruppe": "Süßes & Snacks"
+  },
+  "espresso": {
+   "exact": [
+    "espresso"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "kaffeesahne",
+    "eiskaffee",
+    "kaffeeweißer",
+    "haferdrink"
+   ],
+   "oberbegriff": "kaffee",
+   "warengruppe": "Getränke"
+  },
+  "cappuccino": {
+   "exact": [
+    "cappuccino",
+    "latte macchiato",
+    "milchkaffee"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "kaffeesahne",
+    "eiskaffee",
+    "kaffeeweißer",
+    "haferdrink"
+   ],
+   "oberbegriff": "kaffee",
+   "warengruppe": "Getränke"
+  },
+  "kaffeebohnen": {
+   "exact": [
+    "kaffeebohnen",
+    "ganze bohnen",
+    "bohnenkaffee"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "kaffeesahne",
+    "eiskaffee",
+    "kaffeeweißer",
+    "haferdrink"
+   ],
+   "oberbegriff": "kaffee",
+   "warengruppe": "Vorräte & Kochen"
+  },
+  "löslicher kaffee": {
+   "exact": [
+    "löslicher kaffee",
+    "instantkaffee",
+    "malzkaffee"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "kaffeesahne",
+    "eiskaffee",
+    "kaffeeweißer",
+    "haferdrink"
+   ],
+   "oberbegriff": "kaffee",
+   "warengruppe": "Getränke"
+  },
+  "spaghetti": {
+   "exact": [
+    "spaghetti"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "nudelsalat",
+    "nudelsuppe",
+    "pasta sauce",
+    "pastasauce",
+    "pizza pasta"
+   ],
+   "oberbegriff": "nudeln",
+   "warengruppe": "Vorräte & Kochen"
+  },
+  "lasagne": {
+   "exact": [
+    "lasagne"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "nudelsalat",
+    "nudelsuppe",
+    "pasta sauce",
+    "pastasauce",
+    "pizza pasta"
+   ],
+   "oberbegriff": "nudeln",
+   "warengruppe": "Vorräte & Kochen"
+  },
+  "gnocchi": {
+   "exact": [
+    "gnocchi"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "nudelsalat",
+    "nudelsuppe",
+    "pasta sauce",
+    "pastasauce",
+    "pizza pasta"
+   ],
+   "oberbegriff": "nudeln",
+   "warengruppe": "Vorräte & Kochen"
+  },
+  "penne": {
+   "exact": [
+    "penne",
+    "fusilli",
+    "maccaroni",
+    "bandnudeln",
+    "rigatoni"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "nudelsalat",
+    "nudelsuppe",
+    "pasta sauce",
+    "pastasauce",
+    "pizza pasta"
+   ],
+   "oberbegriff": "nudeln"
+  },
+  "stieleis": {
+   "exact": [
+    "stieleis",
+    "eis am stiel"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "eistee",
+    "eiswürfel",
+    "eiskaffee",
+    "burrata"
+   ],
+   "oberbegriff": "eis",
+   "warengruppe": "Tiefkühl"
+  },
+  "eiscreme": {
+   "exact": [
+    "eiscreme",
+    "eiskonfekt",
+    "gelato",
+    "plombir"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "eistee",
+    "eiswürfel",
+    "eiskaffee",
+    "burrata"
+   ],
+   "oberbegriff": "eis",
+   "warengruppe": "Tiefkühl"
+  },
+  "mochi": {
+   "exact": [
+    "mochi"
+   ],
+   "suffix": [],
+   "prefix": [],
+   "block": [
+    "eistee",
+    "eiswürfel",
+    "eiskaffee",
+    "burrata"
+   ],
+   "oberbegriff": "eis",
+   "warengruppe": "Süßes & Snacks"
   }
  },
  "marken": {
