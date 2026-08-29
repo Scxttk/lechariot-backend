@@ -1,0 +1,65 @@
+name: heim Totmannschalter
+
+# Der Homeserver `heim` (Alpine, im Heimnetz hinter NAT) schickt alle 10 Minuten
+# ein Lebenszeichen an ein privates ntfy-Topic. Diese Action prüft, ob dieses
+# Lebenszeichen ausbleibt — ein abgestürzter Server kann sich nicht selbst melden,
+# und der Mac taugt nicht als Wächter, weil er oft ausgeschaltet ist.
+# ntfy hält die Nachrichten 12 Stunden vor und dient hier als Speicher, damit
+# weder eine Datenbank noch ein weiterer Dienst nötig ist.
+# Details: [[Homeserver heim]] im Vault.
+
+on:
+  schedule:
+    # Alle 15 Minuten. GitHub verschiebt Zeitpläne unter Last, die Erkennung
+    # dauert daher real 15–45 Minuten — für einen Heimserver genug.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: heim-puls
+  cancel-in-progress: false
+
+jobs:
+  wache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Puls prüfen
+        env:
+          PULS: ${{ secrets.NTFY_PULS }}    # Topic mit den Lebenszeichen (nicht auf dem Handy abonniert)
+          TOPIC: ${{ secrets.NTFY_TOPIC }}  # Topic, das auf Scotts Handy landet
+        run: |
+          set -u
+          if [ -z "${PULS:-}" ] || [ -z "${TOPIC:-}" ]; then
+            echo "::error::NTFY_PULS oder NTFY_TOPIC fehlt in den Repo-Secrets."
+            exit 1
+          fi
+
+          hole()  { curl -s --max-time 20 "https://ntfy.sh/$PULS/json?poll=1&since=$1"; }
+          sende() { curl -s -o /dev/null --max-time 20 -H "Title: $1" -H "Priority: $2" -H "Tags: $3" -d "$4" "ntfy.sh/$TOPIC"; }
+          # Der Wächter merkt sich seinen eigenen Zustand als Marke im Puls-Topic.
+          marke() { curl -s -o /dev/null --max-time 20 -H "Title: $1" -H "Priority: min" -d "$2" "ntfy.sh/$PULS"; }
+
+          puls=$(hole 40m   | grep -c '"title":"puls"'  || true)
+          frisch=$(hole 3h  | grep -c '"title":"alarm"' || true)
+          letzte=$(hole 12h | grep -oE '"title":"(alarm|entwarnt)"' | tail -1 || true)
+
+          if [ "$puls" -gt 0 ]; then
+            echo "Puls da ($puls Zeichen in 40 Minuten)."
+            case "$letzte" in
+              *alarm*) echo "Entwarnung wird geschickt."
+                       sende "heim ist wieder da" default white_check_mark "Der Puls kommt wieder an."
+                       marke entwarnt ok ;;
+              *)       echo "Alles ruhig, kein Push." ;;
+            esac
+          else
+            still=nein
+            case "$letzte" in *alarm*) [ "$frisch" -gt 0 ] && still=ja ;; esac
+            if [ "$still" = ja ]; then
+              echo "Kein Puls — Alarm läuft bereits, kein erneuter Push (Wiederholung frühestens nach 3 h)."
+            else
+              echo "::warning::Kein Lebenszeichen von heim seit über 40 Minuten."
+              sende "heim antwortet nicht" high rotating_light "Seit über 40 Minuten kein Lebenszeichen von heim. Strom, Absturz oder Netz?"
+              marke alarm gemeldet
+            fi
+          fi
