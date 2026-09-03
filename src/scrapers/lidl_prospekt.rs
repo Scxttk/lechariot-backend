@@ -87,6 +87,8 @@ const PRICE_TOLERANCE: f64 = 0.06;
 /// ein 10,93er Name ohne eigenen Preis stehen, kostet ihn diese Schranke —
 /// dieser Prospekt kennt den Fall nicht.
 const MIN_NAME_PT: f64 = 11.0;
+/// Größter Schriftgrad, in dem der Prospekt noch einen Produktnamen setzt (pt).
+const MAX_NAME_PT: f64 = 13.0;
 /// Preise außerhalb dieser Spanne sind keine Lebensmittelangebote.
 const MIN_PRICE: f64 = 0.10;
 const MAX_PRICE: f64 = 100.0;
@@ -1196,9 +1198,23 @@ fn title_of(island: &Island) -> String {
 /// 8 pt. Für die Frage „steht in dieser Kachel ein Produktname?" zählt der
 /// Grad der **Titelzeilen**, nicht der der Preisziffern.
 fn head_of(island: &Island) -> (String, f64) {
+    let ohne_siegel = head_from(island, true);
+    if !ohne_siegel.0.is_empty() {
+        return ohne_siegel;
+    }
+    head_from(island, false)
+}
+
+fn head_from(island: &Island, skip_seal: bool) -> (String, f64) {
     let mut head: Vec<String> = Vec::new();
     let mut pt = 0.0_f64;
     for (i, line) in island.lines.iter().enumerate() {
+        if skip_seal
+            && head.is_empty()
+            && island.line_pt.get(i).copied().unwrap_or(0.0) < MIN_NAME_PT
+        {
+            continue;
+        }
         if name_words(line).is_empty() {
             if head.is_empty() {
                 continue;
@@ -1969,12 +1985,21 @@ struct OpenTile {
 /// Seiten (ZOTT Monte Mega, BON GELATI Mini Mix, EXQUISA Frischkäse, AMICELLI
 /// Milchcreme, KIDSMANIA Candy), und jedes Mal bekommen danach **beide**
 /// Kacheln einen Preis statt nur einer.
-fn encloses_wrong_price(product: &Island, price: &Island) -> bool {
-    let encloses = product.x0 >= price.x0
+/// Liegt die Produktkachel vollständig **in** der Preiskachel?
+///
+/// Dann ist sie keine Nachbarin, sondern ein Einschub der großen Kachel — eine
+/// Bildbeschriftung, eine Inhaltsangabe — und der Name der Kachel steht in der
+/// Kachel selbst (WAGNER Steinofen Pizza trägt die kleine Insel „DIAMANT
+/// Zucker XXL" in sich).
+fn encloses(product: &Island, price: &Island) -> bool {
+    product.x0 >= price.x0
         && product.x1 <= price.x1
         && product.y0 >= price.y0
-        && product.y1 <= price.y1;
-    if !encloses {
+        && product.y1 <= price.y1
+}
+
+fn encloses_wrong_price(product: &Island, price: &Island) -> bool {
+    if !encloses(product, price) {
         return false;
     }
     let own = product.text();
@@ -2056,6 +2081,7 @@ fn extract_offers_shots_and_open(
                 roles.push(Role::Price(prices.len()));
                 prices.push(tile);
             } else if tile.font_pt() >= MIN_NAME_PT
+                && head_of(&tile).1 <= MAX_NAME_PT
                 && is_plausible_title(&title_of(&tile))
                 && !is_layout_text(&title_of(&tile))
             {
@@ -2170,12 +2196,16 @@ fn extract_offers_shots_and_open(
             }
         }
 
-        for (i, j) in matched
+        for (i, j, selbst) in matched
             .into_iter()
-            .chain(self_contained.iter().map(|j| (*j, *j)))
+            .map(|(i, j)| (i, j, false))
+            .chain(self_contained.iter().map(|j| (*j, *j, true)))
         {
             let price_tile = &prices[j];
-            let product = if i == j { price_tile } else { &products[i] };
+            // Wer den Titel stellt: die Preiskachel, wenn sie ihr Produkt
+            // umschließt — sonst die gepaarte Produktkachel.
+            let selbst = selbst || encloses(&products[i], price_tile);
+            let product = if selbst { price_tile } else { &products[i] };
 
             // Eine Kachel kann mehrere Sternpreise tragen — „29.99* 2.99*"
             // ist ein Artikel mit zwei Größen, nicht ein Artikel. Jeder Stern
@@ -2216,7 +2246,7 @@ fn extract_offers_shots_and_open(
                 .collect();
             own_badges.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
             let mut sources = vec![product.text()];
-            if i != j {
+            if !selbst {
                 sources.push(price_tile.text());
             }
             sources.extend(own_badges.iter().map(|(_, b)| b.text()));
@@ -3379,6 +3409,77 @@ pub fn merge_products(flyer: &Flyer, market_id: &str, existing: &[Offer]) -> Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Werbebanner sind keine Produktnamen — der Prospekt setzt sie in einem
+    /// Grad, in dem er nie einen Artikel benennt (siehe [`MAX_NAME_PT`]).
+    #[test]
+    fn banner_sind_keine_produktnamen() {
+        let banner = Island {
+            x0: 261.3,
+            y0: 266.1,
+            x1: 359.9,
+            y1: 352.2,
+            lines: vec![
+                "Bewusst".into(),
+                "ernähr a e ld n".into(),
+                "mit Wig".into(),
+                "Boning".into(),
+            ],
+            line_pt: vec![35.86, 34.67, 20.80, 22.64],
+        };
+        assert!(head_of(&banner).1 > MAX_NAME_PT);
+
+        let radieschen = Island {
+            x0: 243.7,
+            y0: 472.1,
+            x1: 289.4,
+            y1: 505.5,
+            lines: vec!["Deutsche".into(), "Radieschen".into(), "Je Bund".into()],
+            line_pt: vec![11.96, 11.96, 9.22],
+        };
+        assert!(head_of(&radieschen).1 <= MAX_NAME_PT);
+    }
+
+    /// Das Herkunftssiegel steht über dem Namen und in einem Grad, in dem der
+    /// Prospekt nur beschriftet. Es darf die Kachel nicht betiteln.
+    #[test]
+    fn das_herkunftssiegel_betitelt_die_kachel_nicht() {
+        let mit_siegel = Island {
+            x0: 243.7,
+            y0: 421.5,
+            x1: 289.4,
+            y1: 505.5,
+            lines: vec![
+                "DE".into(),
+                "AUS UT".into(),
+                "HER LAN".into(),
+                "SC".into(),
+                "GUT".into(),
+                "AFT ES".into(),
+                "www.herkunft-".into(),
+                "deutschland.de".into(),
+                "Deutsche".into(),
+                "Radieschen".into(),
+                "Je Bund".into(),
+            ],
+            line_pt: vec![
+                6.54, 8.83, 7.90, 4.17, 7.28, 6.45, 6.27, 6.27, 11.96, 11.96, 9.22,
+            ],
+        };
+        assert_eq!(title_of(&mit_siegel), "Deutsche Radieschen");
+
+        // Rückfall: Eine Kachel, die ihren Namen wirklich nur klein setzt,
+        // behält ihn.
+        let nur_klein = Island {
+            x0: 0.0,
+            y0: 0.0,
+            x1: 50.0,
+            y1: 20.0,
+            lines: vec!["MILBONA Butterkäse".into()],
+            line_pt: vec![9.4],
+        };
+        assert_eq!(title_of(&nur_klein), "MILBONA Butterkäse");
+    }
 
     /// Aus dem 11-Regionen-Audit (2026-07-30): 538 Zeilen eines
     /// Wochenprospekt-Satzes waren keine Angebote, sondern Layout-Text —
@@ -4785,3 +4886,4 @@ mod tests {
         eprintln!("ANGEBOTE\t{}\tSTREIFEN\t{}", offers.len(), shots.len());
     }
 }
+
