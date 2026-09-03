@@ -1674,3 +1674,44 @@ fn a_page_without_a_star_price_is_counted_as_its_own_reason() {
         "Sternpreis-Seite als sternlos verbucht"
     );
 }
+
+// Die Titelseite: Fixture ist die ungekürzte `pdftotext -bbox-layout`-Ausgabe
+// von Seite 2 des Prospekts vom 31.08.2026 (Absatzregion 20). Sie trägt genau
+// die drei Fallen, an denen Lidls Frischeseiten bis dahin scheiterten: ein
+// Kampagnenbanner in 35,9 pt, das Herkunftssiegel über dem Produktnamen, und
+// eine Produktkachel, die als erste ihrer Seite auf die erste Preiskachel
+// trifft.
+#[test]
+fn die_titelseite_liefert_ihr_gemuese() {
+    let offers = scrapers::lidl_prospekt::extract_offers(
+        include_str!("fixtures/lidl/prospekt_titelseite.xml"),
+        "LIDL_1988",
+        Some("2026-08-31"),
+        Some("2026-09-05"),
+    );
+    let titles: Vec<&str> = offers.iter().map(|o| o.title.as_str()).collect();
+
+    // Die Radieschen: Produktkachel 0 trifft Preiskachel 0. Bis 2026-09-03
+    // las `i == j` das Paar als selbsttragende Preiskachel, und der Titel kam
+    // aus „Aktion 0.49*" — also gar keiner.
+    let radieschen = offers
+        .iter()
+        .find(|o| o.title.starts_with("Deutsche Radieschen"))
+        .unwrap_or_else(|| panic!("Radieschen fehlen: {titles:?}"));
+    assert_eq!(radieschen.price, Some(0.49));
+
+    // Die Lauchzwiebeln: ihr Name steht unter dem Herkunftssiegel, dessen
+    // zerrissene Kleinschrift die Kachel vorher betitelte.
+    assert!(
+        titles
+            .iter()
+            .any(|t| t.starts_with("Deutsche Lauchzwiebeln")),
+        "Lauchzwiebeln fehlen: {titles:?}"
+    );
+
+    // Und das Banner daneben ist kein Artikel.
+    assert!(
+        !titles.iter().any(|t| t.contains("Bewusst ernähr")),
+        "Werbebanner als Artikel: {titles:?}"
+    );
+}
