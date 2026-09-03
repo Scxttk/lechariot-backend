@@ -1709,6 +1709,24 @@ fn die_titelseite_liefert_ihr_gemuese() {
         "Lauchzwiebeln fehlen: {titles:?}"
     );
 
+    // **Die Kartoffeln behalten ihren Namen und ihren Preis.** Ihre Kachel
+    // trägt zwei Sternpreise (0.45 und 2.19) und steht 22 pt neben den
+    // Lauchzwiebeln; bis zum 03.09. bekam der Nachbar beide, und die
+    // Kartoffeln fielen aus dem Prospekt.
+    let kartoffeln = offers
+        .iter()
+        .find(|o| o.title.starts_with("BIOLAND Deutsche Speisekartoffeln"))
+        .unwrap_or_else(|| panic!("Kartoffeln fehlen: {titles:?}"));
+    assert_eq!(kartoffeln.price, Some(2.19));
+
+    // Und die Lauchzwiebeln tragen nur ihren eigenen Preis.
+    let lauch: Vec<Option<f64>> = offers
+        .iter()
+        .filter(|o| o.title.starts_with("Deutsche Lauchzwiebeln"))
+        .map(|o| o.price)
+        .collect();
+    assert_eq!(lauch, vec![Some(0.45)], "Lauchzwiebeln mit fremdem Preis");
+
     // Und das Banner daneben ist kein Artikel.
     assert!(
         !titles.iter().any(|t| t.contains("Bewusst ernähr")),
