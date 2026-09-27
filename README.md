@@ -1,400 +1,172 @@
 # lechariot
 
-A CLI tool that scrapes offers from German supermarkets, stores them in a
-SQLite database, and makes them searchable, comparable, and watchable.
-Nine chains are supported (Rewe, Penny, Kaufland, Lidl, Netto, ALDI Nord,
-ALDI Süd, EDEKA, NORMA). The CLI output itself is in German.
+Scrapes offers from German supermarkets into SQLite, then makes them
+searchable, comparable and watchable — and pushes them to Supabase for the
+[iOS app](https://github.com/Scxttk/lechariot-app). Nine chains: REWE, Penny,
+Kaufland, Lidl, Netto, ALDI Nord, ALDI Süd, EDEKA, NORMA. The CLI speaks
+German.
 
-## Building & installing
+## Building
 
-Rust (edition 2024) is required:
+Rust (edition 2024):
 
 ```sh
-cargo build --release
-# Binary: target/release/lechariot
+cargo build --release   # target/release/lechariot
 ```
 
-The Rewe scrapers additionally need the `rewerse` CLI and a client
-certificate — see [docs/rewe-cert.md](docs/rewe-cert.md). Netto, ALDI Süd, and
-EDEKA shell out to the system `curl` (Akamai blocks reqwest), so `curl` must be
-on the `PATH`.
+REWE additionally needs the `rewerse` CLI and a client certificate
+([docs/rewe-cert.md](docs/rewe-cert.md)). Netto, ALDI Süd and EDEKA shell out
+to the system `curl`, because Akamai blocks reqwest — `curl` has to be on the
+`PATH`. Lidl needs `pdftotext` (poppler-utils).
 
-Every command takes `--db <path>` (default `lechariot.db` in the working
-directory). The database is created and migrated on demand.
+Every command takes `--db <path>` (default `lechariot.db`); the database is
+created and migrated on open.
 
 ## Quick start
 
-Fetch and store offers:
-
 ```sh
-lechariot fetch --store lidl --zip 50667
-# Suche Lidl-Markt für PLZ 50667...
-# Markt gefunden: Lidl Deutschland (ID: LIDL_DE)
-# Lade Angebote...
-# 470 Angebote gefunden.
-# 470 Angebote in 'lechariot.db' gespeichert.
+lechariot fetch --all-stores --zip 50667   # scrape every chain for a ZIP
+lechariot search Butter                    # what's on offer
+lechariot compare Milch                    # same product across markets
+lechariot serve --port 8080                # dashboard + read-only JSON API
 ```
 
-All chains at once (`--all-stores`, with a per-chain summary; individual
-failures don't abort the run):
+Full command reference: [docs/cli.md](docs/cli.md).
 
-```sh
-lechariot fetch --all-stores --zip 50667
-```
+| Command | Does |
+|---|---|
+| `fetch` | scrape and store offers |
+| `search` / `compare` / `stats` | query what's stored |
+| `history` / `deals` | prices over time, price drops |
+| `watch` | watchlist; `watch check` exits 1 on a hit (cron-friendly) |
+| `list` | shopping list, `list suggest` finds the cheapest market per item |
+| `export` | JSON or CSV |
+| `serve` | web dashboard + JSON API |
+| `push` | upload offers to Supabase |
+| `sync-regions` | full pipeline per ZIP, driven by `public.regions` |
+| `branches-sync` | fill `public.branches`, the store directory the app searches |
 
-`--dry-run` only prints without storing; `--notify` checks the watchlist after
-the fetch.
+## Supabase
 
-## Commands
-
-### search — search offers by title
-
-```sh
-lechariot search Butter
-#   [Wochen-Angebote] Butter (250-g-Packung) — 1.29 €  [2026-07-13 – 2026-07-18]
-#   ...
-```
-
-Optionally `--max-price <euro>`.
-
-### compare — price of a product across all markets
-
-```sh
-lechariot compare Milch
-# MÜLLER Reine Buttermilch*
-#   Penny Am Eigelstein    0.66 €  (1.32 €/kg) (je 500 g)
-#   ...
-```
-
-Grouped by normalized product name, cheapest market first, with unit price
-where derivable.
-
-### stats — per-market statistics + top discounts
-
-```sh
-lechariot stats
-# Angebote pro Markt:
-#   Filiale                      Angebote  Gültigkeit              Ø Rabatt
-#   Penny Am Eigelstein               542  2026-07-13 – 2026-07-26 33 %
-#   ...
-# Top 10 Rabatte:
-#    1. -80 %  UNCLE SAM Herren-T-Shirt* je Stück — 3.99 € statt 19.99 € (Penny Am Eigelstein)
-```
-
-### history — price history of a product
-
-```sh
-lechariot history Butter
-```
-
-Shows, per title/market, the prices seen over time (from `price_history`).
-
-### deals — price drops
-
-```sh
-lechariot deals            # all recorded drops
-lechariot deals --since 7  # only the last 7 days
-```
-
-### watch — watchlist (cron-friendly)
-
-```sh
-lechariot watch add Kaffee --max-price 5
-# Watch #1 angelegt: 'Kaffee' (bis 5.00 €)
-lechariot watch list
-lechariot watch check   # prints hits, exit code 1 if there are any
-lechariot watch remove 1
-```
-
-`watch check` exits with **exit code 1** as soon as at least one watch matches
-(0 otherwise) — see [docs/cron.md](docs/cron.md) for notifications.
-
-### list — shopping list
-
-```sh
-lechariot list add Butter
-lechariot list show
-lechariot list suggest
-# Butter                   0.66 € bei Penny Am Eigelstein — MÜLLER Reine Buttermilch*  (1.32 €/kg)
-lechariot list remove Butter
-lechariot list clear
-```
-
-`suggest` finds the cheapest matching offer per item across all markets.
-
-### export — JSON or CSV
-
-```sh
-lechariot export --format csv --query Butter > butter.csv
-lechariot export --format json --out angebote.json
-```
-
-Without `--out` the output goes to stdout; `--query` filters by title/subtitle.
-
-### serve — web dashboard + read-only JSON API
-
-```sh
-lechariot serve --port 8080
-# Web-UI läuft auf http://0.0.0.0:8080, JSON-API auf http://0.0.0.0:8080/api (DB: lechariot.db)
-```
-
-The web dashboard lives at `/`, the JSON endpoints under `/api/*`
-(see below and [docs/cron.md](docs/cron.md)).
-
-### push — Supabase push
-
-Uploads the stored offers to the Supabase table `public.offers`
-(PostgREST upsert on `market_id,product,valid_from,region`, batches of 100)
-and registers the ZIP code in `public.regions`. Outdated weeks for the
-respective **branch** are deleted first — offers belong to a store, not to a
-chain in a ZIP code (see `supabase/migration_v13_offer_market_id.sql`).
-Offers without a price are skipped.
+`push` and `sync-regions` need:
 
 ```sh
 export SUPABASE_URL="https://xyz.supabase.co"
 export SUPABASE_SERVICE_KEY="…"   # service role key, not the anon key
-
-lechariot push --region 01219                  # all markets
-lechariot push --store lidl --region 01219     # a single chain
-lechariot push --dry-run                       # print only, no network
 ```
 
-`--region <ZIP>` is required (except with `--dry-run`). For the weekly sync
-via cron, simply push after the fetch:
+`push --region <ZIP>` upserts on `market_id,product,valid_from,region` in
+batches of 100 and deletes outdated weeks **per branch** first — offers belong
+to a store, not to a chain in a ZIP code. Offers without a price are skipped.
 
-For the regular sync, `scripts/nightly.sh` handles sync-regions plus the
-watchlist check in one go; on macOS, `scripts/install-launchd.sh` installs the
-ready-made nightly agent — see [docs/automation.md](docs/automation.md).
+`sync-regions` reads the active regions (oldest request first) and runs the
+whole pipeline per ZIP; a failing region doesn't abort the run. `--market-id`
+scrapes one specific store instead of "whatever the finder returns for this
+ZIP" — that distinction is real: on 2026-07-25 the three REWE stores in 01067
+published three different flyers in the same week, and a Coca-Cola cost €0.75
+at two of them and €1.49 at the third.
 
-During the push, every offer is deterministically enriched (`src/enrich.rs`):
-`category` holds one of 15 fixed categories (instead of the raw scraper
-category), `emoji` a matching emoji from a curated keyword table — with no
-match, the category's default emoji, never null. The app hardcodes this list;
-changes only go out together with an app update (regression test in
-`tests/enrich.rs`).
+`branches-sync` answers a different question than "which store do we scrape":
+it fills the directory the app searches for *nearby* stores. Kaufland (787)
+and Penny (2120) publish theirs in one request and are fetched nationwide;
+every other chain is fetched per area, so the directory grows where the app is
+used. Refreshed weekly by `.github/workflows/branches.yml`.
 
-In addition, every row carries a product image in `image_url`: the scrapers
-deliver the retailer image URLs and the push writes them into the row as-is —
-the app loads them straight from the retailer CDNs (hotlinking freely
-accessible content instead of hosting copies; also saves all image egress).
-If a CDN rotates its paths or blocks hotlinking, the app falls back to the
-category emoji. Mirroring into the Supabase bucket `offer-images`
-(`src/storage.rs`, idempotent, object path = sha256 of the source URL,
-uploads tracked in the local table `uploaded_images`) still exists as an
-opt-in via `push --mirror-images`.
+Migrations live under [`supabase/`](supabase/) and are run by hand in the SQL
+editor. For the regular sync, [`scripts/nightly.sh`](scripts/nightly.sh) does
+sync-regions plus the watch check in one go; on macOS
+`scripts/install-launchd.sh` installs the nightly agent
+([docs/automation.md](docs/automation.md)).
 
-| Category | Default emoji | | Category | Default emoji |
-|---|---|---|---|---|
-| Obst & Gemüse | 🥬 | | Alkohol | 🍺 |
-| Molkerei & Eier | 🥛 | | Vorräte & Kochen | 🥫 |
-| Fleisch & Wurst | 🥩 | | Drogerie | 🧴 |
-| Fisch | 🐟 | | Haushalt | 🧽 |
-| Backwaren | 🥖 | | Tierbedarf | 🐾 |
-| Tiefkühl | ❄️ | | Kinder | 🧸 |
-| Süßes & Snacks | 🍬 | | Sonstiges | 🛒 |
-| Getränke | 🥤 | | | |
+### Enrichment
 
-### sync-regions — multi-region sync
+Every pushed offer is deterministically enriched (`src/enrich.rs`): `category`
+is one of 15 fixed values rather than the raw scraper category, and `emoji` a
+match from a curated keyword table, falling back to the category's default —
+never null. The app hardcodes this list, so changes ship with an app update
+(regression test in `tests/enrich.rs`).
 
-Reads all active regions from the Supabase table `public.regions`
-(sorted by `requested_at`, oldest request first) and runs the full pipeline
-per ZIP code: fetch all chains, report found stores to `public.markets`, push
-offers with `--region <ZIP>`. The local `offers` table is cleared per region
-so that no offers from other regions get pushed along.
+| | | | | | |
+|---|---|---|---|---|---|
+| Obst & Gemüse | 🥬 | Getränke | 🥤 | Drogerie | 🧴 |
+| Molkerei & Eier | 🥛 | Alkohol | 🍺 | Haushalt | 🧽 |
+| Fleisch & Wurst | 🥩 | Vorräte & Kochen | 🥫 | Tierbedarf | 🐾 |
+| Fisch | 🐟 | Backwaren | 🥖 | Kinder | 🧸 |
+| Tiefkühl | ❄️ | Süßes & Snacks | 🍬 | Sonstiges | 🛒 |
 
-```sh
-export SUPABASE_URL="https://xyz.supabase.co"
-export SUPABASE_SERVICE_KEY="…"
+`image_url` carries the retailer's own image URL as-is and the app loads it
+straight from their CDN — hotlinking freely accessible content instead of
+hosting copies, which also saves all image egress. If a CDN rotates paths or
+blocks hotlinking, the app falls back to the emoji. Mirroring into the
+`offer-images` bucket still exists as `push --mirror-images`.
 
-lechariot sync-regions                          # up to 10 regions
-lechariot sync-regions --max-regions 3          # change the limit
-lechariot sync-regions --dry-run                # no Supabase writes
-```
+## Scrapers
 
-Failures of individual regions don't abort the run; exit code ≠ 0 only if all
-regions fail or the table is empty/unreachable. Prerequisite: the migration
-`supabase/migration_v3_multi_region.sql` has been run once in the Supabase SQL
-editor (see [docs/ci.md](docs/ci.md)).
-
-#### `--market-id` — sync a single store
-
-```sh
-lechariot sync-regions --market-id 1766063      # REWE am Postplatz, 01067
-```
-
-The ZIP path asks the store finder which store is *nearest* and takes the
-first hit. That answer is unique per chain and ZIP, and the offers aren't:
-measured on 2026-07-25, the three REWE stores in 01067 published three
-different flyers in the same week — Friedrichstadt carried 101 offers the
-Postplatz store did not, and a Coca-Cola cost €0.75 at two of them and €1.49
-at the third.
-
-With `--market-id` the store is picked from the directory (`public.branches`)
-instead, so there is nothing left to search: the offers are fetched for that
-store, written under its `market_id` and pushed with the store's own ZIP as
-`region`. Conflicts with `--only`.
-
-### branches-sync — store directory
-
-Fills `public.branches`, the directory the app searches to show *nearby*
-stores. This is a different question from "which store do we scrape": until
-now the backend kept exactly one store per chain and ZIP — whichever the
-finder returned first — and threw the rest of the response away. That is where
-rows like "REWE in 01219" come from: searching REWE for `01219` returns five
-stores, all of them in 01257/01259/01277.
-
-Chains differ wildly in what a full directory costs, and the command follows
-that: Kaufland (787 stores) and Penny (2120) publish theirs in a single
-request and are fetched nationwide; everything else is fetched per area, so
-the directory grows where the app is actually used.
-
-```sh
-export SUPABASE_URL="https://xyz.supabase.co"
-export SUPABASE_SERVICE_KEY="…"
-
-lechariot branches-sync                            # Kaufland + Penny, nationwide
-lechariot branches-sync --area 01219               # plus every chain around one ZIP
-lechariot branches-sync --from-regions             # areas = active regions
-lechariot branches-sync --area 01219 --dry-run     # no Supabase writes
-```
-
-For an area, REWE is searched twice — once by ZIP (the neighbourhood) and once
-by city (the centre; that search caps at 20 hits) — and everything outside
-`--radius-km` (default 25) is dropped afterwards, because each finder draws
-its own boundary differently. EDEKA is the expensive one: its offer id sits
-behind a redirect, so every store costs an extra request. NORMA costs two: its
-store finder is a POST form whose search lives in a PHP session, so one request
-opens the session before the search itself.
-
-Failures of individual chains only warn. Prerequisite: the migration
-`supabase/migration_v12_branches.sql` has been run once in the Supabase SQL
-editor. Refreshed weekly by `.github/workflows/branches.yml`.
-
-## Scraper support
-
-| Chain | Auth required | Market | Offers (ballpark) |
+| Chain | Auth | Market | Offers |
 |---|---|---|---|
-| Rewe | yes — TLS cert + `rewerse` | store-specific (ZIP) | ~323 |
-| Penny | no | store-specific (ZIP) | ~540 |
-| Kaufland | no | store-specific (ZIP) | varies (not every ZIP) |
-| Lidl² | no (needs `pdftotext`) | sales region of the store | ~382 (1 week) |
-| Netto | no (curl) | store-specific (ZIP) | ~190 |
-| ALDI Nord | no | national¹ | ~240 |
-| ALDI Süd | no (curl) | national¹ | ~75 |
-| EDEKA | no (curl) | store-specific (ZIP) | varies (not every region) |
-| NORMA | no | national¹ | ~220 (3 terms/week) |
+| REWE | TLS cert + `rewerse` | per store (ZIP) | ~323 |
+| Penny | – | per store (ZIP) | ~540 |
+| Kaufland | – | per store (ZIP) | varies |
+| Lidl | needs `pdftotext` | sales region | ~382 |
+| Netto | curl | per store (ZIP) | ~190 |
+| ALDI Nord | – | national* | ~240 |
+| ALDI Süd | curl | national* | ~75 |
+| EDEKA | curl | per store (ZIP) | varies |
+| NORMA | – | national* | ~220 |
 
-Ballpark numbers from a live fetch for ZIP 50667 (Cologne) on 2026-07-17;
-actual numbers vary per week and store. Kaufland and EDEKA returned no hits
-for this ZIP — both are region-dependent. The Rewe number (~323) comes from a
-live fetch for ZIP 01219 (Dresden, store "REWE Supermarkt", ID 565005) on
-2026-07-18.
+Counts from a live fetch for 50667 on 2026-07-17 (REWE: 01219 on 2026-07-18);
+they move every week. Kaufland and EDEKA returned nothing for that ZIP — both
+are region-dependent.
 
-² Lidl comes from Lidl's own weekly leaflet — a PDF with a real text layer,
-read via `pdftotext -bbox-layout` (install `poppler-utils`), plus the
-online-shop articles from the leaflet JSON. It carries struck-through prices,
-page-accurate validity windows and categories. No API key, no LLM.
+\* The *offers* are national, the *presence* isn't: `find_market` asks the
+chain's own store finder and only registers the chain if there's a store
+within 15 km. If the finder itself fails, the sync falls back to the national
+placeholder with a WARN.
 
-This is now the only Lidl source. Until 2026-07-31 an unset `LIDL_SOURCE`
-fell back to the third-party marktguru web API — the original source, which
-the leaflet covered to 96 % when it took over on 2026-07-27. marktguru was
-removed so that nothing can reach it by accident; `LIDL_SOURCE` now only
-chooses between `prospekt` (default) and `prospekt-llm`.
+**Lidl** comes from Lidl's own weekly leaflet — a PDF with a real text layer,
+read via `pdftotext -bbox-layout`, plus the online-shop articles from the
+leaflet JSON. Struck-through prices, page-accurate validity windows,
+categories; no API key, no LLM. It replaced the third-party marktguru API on
+2026-07-31 after covering it to 96 %. What that cost: marktguru was the only
+Lidl source carrying product images, so until crops are extracted from the
+leaflet pages every Lidl offer falls back to its emoji.
+`LIDL_SOURCE=prospekt-llm` reads the same text layer through GitHub Models to
+pick up tiles the geometry misses — an add-on, not a replacement: every price
+must appear verbatim in the page text and pass the arithmetic check, so the
+model can miss rows but cannot invent them
+([docs/scrapers](docs/scrapers/README.md)).
 
-**What that costs:** marktguru was the only Lidl source carrying product
-images. The leaflet paths supply none, so until image crops are extracted
-from the leaflet pages every Lidl offer falls back to its emoji.
+## HTTP API and dashboard
 
-An optional third mode, `LIDL_SOURCE=prospekt-llm`, reads the same text layer
-page by page through GitHub Models (free with the GitHub Student pack) to pick
-up the tiles the geometry misses. It is an add-on, not a replacement — every
-price it returns must appear verbatim in the page text and pass the same
-arithmetic check, so the model can miss rows but cannot invent them. See
-[docs/scrapers/README.md](docs/scrapers/README.md).
+`lechariot serve` delivers a server-rendered HTML dashboard (no JavaScript,
+CSS embedded) at `/` and read-only JSON under `/api`.
 
-¹ The *offers* are national, the *presence* no longer is: `find_market`
-queries the chain's official store finder (Lidl: Bing Spatial Data Service
-behind lidl.de, ALDI Nord/Süd: Uberall locator; ZIP geocoding via Nominatim,
-`src/scrapers/store_finder.rs`). If there is a store within 15 km, it is
-registered with name, ID, and coordinates; otherwise the chain is not
-registered for the region at all. If the finder itself fails (network, format
-change), the sync falls back to the national placeholder with a WARN. Penny
-and Kaufland deliver their store coordinates anyway — `markets.lat/lon`
-(migration_v8) carries them, NULL where unknown.
-
-## HTTP API endpoints
-
-All endpoints are `GET` and return JSON; errors as `{"error": "..."}` with
-status 400 (missing/invalid parameter) or 500. Via `lechariot serve` they are
-reachable under the **`/api`** prefix (e.g. `/api/offers?q=Butter`); the root
-paths belong to the web dashboard.
-
-| Endpoint | Parameters | Returns |
-|---|---|---|
-| `/markets` | – | Stored stores |
-| `/offers` | `q` (required), `max_price`, `market` | Offers matching the search |
-| `/compare` | `q` (required) | Price comparison, grouped per product |
-| `/stats` | – | Offers per store + top 10 discounts |
-| `/history` | `q` (required) | Price history |
-| `/deals` | `since` (days, optional) | Price drops |
-| `/watches` | – | Watchlist |
-| `/watches/check` | – | `{"hits": bool, "watches": [...]}` |
-| `/list` | – | Shopping list |
-| `/list/suggest` | – | Cheapest market per list item |
-
-The API is read-only and **unauthenticated** — only run it on a trusted
-network.
-
-## Web dashboard
-
-`lechariot serve` additionally delivers a server-rendered HTML dashboard —
-entirely without JavaScript, CSS embedded, no external assets.
-
-| Page | Content |
+| Endpoint | Parameters |
 |---|---|
-| `/` | Overview: offers per market, validity periods, top discounts |
-| `/search?q=…` | Offer search with market, price, and unit price |
-| `/compare?q=…` | Price comparison per product across all markets, cheapest first |
-| `/watchlist` | View, create, and remove watches (POST forms) |
-| `/history?offer=…` | Price history as an inline SVG sparkline plus table |
+| `/markets`, `/stats`, `/deals`, `/watches`, `/list` | – (`deals` takes `since`) |
+| `/offers` | `q` (required), `max_price`, `market` |
+| `/compare`, `/history` | `q` (required) |
+| `/watches/check`, `/list/suggest` | – |
 
-Like the JSON API, the dashboard is unauthenticated — only run it on a
-trusted network. The watchlist (create/remove) is the only thing that writes.
+Errors come back as `{"error": "…"}` with status 400 or 500. Both the API and
+the dashboard are **unauthenticated** — only run this on a trusted network.
+The watchlist forms are the only thing that writes.
 
-## Database & schema
+## Database
 
-SQLite in WAL mode. Tables: `markets`, `offers`, `price_history`, `watches`,
+SQLite in WAL mode; tables `markets`, `offers`, `price_history`, `watches`,
 `shopping_list`, `uploaded_images`. The schema version lives in
-`PRAGMA user_version`; `db::open()` automatically migrates to the current
-version on open. Schema changes bump `SCHEMA_VERSION` and add a migration step
-in `migrate()` (`src/db.rs`) — existing databases are updated in place.
+`PRAGMA user_version` and `db::open()` migrates on open — a schema change
+bumps `SCHEMA_VERSION` and adds a step in `migrate()` (`src/db.rs`).
 
-The Supabase schema (tables `offers`, `regions`, `markets` plus the storage
-bucket `offer-images`) lives canonically under [`supabase/`](supabase/) —
-`schema.sql` + migrations; for new projects: run `setup_full.sql`, then
-`migration_regions.sql`, `migration_v3_multi_region.sql`,
-`migration_v4_region_trigger.sql`, `migration_v5_image_url.sql`, and
-`migration_v6_storage_bucket.sql` in the SQL editor.
+Every push also writes its rows to the Supabase table `price_history` (not the
+local one of the same name) as a permanent weekly snapshot, keyed
+`(market, product, region, valid_from)`. A failure there only warns; the
+offers push never fails because of it.
 
-## Price history
+## Docs
 
-In addition to the weekly `offers` table, every push writes the same rows to
-the Supabase table `price_history` (not to be confused with the local SQLite
-table of the same name) — as a permanent weekly snapshot so the app can later
-show price histories. The upsert key is
-`(market, product, region, valid_from)`: pushing the same week again updates
-the rows instead of duplicating them. Rows without a price are skipped.
-Failures while writing the history (e.g. missing table) only emit a warning —
-the actual offers push never fails because of it.
-
-**Manual migration:** run `supabase/migration_v7_price_history.sql` once in
-the Supabase SQL editor. Until then, every push still succeeds but reports
-`WARNUNG: Preis-Historie fehlgeschlagen`.
-
-## Documentation
-
-- [docs/rewe-cert.md](docs/rewe-cert.md) — setting up the Rewe TLS certificate
-- [docs/automation.md](docs/automation.md) — nightly launchd agent (macOS)
-- [docs/cron.md](docs/cron.md) — cron automation and the JSON API
-- [docs/ci.md](docs/ci.md) — GitHub Actions CI, nightly sync, and migrations
-- [scripts/nightly.sh](scripts/nightly.sh) — pipeline script sync-regions + watch check (with single-ZIP fallback)
+- [docs/cli.md](docs/cli.md) — every command in full
+- [docs/rewe-cert.md](docs/rewe-cert.md) — the REWE TLS certificate
+- [docs/ci.md](docs/ci.md) — GitHub Actions, nightly sync, migrations
+- [docs/automation.md](docs/automation.md) · [docs/cron.md](docs/cron.md) — running it unattended
