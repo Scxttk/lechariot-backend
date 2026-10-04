@@ -322,9 +322,12 @@ pub fn parse_offers(html: &str, market_id: &str) -> Result<Vec<Offer>> {
     let sel_sronly = sel(".sr-only");
     let sel_img = sel("img");
 
-    // Seitenweite Gültigkeit: "Gültig ab 13.07.2026" ... "gültig bis ..., den 18.07.2026"
+    // Seitenweite Gültigkeit: "Gültig ab 13.07.2026" ... "gültig bis ..., den 18.07.2026".
+    // Seit Ende September steht der Wochenbeginn als "Gültig vom 05.10.2026
+    // bis zum 10.10.2026" über der Liste; beide Fassungen werden gelesen.
     let page_text: String = doc.root_element().text().collect();
-    let valid_from = find_date_after(&page_text, "Gültig ab ");
+    let valid_from = find_date_after(&page_text, "Gültig ab ")
+        .or_else(|| find_date_after(&page_text, "Gültig vom"));
     let valid_until = find_date_after(&page_text, "gültig bis ");
 
     let mut offers = Vec::new();
