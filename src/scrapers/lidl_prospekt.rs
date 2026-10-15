@@ -1227,6 +1227,21 @@ fn head_from(island: &Island, skip_seal: bool) -> (String, f64) {
         head.push(line.split_whitespace().collect::<Vec<_>>().join(" "));
         pt = pt.max(island.line_pt.get(i).copied().unwrap_or(0.0));
         if head.len() >= 3 {
+            // Ein weicher Trennstrich am Zeilenende heißt: Das Wort geht in
+            // der nächsten Zeile weiter. Die Schranke von drei Zeilen darf
+            // nicht mitten im Wort greifen — sonst hieß die Kachel der
+            // Titelseite „BIOLAND Deutsche Speise" statt „… Speisekartoffeln",
+            // und wer Kartoffeln sucht, findet sie nicht.
+            //
+            // Geholt wird **nur das fehlende Stück**, nicht die ganze Zeile:
+            // Die vierte Zeile ist sonst eine Beschreibung, und der Titel
+            // liefe voll („… atmungsaktiv. Durchgehender Reißver…").
+            if line.trim_end().ends_with('\u{00ad}')
+                && let Some(rest) = island.lines.get(i + 1)
+                && let Some(wort) = rest.split_whitespace().next()
+            {
+                head.push(wort.to_string());
+            }
             break;
         }
     }
@@ -1991,6 +2006,55 @@ struct OpenTile {
 /// Bildbeschriftung, eine Inhaltsangabe — und der Name der Kachel steht in der
 /// Kachel selbst (WAGNER Steinofen Pizza trägt die kleine Insel „DIAMANT
 /// Zucker XXL" in sich).
+/// Abstand zweier Rechtecke; 0, wenn sie sich überlappen. Wie
+/// [`Island::gap`], aber für die rohen Inselrechtecke.
+fn rect_gap(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> f64 {
+    let dx = (a.0 - b.2).max(b.0 - a.2).max(0.0);
+    let dy = (a.1 - b.3).max(b.1 - a.3).max(0.0);
+    (dx * dx + dy * dy).sqrt()
+}
+
+/// Gehört dieser Sternpreis der Preiskachel selbst — oder dem Partner nebenan?
+///
+/// Gesucht wird die **rohe Insel**, in der dieser Preis gedruckt steht; das
+/// Clustern hat mehrere davon zu einer Kachel gezogen, aber ihre Rechtecke
+/// stehen noch. Von dort ist es eine Abstandsfrage: Der Preis gehört dem
+/// Namen, neben dem er steht.
+///
+/// Findet sich die Insel nicht wieder (der Preis steht in derselben Insel wie
+/// beides, oder gar nicht mehr), bleibt es beim Partner — dem Zustand vor
+/// dieser Regel.
+#[allow(clippy::too_many_arguments)]
+fn preis_gehoert_der_kachel(
+    price: f64,
+    kachel: usize,
+    membership: &[usize],
+    island_texts: &[String],
+    island_rects: &[(f64, f64, f64, f64)],
+    partner: (f64, f64, f64, f64),
+    eigener_name: (f64, f64, f64, f64),
+) -> bool {
+    let Some(preisinsel) = (0..island_texts.len()).find(|k| {
+        membership[*k] == kachel
+            && PRICE_STAR
+                .captures_iter(&island_texts[*k])
+                .filter_map(|c| c.get(1).and_then(|m| parse_price(m.as_str())))
+                .any(|p| (p - price).abs() < 0.005)
+    }) else {
+        return false;
+    };
+    let rect = island_rects[preisinsel];
+    // **Steht der Preis in derselben Insel wie der Name, entscheidet der
+    // Abstand nichts** — er ist null, und zwar für jeden Preis dieser Insel.
+    // Genau daran ging die erste Fassung am 03.09. schief: „UVP 3.49 2.99*
+    // CINZANO Vermouth Bianco" ist **eine** Insel, der Preis gehört aber dem
+    // Nachbarn (2,99 statt 3,49 sind die gedruckten -14 %).
+    if rect == eigener_name {
+        return false;
+    }
+    rect_gap(rect, eigener_name) < rect_gap(rect, partner)
+}
+
 fn encloses(product: &Island, price: &Island) -> bool {
     product.x0 >= price.x0
         && product.x1 <= price.x1
@@ -2064,6 +2128,12 @@ fn extract_offers_shots_and_open(
             .map(|t| regular_candidates(std::slice::from_ref(t)).len())
             .collect();
 
+        // Die Rechtecke der **rohen** Inseln, vor dem Clustern. Eine
+        // Preiskachel mit mehreren Sternpreisen ist zusammengeclustert; wo
+        // ihre einzelnen Preise stehen, weiß nur die Insel, aus der sie
+        // stammen. Siehe die Verteilung weiter unten.
+        let island_rects: Vec<(f64, f64, f64, f64)> =
+            islands.iter().map(|i| (i.x0, i.y0, i.x1, i.y1)).collect();
         let (tiles, membership) = cluster(islands);
         // Die Rechtecke aller Kacheln, bevor sie in Preise und Produkte
         // aufgeteilt werden — sie begrenzen die Bildstreifen nach oben.
@@ -2076,8 +2146,12 @@ fn extract_offers_shots_and_open(
         // Verlustrechnung geht von der Insel über `membership` hierher und
         // von hier zu dem, was aus der Kachel geworden ist.
         let mut roles: Vec<Role> = Vec::with_capacity(page_rects.len());
+        // Zu jeder Preiskachel ihr Index in `roles`/`membership` — der Weg
+        // zurück zu den rohen Inseln, aus denen sie geclustert wurde.
+        let mut price_tile_of: Vec<usize> = Vec::new();
         for tile in tiles {
             if PRICE_STAR.is_match(&tile.text()) {
+                price_tile_of.push(roles.len());
                 roles.push(Role::Price(prices.len()));
                 prices.push(tile);
             } else if tile.font_pt() >= MIN_NAME_PT
@@ -2251,6 +2325,44 @@ fn extract_offers_shots_and_open(
             }
             sources.extend(own_badges.iter().map(|(_, b)| b.text()));
 
+            // **Zwei Artikel in einer Preiskachel bekommen zwei Namen.**
+            //
+            // Trägt eine Kachel mehrere Sternpreise **und** ihren eigenen
+            // Namen, sind zwei Artikel zusammengeclustert — und der Partner
+            // von nebenan ist der zweite. Bisher bekamen dann beide Preise
+            // den Namen des Partners: Auf der Titelseite von 36/2026 stand
+            // die große Kartoffel-Kachel (0.45* und 2.19*) 22 pt neben
+            // „Deutsche Lauchzwiebeln", und heraus kamen Lauchzwiebeln für
+            // 2,19 € — die Kartoffeln fehlten ganz.
+            //
+            // Entschieden wird an der **rohen Insel**, aus der ein Preis
+            // stammt: Steht sie näher am Partner als am eigenen Namen der
+            // Kachel, gehört der Preis dem Partner, sonst der Kachel.
+            // Der eigene Name der Kachel muss dieselbe Latte reißen wie ein
+            // Produktname, sonst gewinnt jede Farbliste und jede Werbezeile:
+            // Am 03.09. machte die weichere Fassung aus „LIVARNO Dekokissen-Set"
+            // ein „Blau, Lila/Violett, Grün" und holte das Banner „Bewusst
+            // ernähren mit Wig Boning" zurück.
+            let eigener_titel = tile_title(price_tile);
+            let (_, eigener_grad) = head_of(price_tile);
+            let eigener_name_taugt = is_plausible_title(&eigener_titel)
+                && !is_layout_text(&eigener_titel)
+                && !is_layout_remnant(&eigener_titel)
+                && (MIN_NAME_PT..=MAX_NAME_PT).contains(&eigener_grad);
+            let verteilen = !selbst && usable.len() > 1 && eigener_name_taugt;
+            let namensinsel = if verteilen {
+                let kachel = price_tile_of[j];
+                let erstes = eigener_titel.split_whitespace().next().unwrap_or("");
+                (0..island_texts.len())
+                    .find(|k| {
+                        membership[*k] == kachel
+                            && !erstes.is_empty()
+                            && island_texts[*k].contains(erstes)
+                    })
+                    .map(|k| island_rects[k])
+            } else {
+                None
+            };
             let title = tile_title(product);
             if !is_plausible_title(&title) || is_layout_text(&title) || is_layout_remnant(&title) {
                 stats.bad_title += usable.len();
@@ -2294,7 +2406,36 @@ fn extract_offers_shots_and_open(
             stats.regular += regulars.iter().filter(|r| r.is_some()).count();
 
             for (slot, price) in usable.iter().copied().enumerate() {
-                if veto && arithmetic_check(&context, price) == Some(false) {
+                // Gehört dieser Preis dem Partner oder der Kachel selbst?
+                let (title, product, verteilt_an_kachel) = match namensinsel {
+                    Some(name_rect) if preis_gehoert_der_kachel(
+                        price,
+                        price_tile_of[j],
+                        &membership,
+                        &island_texts,
+                        &island_rects,
+                        (product.x0, product.y0, product.x1, product.y1),
+                        name_rect,
+                    ) =>
+                    {
+                        (eigener_titel.clone(), price_tile, true)
+                    }
+                    _ => (title.clone(), product, false),
+                };
+                // **Die Rechenprobe prüft gegen den Text, dem der Preis jetzt
+                // gehört.** Sonst rechnet sie den Nachbarn gegen: Auf der
+                // Titelseite fiel 0,45 € für die Lauchzwiebeln durch, weil im
+                // gemeinsamen Text „Je 2 kg, 1 kg = 1.10" der Kartoffeln stand.
+                let kontext = if namensinsel.is_some() {
+                    if verteilt_an_kachel {
+                        format!("{} {near}", price_tile.text())
+                    } else {
+                        format!("{} {near}", product.text())
+                    }
+                } else {
+                    context.clone()
+                };
+                if veto && arithmetic_check(&kontext, price) == Some(false) {
                     stats.failed_arithmetic += 1;
                     if debug_enabled() {
                         eprintln!(
@@ -3409,6 +3550,27 @@ pub fn merge_products(flyer: &Flyer, market_id: &str, existing: &[Offer]) -> Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Ein Wort, das über den Zeilenumbruch geht, bleibt ganz — auch wenn
+    /// die Schranke von drei Titelzeilen mitten hinein fällt.
+    #[test]
+    fn getrennte_woerter_bleiben_ganz() {
+        let kachel = Island {
+            x0: 95.0,
+            y0: 604.0,
+            x1: 454.0,
+            y1: 784.0,
+            lines: vec![
+                "BIOLAND".into(),
+                "Deutsche".into(),
+                "Speise\u{00ad}".into(),
+                "kartoffeln".into(),
+                "Qualität I".into(),
+            ],
+            line_pt: vec![11.96, 11.96, 11.96, 11.96, 9.2],
+        };
+        assert_eq!(title_of(&kachel), "BIOLAND Deutsche Speisekartoffeln");
+    }
 
     /// Werbebanner sind keine Produktnamen — der Prospekt setzt sie in einem
     /// Grad, in dem er nie einen Artikel benennt (siehe [`MAX_NAME_PT`]).
@@ -4886,4 +5048,6 @@ mod tests {
         eprintln!("ANGEBOTE\t{}\tSTREIFEN\t{}", offers.len(), shots.len());
     }
 }
+
+
 
