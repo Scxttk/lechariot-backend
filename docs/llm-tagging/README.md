@@ -1,62 +1,55 @@
-# LLM tagging experiment (2026-10-20)
+# LLM tagging (`src/llm_tags.rs`)
 
-Should a cheap model (Claude Haiku) tag offers instead of, or alongside, the dictionary?
+Claude Haiku 5.5 tags offers in the nightly push, once per distinct product, cached. The dictionary stays as fast path and fallback.
 
-## Numbers
+## Turning it on
 
-**The eval is stale.** `matching-woerterbuch-eval.py` measures coverage on a July corpus (last week: 2026-08-05). It reports 91–93 % tagged, and production does worse: this week **567 of 2,758 non-nonfood products (20.6 %) have an empty `match_key`**. Autumn and Christmas products (Kürbis, Lebkuchen, Punsch, Adventskalender, Grablichter) aren't in the corpus. The eval also counts coverage, not correctness.
+One place: the GitHub Actions secret **`ANTHROPIC_API_KEY`** on `lechariot-backend` (Settings → Secrets → Actions). The nightly reads it. Without it, nothing changes.
 
-**Gold set** (`gold-2026-10-20.json`): 220 production products from this week, labelled by hand. 120 are drawn from the empty ones and 100 from the tagged ones. Weighted back to production:
+Locally (for `lechariot llm-tags` or a hand push), the same variable goes in `~/.config/lechariot/env`, see `scripts/env.example`.
 
-| Dictionary today, food products this week (≈2,500) | |
-|---|---:|
-| correct | ~80 % |
-| missing (text says what it is, no tag) | ~11 % |
-| wrong tag (Käsewiener→käse, Kürbiskerne→pinienkerne, Kokos-Filzmatte→kokosnuss) | ~9 % |
+## How it works
 
-**Shape of the 120 untagged:**
+- `push::load_grouped` collects every offer's (title, subtitle, raw category) plus the dictionary's tags, and sends uncached ones to Haiku in requests of 50 (4 in parallel). The model picks only from the dictionary's vocabulary. Anything else is dropped.
+- Cache key = model + prompt fingerprint (prompt and vocabulary) + text. Same input, same tags, so the T3 determinism gate holds. A `/pflegerunde` that changes the vocabulary re-tags everything once: about $0.04.
+- CI keeps the cache between nights with `actions/cache` (`llm-tags.json`).
+- `LLM_TAGS_MODE=fill` (set in `nightly.yml`): the model only fills products where the dictionary found nothing, so it can't break a tag that's right today. `replace` lets the model override; switch only after the gold set says it's better.
+- Any API error leaves those products on the dictionary and the run continues. `LLM_TAGS_MAX_PER_RUN` (default 8000) caps a runaway.
+- The log line `LLM-Tags (Fill): … ≈ $… ; N of M offers differ from the dictionary` reports the real token usage each run.
 
-| | n | an LLM fixes it? |
-|---|---:|---|
-| non-food the filter misses (LED, Tupperware, jackets): harmless for matching | 55 | yes, but low value |
-| word form: plural/compound of a known term (Passionsfrüchte, Säfte, Tafelbirnen, Speisekürbis) | 18 | yes, trivially |
-| synonym/foreign word (Triple Sec, Amaro, Crushed Ice, Suppenhuhn, Rehkeule, Gruyère) | 16 | yes |
-| brand only (Mon Cheri, Nusspli, Philadelphia, Feldschlösschen, DUPLO) | 22 | mostly |
-| term missing from vocabulary (Honig, Lebkuchen) | 2 | no: vocabulary is a product decision |
-| text doesn't say (Quattro Formaggi, "Frisches 517 g") | 7 | no: extractor problem |
+## Cost
 
-So yes: almost all food failures are dictionary-shaped. 56 of 58 are word forms, synonyms or brands, and they come back with every new season. Only 9 of 120 are something a model can't fix either.
+Prices from platform.claude.com/docs pricing, 2026-10-20, Haiku 5.5 with prompts under 100k tokens: $0.10 input, $0.125 cache write, $0.01 cache read, $0.50 output per MTok.
 
-**LLM score: estimated, not measured** (no API was reachable, see below). The estimate is ~90 % correct (range 88–93 %), against ~80 % for the dictionary. Most of the gain comes from the 11 % missing; a smaller part from the wrong tags, which the prompt sees as `dict` hints. The risk: the model guesses on the 7 unknowable lines and occasionally changes a correct tag.
+Tokens estimated from text length (3.2 chars/token, pessimistic): system prompt ≈ 2,270 tokens, ≈ 30 input + 14 output tokens per product.
 
-**Cost** (`llm_tagging.py estimate`, 3,637 distinct products this week, 73 requests of 50, prompt ≈ 2,300 tokens):
-
-| model | per week, standard | batch + prompt cache |
+| | per week | per month |
 |---|---:|---:|
-| Haiku 5.5 | $0.06 | $0.02 |
-| Haiku 4.5 | $0.56 | $0.20 |
-| Sonnet 5.5 | $1.11 | $0.41 |
+| 3,637 products/week (this week's production), every product new every week | $0.04 | **$0.17** |
+| same, priced per product off the gold set (longer texts) | $0.06 | $0.24 |
 
-That assumes every product is new each week. Reuse across weeks would lower it, but production prunes history, so reuse can't be measured yet. **Latency for users: zero.** Tags are computed in the nightly and stored in `match_key` as today. The nightly gets ~2–5 min longer (sync), or up to ~1 h with the batch API.
+Upper bound, since repeat products cost nothing. Even 10× off, it's ~$2/month. A $5 prepaid credit covers well over a year. Users see no added latency, since tags are computed in the nightly. The nightly runs about 1–3 minutes longer.
 
-## Pipeline (`llm_tagging.py`)
+## Measuring
 
-- The nightly computes dictionary tags as today, then sends each *uncached* (title, sub, cat) to Haiku with the vocabulary and the dictionary's tags as a hint. The answer is stored in a cache keyed by model + prompt version + text.
-- Same input, same stored tags: the T3 determinism gate from the LLM-Entscheidung note holds by construction. A prompt or model change is a new key, i.e. an explicit re-tag.
-- If the API fails, `match_key` falls back to the dictionary. Output is filtered to known vocabulary terms.
-- `score` compares dictionary and cached LLM tags against the gold file.
+`gold-2026-10-20.json`: 220 production products from 2026-10-20, labelled by hand. 120 are drawn from empty `match_key`, 100 from tagged. Weighted back to production, the dictionary today scores:
 
-## Not done
-
-- **No model was run.** No Anthropic API key is configured for the project. GitHub Models (used by the Lidl LLM path) answers every request, even with a fake token, with a bare `200 OK` body, so it's dead as a free option.
-- The gold labels are my judgement (one pass, no second rater).
-- Side finding: running `matching-woerterbuch-eval.py` today rewrites the JSON **without the `warengruppe` fields** (316+/631− lines). The Python source doesn't know about them since #88. The next `/pflegerunde` would silently drop them, the same class of bug as #62.
-
-To measure: put `ANTHROPIC_API_KEY` in the env, `pip install anthropic`, then
+| | ok | missing | wrong |
+|---|---:|---:|---:|
+| dictionary | 80.3 % | 11.0 % | 8.8 % |
+| Haiku 5.5 | not measured yet | | |
 
 ```
-LLM_TAG_CACHE=/tmp/t.db python3 docs/llm-tagging/llm_tagging.py run docs/llm-tagging/gold-2026-10-20.json
-LLM_TAG_CACHE=/tmp/t.db python3 docs/llm-tagging/llm_tagging.py score docs/llm-tagging/gold-2026-10-20.json
+cargo run --release -- llm-tags              # needs ANTHROPIC_API_KEY, costs < $0.01
+cargo run --release -- llm-tags --estimate   # no key, no call
 ```
 
-Cost of that run: < $0.01.
+It prints dictionary, `fill` and `replace` side by side, plus real token usage and the monthly projection.
+
+Of the 58 food products the dictionary misses, 56 are word forms (Passionsfrüchte, Säfte), synonyms (Triple Sec, Crushed Ice) or brand-only names (Nusspli, DUPLO). That's the work a model does well. 9 of 120 untagged can't be fixed by a model either: 2 terms missing from the vocabulary (Honig, Lebkuchen), 7 lines whose text doesn't say what the product is.
+
+## Open
+
+- **The request has never been accepted by the API**: no key, only a 401 test. If a parameter is rejected (structured output with thinking off on Haiku 5.5), the first `llm-tags` run shows the 400 and production keeps the dictionary.
+- The gold labels are one person's judgement (mine, one pass).
+- The eval script `matching-woerterbuch-eval.py` measures coverage on a July corpus (91–93 %), while production has 20.6 % empty `match_key`. It also strips the `warengruppe` fields when it rewrites the JSON (since #88).
