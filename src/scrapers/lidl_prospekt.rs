@@ -528,8 +528,29 @@ pub struct Flyer {
     /// Von zehn marktguru-Angeboten ohne Treffer im Prospekttext waren zehn
     /// Onlineshop-Möbel. Als Bonus liefert es Bild und Kategorie, die der
     /// PDF-Weg nicht hat.
-    #[serde(default)]
+    ///
+    /// Ohne Artikel schickt die API eine leere *Liste* statt einer leeren Map
+    /// (Prospekt vom 02.11.2026, am 21.10. abgerufen) — ohne
+    /// [`map_or_empty_list`] scheiterte daran der ganze Prospekt.
+    #[serde(default, deserialize_with = "map_or_empty_list")]
     pub products: HashMap<String, serde_json::Value>,
+}
+
+fn map_or_empty_list<'de, D>(d: D) -> std::result::Result<HashMap<String, serde_json::Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum MapOrList {
+        Map(HashMap<String, serde_json::Value>),
+        List(Vec<serde_json::Value>),
+    }
+    match serde::Deserialize::deserialize(d)? {
+        MapOrList::Map(m) => Ok(m),
+        MapOrList::List(l) if l.is_empty() => Ok(HashMap::new()),
+        MapOrList::List(_) => Err(serde::de::Error::custom("products: Liste mit Einträgen statt Map")),
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -3487,6 +3508,12 @@ mod tests {
             xml.push_str("  </page>\n");
         }
         xml + "</doc>\n"
+    }
+
+    #[test]
+    fn leere_artikelliste_ist_kein_fehler() {
+        let raw = serde_json::json!({"flyer": {"pages": [{}], "products": []}});
+        assert!(parse_flyer(&raw).unwrap().products.is_empty());
     }
 
     /// Der Prospekt vom 2026-10-20: Text auf einer von 73 Seiten.
