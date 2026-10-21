@@ -402,8 +402,8 @@ fn cache_dir() -> PathBuf {
         .unwrap_or_else(|| std::env::temp_dir().join("lechariot-lidl-ocr"))
 }
 
-fn cache_path(dir: &Path, url: &str) -> PathBuf {
-    let hash = Sha256::digest(url.as_bytes());
+fn cache_path(dir: &Path, key: &[u8]) -> PathBuf {
+    let hash = Sha256::digest(key);
     let hex: String = hash.iter().take(16).map(|b| format!("{b:02x}")).collect();
     dir.join(format!("{hex}.tsv"))
 }
@@ -420,17 +420,23 @@ fn ocr_command() -> Vec<String> {
     }
 }
 
+/// Zwei Schlüssel je Seite: die URL, damit ein späterer Lauf nichts mehr laden
+/// muss, und der Bildinhalt. Die Prospektvarianten einer Woche teilen fast
+/// alle Seiten byteweise (26.10.2026: 71 von 72 zwischen zwei Regionen),
+/// unter verschiedenen URLs. Über den Inhalt wird jede Seite nur einmal
+/// gelesen, eine weitere Variante kostet ein, zwei Seiten statt 72.
 fn run_ocr(urls: &[String]) -> Result<Vec<Vec<OcrLine>>> {
     let dir = cache_dir();
     std::fs::create_dir_all(&dir).with_context(|| format!("{} anlegen", dir.display()))?;
     let missing: Vec<&String> = urls
         .iter()
-        .filter(|u| !cache_path(&dir, u).exists())
+        .filter(|u| !cache_path(&dir, u.as_bytes()).exists())
         .collect();
 
     if !missing.is_empty() {
         let client = util::blocking_client()?;
-        let mut images = Vec::new();
+        // Seiten, deren Inhalt noch niemand gelesen hat: (URL, Inhaltsschlüssel, Bild).
+        let mut unread: Vec<(&String, PathBuf, PathBuf)> = Vec::new();
         for url in &missing {
             let bytes = client
                 .get(url.as_str())
@@ -438,42 +444,63 @@ fn run_ocr(urls: &[String]) -> Result<Vec<Vec<OcrLine>>> {
                 .and_then(|r| r.error_for_status())
                 .and_then(|r| r.bytes())
                 .with_context(|| format!("Seitenbild {url}"))?;
-            let path = cache_path(&dir, url).with_extension("jpg");
-            std::fs::write(&path, &bytes)?;
-            images.push(path);
-        }
-        let cmd = ocr_command();
-        let output = Command::new(&cmd[0])
-            .args(&cmd[1..])
-            .args(&images)
-            .output()
-            .with_context(|| format!("{} nicht startbar", cmd.join(" ")))?;
-        for image in &images {
-            let _ = std::fs::remove_file(image);
-        }
-        if !output.status.success() {
-            bail!(
-                "OCR fehlgeschlagen: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            );
-        }
-        let mut per_image: Vec<String> = vec![String::new(); missing.len()];
-        for line in String::from_utf8_lossy(&output.stdout).lines() {
-            let Some((idx, rest)) = line.split_once('\t') else {
+            let by_content = cache_path(&dir, &bytes);
+            if by_content.exists() {
+                std::fs::copy(&by_content, cache_path(&dir, url.as_bytes()))?;
                 continue;
-            };
-            if let Some(slot) = idx.parse::<usize>().ok().and_then(|i| per_image.get_mut(i)) {
-                slot.push_str(&format!("0\t{rest}\n"));
+            }
+            if unread.iter().any(|u| u.1 == by_content) {
+                // Dasselbe Bild zweimal in diesem Aufruf: einmal lesen.
+                unread.push((url, by_content, PathBuf::new()));
+                continue;
+            }
+            let image = by_content.with_extension("jpg");
+            std::fs::write(&image, &bytes)?;
+            unread.push((url, by_content, image));
+        }
+        let images: Vec<&PathBuf> = unread
+            .iter()
+            .map(|u| &u.2)
+            .filter(|p| !p.as_os_str().is_empty())
+            .collect();
+        if !images.is_empty() {
+            let cmd = ocr_command();
+            let output = Command::new(&cmd[0])
+                .args(&cmd[1..])
+                .args(&images)
+                .output()
+                .with_context(|| format!("{} nicht startbar", cmd.join(" ")));
+            for image in &images {
+                let _ = std::fs::remove_file(image);
+            }
+            let output = output?;
+            if !output.status.success() {
+                bail!(
+                    "OCR fehlgeschlagen: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                );
+            }
+            let mut per_image: Vec<String> = vec![String::new(); images.len()];
+            for line in String::from_utf8_lossy(&output.stdout).lines() {
+                let Some((idx, rest)) = line.split_once('\t') else {
+                    continue;
+                };
+                if let Some(slot) = idx.parse::<usize>().ok().and_then(|i| per_image.get_mut(i)) {
+                    slot.push_str(&format!("0\t{rest}\n"));
+                }
+            }
+            for (image, text) in images.iter().zip(per_image) {
+                std::fs::write(image.with_extension("tsv"), text)?;
             }
         }
-        for (url, text) in missing.iter().zip(per_image) {
-            std::fs::write(cache_path(&dir, url), text)?;
+        for (url, by_content, _) in &unread {
+            std::fs::copy(by_content, cache_path(&dir, url.as_bytes()))?;
         }
     }
 
     urls.iter()
         .map(|u| {
-            let text = std::fs::read_to_string(cache_path(&dir, u))?;
+            let text = std::fs::read_to_string(cache_path(&dir, u.as_bytes()))?;
             Ok(parse_ocr_output(&text)
                 .into_iter()
                 .map(|(_, l)| l)
