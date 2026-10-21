@@ -3502,6 +3502,14 @@ fn read_flyer(flyer: &Flyer, market_id: &str, with_images: bool) -> Result<Vec<O
         // Zweiter Weg für die Kacheln, die der Schnitt abgelehnt hat. Scheitert
         // er, ist das kein Fehler des Laufs — die Angebote stehen, nur einige
         // tragen weiter ihr Emoji.
+        // Nicht auf OCR-Seiten: Dort bleiben so viele Kacheln ungeschnitten,
+        // dass pdftohtml fast den ganzen Prospekt auszieht — 424 s je Markt
+        // für 35 Bilder (19.10.2026). Diese Kacheln behalten ihr Emoji.
+        let ocr_pages = crate::scrapers::lidl_ocr::ocr_pages(xml);
+        let open: Vec<OpenTile> = open
+            .into_iter()
+            .filter(|t| !ocr_pages.get(t.page.wrapping_sub(1)).copied().unwrap_or(false))
+            .collect();
         let embedded = embedded_photos(pdf_url, &pdf_path, xml, &open);
         for offer in &mut offers {
             if let Some(url) = crops.get(&offer.id).or_else(|| embedded.get(&offer.id)) {

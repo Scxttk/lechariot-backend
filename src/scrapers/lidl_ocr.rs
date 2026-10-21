@@ -82,6 +82,8 @@ static THOUSANDS: LazyLock<Regex> =
 /// Ein Stern nach einer kleinen Zahl ist ein Lesefehler oder eine Fußnote,
 /// kein Sternpreis — der Parser soll ihn nicht als Preis zählen.
 static SMALL_STAR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d[.,]\d{2})\s*\*").unwrap());
+/// Längste Zeile, die noch zu einer Kachel gehört.
+const MAX_LINE_CHARS: usize = 90;
 /// Plakette über dem Namen; sie stünde sonst vor jedem Titel.
 static ONLINE_BADGE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^(auch|nur)\s*online$").unwrap());
@@ -223,6 +225,12 @@ pub fn normalise_line(line: &OcrLine, aspect: f64) -> Option<String> {
             return Some(format!("{}.{}*", &c[1], &c[2]));
         }
         return Some(text.to_string());
+    }
+    // Fußnoten liest die Erkennung als eine lange Zeile; Kacheltext ist
+    // 25–45 Zeichen breit. Im Titel landete sonst „Wochen-Ersparnis
+    // (26.10.–31.10.2026) umfasst alle …" (19.10.2026).
+    if text.chars().count() > MAX_LINE_CHARS {
+        return None;
     }
     Some(SMALL_STAR.replace_all(text, "$1").into_owned())
 }
@@ -564,6 +572,7 @@ mod tests {
             Some("Normalpreis: 2.55")
         );
         assert_eq!(n(0.011, "Auch online"), None);
+        assert_eq!(n(0.008, &"Fußnote ".repeat(20)), None);
     }
 
     #[test]
