@@ -3536,26 +3536,53 @@ fn read_flyer(flyer: &Flyer, market_id: &str, with_images: bool) -> Result<Vec<O
 /// `products` führt. Die Textebene setzte ihre Preise ohne Stern, also wurden
 /// sie nie doppelt gelesen; die Texterkennung sieht den Stern nicht
 /// zuverlässig und liest sie mit. Das JSON hat den besseren Titel, ein Bild
-/// und eine Kategorie — deshalb fällt das Prospektangebot weg. Gleich heißt:
-/// gleicher Preis und ein gemeinsames Wort ab fünf Buchstaben (Umlaute
-/// gefaltet, weil die Erkennung sie oft verliert: „Turschutzgitter").
+/// und eine Kategorie — deshalb fällt das Prospektangebot weg.
+///
+/// Gleich heißt: gleicher Preis, dieselbe Marke und hinter der Marke zwei
+/// gemeinsame Wörter oder eines ab acht Buchstaben. Die Marke allein reichte
+/// nicht — am 19.10.2026 hätte sie CRIVIT-Skijacke und CRIVIT-Skihose (beide
+/// 24.99) zusammengeworfen, „Adventskalender" allein RAVENSBURGER und
+/// FRANZIS. Umlaute und Akzente sind gefaltet, weil die Erkennung sie oft
+/// verliert („Turschutzgitter").
 fn same_online_item(offer: &Offer, online: &Offer) -> bool {
     let (Some(a), Some(b)) = (offer.price, online.price) else { return false };
     if (a - b).abs() > 0.005 {
         return false;
     }
-    let words = |t: &str| -> HashSet<String> {
+    let fold = |t: &str| -> String {
         t.to_lowercase()
-            .replace('ä', "a")
-            .replace('ö', "o")
-            .replace('ü', "u")
-            .replace('ß', "ss")
+            .chars()
+            .map(|c| match c {
+                'ä' | 'á' | 'à' | 'â' => 'a',
+                'ö' | 'ó' | 'ò' | 'ô' => 'o',
+                'ü' | 'ú' | 'ù' | 'û' => 'u',
+                'é' | 'è' | 'ê' => 'e',
+                'í' | 'ì' | 'î' => 'i',
+                'ç' => 'c',
+                'ß' => 's',
+                c => c,
+            })
+            .collect()
+    };
+    let tokens = |t: &str| -> Vec<String> {
+        fold(t)
             .split(|c: char| !c.is_alphanumeric())
-            .filter(|w| w.chars().count() >= 5)
+            .filter(|w| !w.is_empty())
             .map(str::to_string)
             .collect()
     };
-    !words(&offer.title).is_disjoint(&words(&online.title))
+    let (ta, tb) = (tokens(&offer.title), tokens(&online.title));
+    let (Some(brand_a), Some(brand_b)) = (ta.first(), tb.first()) else { return false };
+    // „ESMARAMEN" gegen „ESMARA MEN", „FAN" gegen „f.a.n.".
+    let (ca, cb) = (ta.concat(), tb.concat());
+    if !cb.starts_with(brand_a.as_str()) && !ca.starts_with(brand_b.as_str()) {
+        return false;
+    }
+    let words = |t: &[String]| -> HashSet<String> {
+        t.iter().skip(1).filter(|w| w.chars().count() >= 5).cloned().collect()
+    };
+    let shared: Vec<String> = words(&ta).intersection(&words(&tb)).cloned().collect();
+    shared.len() >= 2 || shared.iter().any(|w| w.chars().count() >= 8)
 }
 
 /// Onlineshop-Artikel ergänzen, ohne bereits gelesene doppelt zu zählen.
@@ -3617,10 +3644,20 @@ mod tests {
     /// Prospekt vom 19.10.2026, S. 6–7 („Nur online").
     #[test]
     fn onlineshop_artikel_aus_der_ocr_werden_erkannt() {
-        let online = angebot("SAFETY 1ST Türschutzgitter »Quick Close+« (Onlineshop)", 29.99);
-        assert!(same_online_item(&angebot("SAFETY1ST Turschutzgitter Modell", 29.99), &online));
-        assert!(!same_online_item(&angebot("SAFETY1ST Turschutzgitter Modell", 24.99), &online));
-        assert!(!same_online_item(&angebot("LUPILU Kinder-Jacke", 29.99), &online));
+        let gleich = |a: &str, b: &str, p| same_online_item(&angebot(a, p), &angebot(b, p));
+        let gitter = "SAFETY 1ST Türschutzgitter »Quick Close+« (Onlineshop)";
+        assert!(gleich("SAFETY1ST Turschutzgitter Modell", gitter, 29.99));
+        assert!(!same_online_item(
+            &angebot("SAFETY1ST Turschutzgitter Modell", 24.99),
+            &angebot(gitter, 29.99)
+        ));
+        assert!(gleich("ESMARAMEN Steppjacke Wasserabweisendes", "ESMARA MEN Herren Steppjacke", 14.99));
+        assert!(gleich("FAN 7-Zonen-Kaltschaum-Topper", "f.a.n. Topper »BIG KOMFORT PLUS«, 7-Zonen Kaltschaum", 79.99));
+        // Nur die Marke oder nur ein kurzes Wort gemeinsam: verschiedene Artikel.
+        assert!(!gleich("CRIVIT Ski-Jacke", "CRIVIT Herren Skihose", 24.99));
+        assert!(!gleich("RAVENSBURGER Adventskalender tiptoi/Exit", "FRANZIS Adventskalender", 19.99));
+        assert!(!gleich("SILVERCREST Premium Doppelschlitz-Toaster", "LUPILU® Premium Kinder Wollwalk-Jacke", 29.99));
+        assert!(!gleich("CRIVIT Winter-Funktionsstriimpfe", "CRIVIT Winter-Accessoires", 4.99));
     }
 
     #[test]

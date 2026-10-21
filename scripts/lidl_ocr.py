@@ -68,7 +68,11 @@ def upright_price(engine: RapidOCR, image: np.ndarray, box: list, text: str) -> 
     zwei Kästen („39." und „99"), von links nach rechts zusammengesetzt ist
     das der Preis.
     """
-    if PRICE.match(text) or not UPSIDE_DOWN.match(text):
+    # 9.99 kommt auch als glattes „666" heraus (19.10.2026, S. 56): Die
+    # Verwechslung macht aus jeder 9 eine 6. Echte 6.66 gibt es, deshalb wird
+    # nur nachgelesen, nicht verworfen.
+    only_sixes = bool(re.fullmatch(r"6{1,3}[.,]?66\W{0,3}", text))
+    if not only_sixes and (PRICE.match(text) or not UPSIDE_DOWN.match(text)):
         return text
     xs = [p[0] for p in box]
     ys = [p[1] for p in box]
@@ -80,14 +84,18 @@ def upright_price(engine: RapidOCR, image: np.ndarray, box: list, text: str) -> 
     ]
     if crop.size == 0:
         return text
-    # Welcher Rand reicht, schwankt: 0.99 auf S. 63 kam erst mit 60 px.
-    for pad in (30, 60, 90):
+    # Welcher Rand reicht, schwankt: 0.99 auf S. 63 kam erst mit 60 px, 9.99
+    # auf S. 56 (19.10.) erst mit 120 px. Kleine Kästen im Ausschnitt sind
+    # Fußnoten („Letzter Preis auf lidl.de") und bleiben draußen.
+    tall = 0.3 * crop.shape[0]
+    for pad in (30, 60, 90, 120):
         padded = cv2.copyMakeBorder(crop, pad, pad, pad, pad, cv2.BORDER_REPLICATE)
         result, _ = engine(padded, use_cls=False)
-        again = "".join(r[1] for r in sorted(result or [], key=lambda r: r[0][0][0]))
-        again = re.sub(r"^(\d{1,3})[.,]?(\d{2})", r"\1.\2", again)
-        if re.match(r"^\d{1,3}\.\d{2}", again):
-            return again
+        boxes = [r for r in result or [] if max(p[1] for p in r[0]) - min(p[1] for p in r[0]) >= tall]
+        again = "".join(r[1] for r in sorted(boxes, key=lambda r: r[0][0][0]))
+        found = re.match(r"^(\d{1,3})[.,]?(\d{2})(?!\d)", again)
+        if found:
+            return f"{found[1]}.{found[2]}"
     return text
 
 

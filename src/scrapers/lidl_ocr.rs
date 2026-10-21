@@ -67,9 +67,10 @@ static BIG_PRICE: LazyLock<Regex> =
 /// sind Jahreszahlen („2026").
 static BIG_PRICE_NO_SEP: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^(\d)(\d{2})[*°\x22']?$").unwrap());
-/// Ganze Euro: „549.-", „549.", „129-".
+/// Ganze Euro: „549.-", „129-", „549.". Ein bloßer Punkt erst ab drei
+/// Ziffern — „10." stammt aus der Überschrift „Zum 10. Mal" (19.10.2026).
 static WHOLE_EUROS: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^(\d{1,4})(?:[.,]-?|-)\W{0,2}$").unwrap());
+    LazyLock::new(|| Regex::new(r"^(?:(\d{1,4})[.,]?-|(\d{3,4})[.,])\W{0,2}$").unwrap());
 /// Breite durch Höhe (in Bildpunkten), ab der eine dreistellige Zahl ohne
 /// Trennzeichen ganze Euro sind. „7⁹⁹" setzt die Cent klein und hochgestellt
 /// und kommt auf 1,4–1,6, „149.-" in voller Größe auf 1,9–2,1 (gemessen
@@ -212,7 +213,8 @@ pub fn normalise_line(line: &OcrLine, aspect: f64) -> Option<String> {
             return Some(format!("{euros}.{}*", &c[2]));
         }
         if let Some(c) = WHOLE_EUROS.captures(text) {
-            return Some(format!("{}.00*", &c[1]));
+            let euros = c.get(1).or(c.get(2)).map_or("", |m| m.as_str());
+            return Some(format!("{euros}.00*"));
         }
         if let Some(c) = BIG_PRICE_NO_SEP.captures(text) {
             if line.w * aspect / line.h >= WHOLE_EUROS_ASPECT {
@@ -503,13 +505,21 @@ mod tests {
         assert_eq!(n(0.045, "1,70*0 25").as_deref(), Some("1.70*"));
         assert_eq!(n(0.045, "5.790 **))").as_deref(), Some("5.79*"));
         // „7⁹⁹" mit hochgestellten Cent ist schmal.
-        let schmal = OcrLine { w: 0.045 * 1.5 / 0.59, ..line(0.045, "199") };
+        let schmal = OcrLine {
+            w: 0.045 * 1.5 / 0.59,
+            ..line(0.045, "199")
+        };
         assert_eq!(normalise_line(&schmal, 0.59).as_deref(), Some("1.99*"));
         assert_eq!(n(0.045, "-.57").as_deref(), Some("0.57*"));
         assert_eq!(n(0.045, "549.-").as_deref(), Some("549.00*"));
         assert_eq!(n(0.045, "129-").as_deref(), Some("129.00*"));
+        assert_eq!(n(0.045, "549.").as_deref(), Some("549.00*"));
+        assert_eq!(n(0.08, "10.").as_deref(), Some("10."));
         // „149.-" ohne Strich gelesen: so breit wie hoch mal zwei, keine 1.49.
-        let breit = OcrLine { w: 0.045 * 2.0 / 0.59, ..line(0.045, "149") };
+        let breit = OcrLine {
+            w: 0.045 * 2.0 / 0.59,
+            ..line(0.045, "149")
+        };
         assert_eq!(normalise_line(&breit, 0.59).as_deref(), Some("149.00*"));
     }
 
