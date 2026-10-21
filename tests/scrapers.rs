@@ -1735,3 +1735,86 @@ fn die_titelseite_liefert_ihr_gemuese() {
         "Werbebanner als Artikel: {titles:?}"
     );
 }
+
+// ------------------------------------------------- Lidl-Prospekt ohne Textebene
+
+// Seit dem 05.10.2026 zeichnet Lidl den Prospekttext als Pfade. Die Fixtures
+// sind die RapidOCR-Ausgabe (`scripts/lidl_ocr.py`) der Seiten 25 und 63 des
+// Prospekts vom 26.10.2026; die erwarteten Angebote sind von Hand am
+// Seitenbild abgelesen.
+
+fn ocr_pages(fixtures: &[&str]) -> String {
+    use lechariot::scrapers::lidl_ocr;
+    let mut xml = String::from("<doc>\n");
+    for _ in fixtures {
+        xml.push_str("  <page width=\"467.717000\" height=\"793.701000\">\n  </page>\n");
+    }
+    xml.push_str("</doc>\n");
+    let pages: Vec<serde_json::Value> = (0..fixtures.len())
+        .map(|i| serde_json::json!({ "zoom": format!("https://example.org/{i}.jpg") }))
+        .collect();
+    let ocr = |urls: &[String]| -> anyhow::Result<Vec<Vec<lidl_ocr::OcrLine>>> {
+        Ok(urls
+            .iter()
+            .enumerate()
+            .map(|(i, _)| {
+                let tsv: String = fixtures[i].lines().map(|l| format!("0\t{l}\n")).collect();
+                lidl_ocr::parse_ocr_output(&tsv).into_iter().map(|(_, l)| l).collect()
+            })
+            .collect())
+    };
+    lidl_ocr::fill_textless_pages_with(&xml, &pages, &ocr).unwrap().0
+}
+
+#[test]
+fn lidl_prospekt_ohne_textebene_liest_die_seitenbilder() {
+    let xml = ocr_pages(&[
+        include_str!("fixtures/lidl/ocr_seite25.tsv"),
+        include_str!("fixtures/lidl/ocr_seite63.tsv"),
+    ]);
+    let offers = scrapers::lidl_prospekt::extract_offers(&xml, "LIDL_1988", None, None);
+    let erwartet = [
+        (8.50, "MILBONA Haltbare"),
+        (2.49, "SOLEVITA Aloe Vera"),
+        (7.99, "PAULANER Spezi"),
+        (6.99, "AIRWICK Duftstecker"),
+        (3.33, "FAIRY"),
+        (3.69, "PERLEN-BACHER Pils"),
+        (9.99, "FLORALYS Toilettenpapier"),
+        (4.99, "Feuchte Allzweck"),
+        (39.99, "Weinpaket Sauvignon Blanc"),
+        (8.99, "FORMIL Waschmittel"),
+        (3.99, "MILA'SWORLD"),
+        (3.99, "CHEFSELECT XXLHahnchen Schnitzel"),
+        (0.99, "MILBONA Creme Fraiche"),
+        (3.49, "DANONE Actimel"),
+        (0.99, "MILBONA Kaffeegetrank"),
+        (5.99, "ALESTO Pistazien"),
+        (2.79, "ALESTO Cashewkerne"),
+        (5.49, "ALESTO Cashew-kerne"),
+        (5.49, "ALESTO Walnusskerne"),
+        (5.99, "ALESTO Nuts Royal"),
+    ];
+    let fehlen = erwarteten_fehlen(&offers, &erwartet);
+    assert!(fehlen.is_empty(), "fehlen: {fehlen:?} — gelesen: {:?}", titel_preise(&offers));
+    assert_eq!(offers.len(), erwartet.len(), "{:?}", titel_preise(&offers));
+}
+
+fn titel_preise(offers: &[lechariot::models::Offer]) -> Vec<(String, Option<f64>)> {
+    offers.iter().map(|o| (o.title.clone(), o.price)).collect()
+}
+
+fn erwarteten_fehlen<'a>(
+    offers: &[lechariot::models::Offer],
+    erwartet: &[(f64, &'a str)],
+) -> Vec<(f64, &'a str)> {
+    erwartet
+        .iter()
+        .filter(|(preis, titel)| {
+            !offers
+                .iter()
+                .any(|o| o.title.starts_with(titel) && o.price.is_some_and(|p| (p - preis).abs() < 0.005))
+        })
+        .copied()
+        .collect()
+}

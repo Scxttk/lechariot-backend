@@ -2012,6 +2012,29 @@ struct OpenTile {
 /// Bildbeschriftung, eine Inhaltsangabe — und der Name der Kachel steht in der
 /// Kachel selbst (WAGNER Steinofen Pizza trägt die kleine Insel „DIAMANT
 /// Zucker XXL" in sich).
+/// Zwei Regeln nur für Seiten aus der Texterkennung
+/// ([`crate::scrapers::lidl_ocr`]). Dort fallen Kacheln gröber aus als aus der
+/// Textebene: Name und Preis eines Angebots landen oft in derselben Kachel,
+/// und der kürzeste Abstand allein reicht Preise dann reihum an den falschen
+/// Nachbarn weiter (26.10.2026, S. 25: Perlenbacher bekam den Preis von
+/// FAIRY, FAIRY den von Solevita).
+///
+/// - Trägt eine Preiskachel schon einen eigenen Namen, gehört ihr Preis ihr.
+/// - Ein Preis steht rechts neben oder unter seinem Namen, nie links davon
+///   oder darüber.
+///
+/// Auf der Textebene bleiben beide aus. Die erste ändert dort zwei
+/// Fixture-Ergebnisse zum Schlechteren (Lauchzwiebeln, GSW-Kochtopf).
+fn carries_own_name(price: &Island) -> bool {
+    price.lines.iter().zip(&price.line_pt).any(|(line, pt)| {
+        (MIN_NAME_PT..=MAX_NAME_PT).contains(pt) && !PRICE_STAR.is_match(line)
+    }) && is_plausible_title(&tile_title(price))
+}
+
+fn price_before_product(product: &Island, price: &Island) -> bool {
+    price.x1 < product.x0 || price.y1 < product.y0
+}
+
 fn encloses(product: &Island, price: &Island) -> bool {
     product.x0 >= price.x0
         && product.x1 <= price.x1
@@ -2063,7 +2086,9 @@ fn extract_offers_shots_and_open(
     let mut open: Vec<OpenTile> = Vec::new();
     let mut stats = Stats::default();
 
+    let ocr_pages = crate::scrapers::lidl_ocr::ocr_pages(xml);
     for (page_index, islands) in parse_bbox_layout(xml).into_iter().enumerate() {
+        let from_ocr = ocr_pages.get(page_index).copied().unwrap_or(false);
         // Seiten mit eigenem Laufzeit-Kopf schlagen die Prospektdaten.
         let page_text: String = islands
             .iter()
@@ -2123,7 +2148,10 @@ fn extract_offers_shots_and_open(
         for (i, product) in products.iter().enumerate() {
             for (j, price) in prices.iter().enumerate() {
                 let gap = product.gap(price);
-                if gap > PAIR_GAP_PT || encloses_wrong_price(product, price) {
+                if gap > PAIR_GAP_PT
+                    || encloses_wrong_price(product, price)
+                    || (from_ocr && (price_before_product(product, price) || carries_own_name(price)))
+                {
                     continue;
                 }
                 pairs.push((gap, i, j));
@@ -3289,8 +3317,21 @@ pub fn products_as_offers(
 pub fn fetch_bbox_layout(zip: &str) -> Result<(Flyer, std::sync::Arc<String>)> {
     let flyer = resolve_flyer(zip)?;
     let pdf_url = flyer.pdf_url.clone().context("Prospekt ohne pdfUrl")?;
-    let (_, xml) = cached_leaflet(&pdf_url, "-bbox-layout", &download_pdf, &run_pdftotext)?;
+    let (_, xml) = cached_bbox_layout(&flyer, &pdf_url)?;
     Ok((flyer, xml))
+}
+
+/// `pdftotext -bbox-layout` des Prospekts, Seiten ohne Textebene per OCR
+/// gefüllt (siehe [`crate::scrapers::lidl_ocr`]).
+fn cached_bbox_layout(
+    flyer: &Flyer,
+    pdf_url: &str,
+) -> Result<(std::path::PathBuf, std::sync::Arc<String>)> {
+    let parse = |path: &std::path::Path, mode: &str| -> Result<String> {
+        let xml = run_pdftotext(path, mode)?;
+        Ok(crate::scrapers::lidl_ocr::fill_textless_pages(&xml, &flyer.pages))
+    };
+    cached_leaflet(pdf_url, "-bbox-layout", &download_pdf, &parse)
 }
 
 /// Prospekt der Woche plus seinen Text, seitenweise in Lesereihenfolge.
@@ -3440,7 +3481,7 @@ fn read_flyer(flyer: &Flyer, market_id: &str, with_images: bool) -> Result<Vec<O
     // ein zweites Mal zu laden wären 85 MB für nichts. Seit dem Cache gilt das
     // über die Filiale hinaus: Die drei gewählten Lidl-Märkte teilen sich
     // Prospekt und Textebene, geladen und gelesen wird beides einmal je Lauf.
-    let (pdf_path, xml) = cached_leaflet(pdf_url, "-bbox-layout", &download_pdf, &run_pdftotext)?;
+    let (pdf_path, xml) = cached_bbox_layout(flyer, pdf_url)?;
     let xml = xml.as_str();
 
     let (mut offers, shots, open, _) = extract_offers_shots_and_open(
@@ -3469,8 +3510,52 @@ fn read_flyer(flyer: &Flyer, market_id: &str, with_images: bool) -> Result<Vec<O
         }
     }
     let extra = merge_products(flyer, market_id, &offers);
+    let ocr_pages = crate::scrapers::lidl_ocr::ocr_pages(xml);
+    let before = offers.len();
+    offers.retain(|o| {
+        let from_ocr = o
+            .flyer_page
+            .and_then(|p| ocr_pages.get((p as usize).wrapping_sub(1)))
+            .copied()
+            .unwrap_or(false);
+        !(from_ocr && extra.iter().any(|e| same_online_item(o, e)))
+    });
+    if offers.len() < before {
+        println!(
+            "  {} OCR-Angebote verworfen, die das Prospekt-JSON als Onlineshop-Artikel führt",
+            before - offers.len()
+        );
+    }
     offers.extend(extra);
     Ok(offers)
+}
+
+/// Ist das Prospektangebot derselbe Artikel wie dieser aus dem Onlineshop?
+///
+/// Auf den „Nur online"-Seiten stehen genau die Artikel, die das JSON unter
+/// `products` führt. Die Textebene setzte ihre Preise ohne Stern, also wurden
+/// sie nie doppelt gelesen; die Texterkennung sieht den Stern nicht
+/// zuverlässig und liest sie mit. Das JSON hat den besseren Titel, ein Bild
+/// und eine Kategorie — deshalb fällt das Prospektangebot weg. Gleich heißt:
+/// gleicher Preis und ein gemeinsames Wort ab fünf Buchstaben (Umlaute
+/// gefaltet, weil die Erkennung sie oft verliert: „Turschutzgitter").
+fn same_online_item(offer: &Offer, online: &Offer) -> bool {
+    let (Some(a), Some(b)) = (offer.price, online.price) else { return false };
+    if (a - b).abs() > 0.005 {
+        return false;
+    }
+    let words = |t: &str| -> HashSet<String> {
+        t.to_lowercase()
+            .replace('ä', "a")
+            .replace('ö', "o")
+            .replace('ü', "u")
+            .replace('ß', "ss")
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| w.chars().count() >= 5)
+            .map(str::to_string)
+            .collect()
+    };
+    !words(&offer.title).is_disjoint(&words(&online.title))
 }
 
 /// Onlineshop-Artikel ergänzen, ohne bereits gelesene doppelt zu zählen.
@@ -3508,6 +3593,34 @@ mod tests {
             xml.push_str("  </page>\n");
         }
         xml + "</doc>\n"
+    }
+
+    fn angebot(title: &str, price: f64) -> Offer {
+        Offer {
+            id: title.into(),
+            market_id: "LIDL_1988".into(),
+            title: title.into(),
+            subtitle: None,
+            overline: None,
+            price: Some(price),
+            regular_price: None,
+            category: None,
+            nutri_score: None,
+            valid_from: None,
+            valid_until: None,
+            images: vec![],
+            biozid: false,
+            flyer_page: Some(6),
+        }
+    }
+
+    /// Prospekt vom 19.10.2026, S. 6–7 („Nur online").
+    #[test]
+    fn onlineshop_artikel_aus_der_ocr_werden_erkannt() {
+        let online = angebot("SAFETY 1ST Türschutzgitter »Quick Close+« (Onlineshop)", 29.99);
+        assert!(same_online_item(&angebot("SAFETY1ST Turschutzgitter Modell", 29.99), &online));
+        assert!(!same_online_item(&angebot("SAFETY1ST Turschutzgitter Modell", 24.99), &online));
+        assert!(!same_online_item(&angebot("LUPILU Kinder-Jacke", 29.99), &online));
     }
 
     #[test]
