@@ -3302,7 +3302,20 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
         .date_naive();
 
     let flyer = pick_flyer(ar.as_deref(), week_slugs(&slugs, today))?;
-    let mut offers = read_flyer(&flyer, &market.id, true)?;
+    // Ein Prospekt ohne Textebene ist kein Grund, auch die Folgewoche
+    // fallen zu lassen. Die gültige Woche bleibt in Supabase stehen, weil der
+    // Push nur vor der jüngsten *begonnenen* Woche löscht
+    // (`push::stale_week_cutoffs`).
+    let mut unreadable = None;
+    let mut offers = match read_flyer(&flyer, &market.id, true) {
+        Ok(offers) => offers,
+        Err(e) if e.downcast_ref::<NoTextLayer>().is_some() && crate::preview::enabled() => {
+            eprintln!("WARNUNG [Lidl] Prospekt der laufenden Woche übersprungen: {e:#}");
+            unreadable = Some(e);
+            Vec::new()
+        }
+        Err(e) => return Err(e),
+    };
 
     // Die künftigen Prospekte, **ohne Bilder**: Ein Bildschnitt landet im
     // Storage-Bucket, und die Phase-0-Messung hat den Bild-Egress als einzigen
@@ -3322,7 +3335,58 @@ pub fn fetch_offers(market: &Market, zip: &str) -> Result<Vec<Offer>> {
             }
         }
     }
+    if let (true, Some(e)) = (offers.is_empty(), unreadable) {
+        return Err(e);
+    }
     Ok(offers)
+}
+
+/// Unter diesem Anteil an Seiten mit Text gilt ein Prospekt als ohne
+/// Textebene. Gemessen 2026-10-20: Der neu hochgeladene Prospekt der Woche
+/// trug auf 1 von 73 Seiten Wörter (Schrift als Pfade gezeichnet), der der
+/// Folgewoche auf 3 von 72. Ein Prospekt mit echter Textebene hat sie auf
+/// nahezu jeder Seite — dort bleibt ein leeres Ergebnis ein Layoutfehler.
+const MIN_TEXT_PAGE_SHARE: f64 = 0.10;
+
+/// Der Prospekt hat (fast) keine Textebene; `pdftotext` sieht nur Bilder und Pfade.
+#[derive(Debug)]
+pub struct NoTextLayer {
+    pub pages: usize,
+    pub pages_with_text: usize,
+    pub words: usize,
+}
+
+impl std::fmt::Display for NoTextLayer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Prospekt ohne Textebene — {} Wörter auf {} von {} Seiten, nichts zu lesen",
+            self.words, self.pages_with_text, self.pages
+        )
+    }
+}
+
+impl std::error::Error for NoTextLayer {}
+
+/// Seiten, Seiten mit mindestens einem Wort und Wörter einer
+/// `pdftotext -bbox-layout`-Ausgabe. `None`, wenn die Textebene trägt.
+pub fn missing_text_layer(xml: &str) -> Option<NoTextLayer> {
+    let (mut pages, mut pages_with_text, mut words, mut on_page) = (0, 0, 0, false);
+    for line in xml.lines() {
+        let line = line.trim_start();
+        if line.starts_with("<page ") {
+            pages += 1;
+            on_page = false;
+        } else if line.starts_with("<word ") {
+            words += 1;
+            if !on_page {
+                pages_with_text += 1;
+                on_page = true;
+            }
+        }
+    }
+    let share = if pages == 0 { 0.0 } else { pages_with_text as f64 / pages as f64 };
+    (share < MIN_TEXT_PAGE_SHARE).then_some(NoTextLayer { pages, pages_with_text, words })
 }
 
 /// Vorschau-Angebote, die der Lauf noch nicht kennt.
@@ -3365,6 +3429,9 @@ fn read_flyer(flyer: &Flyer, market_id: &str, with_images: bool) -> Result<Vec<O
         flyer.offer_end_date.as_deref(),
     );
     if offers.is_empty() {
+        if let Some(missing) = missing_text_layer(xml) {
+            return Err(missing.into());
+        }
         bail!("Prospekt gelesen, aber keine Angebote extrahiert — Layout geändert?");
     }
 
@@ -3409,6 +3476,33 @@ pub fn merge_products(flyer: &Flyer, market_id: &str, existing: &[Offer]) -> Vec
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn bbox_pages(words_per_page: &[usize]) -> String {
+        let mut xml = String::from("<doc>\n");
+        for &n in words_per_page {
+            xml.push_str("  <page width=\"467.7\" height=\"793.7\">\n");
+            for _ in 0..n {
+                xml.push_str("    <word xMin=\"1\" yMin=\"1\" xMax=\"2\" yMax=\"2\">0.99*</word>\n");
+            }
+            xml.push_str("  </page>\n");
+        }
+        xml + "</doc>\n"
+    }
+
+    /// Der Prospekt vom 2026-10-20: Text auf einer von 73 Seiten.
+    #[test]
+    fn prospekt_ohne_textebene_wird_erkannt() {
+        let mut seiten = vec![0; 73];
+        seiten[59] = 205;
+        let fehlt = missing_text_layer(&bbox_pages(&seiten)).expect("ohne Textebene");
+        assert_eq!((fehlt.pages, fehlt.pages_with_text, fehlt.words), (73, 1, 205));
+    }
+
+    /// Text auf jeder Seite: Ein leeres Ergebnis bleibt dann ein Layoutfehler.
+    #[test]
+    fn prospekt_mit_textebene_ist_kein_textebenen_fehler() {
+        assert!(missing_text_layer(&bbox_pages(&[40; 73])).is_none());
+    }
 
     /// Werbebanner sind keine Produktnamen — der Prospekt setzt sie in einem
     /// Grad, in dem er nie einen Artikel benennt (siehe [`MAX_NAME_PT`]).
