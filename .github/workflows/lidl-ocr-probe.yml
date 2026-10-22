@@ -1,0 +1,57 @@
+name: Lidl-OCR-Probe (nur lesen)
+
+# Misst den OCR-Weg für Lidl-Prospekte ohne Textebene dort, wo er läuft: auf
+# dem ubuntu-Runner. Keine Secrets, kein Push, nur `fetch --dry-run`. Zweimal
+# hintereinander, damit der zweite Lauf zeigt, was der OCR-Cache spart.
+
+on:
+  workflow_dispatch:
+    inputs:
+      zip:
+        description: "PLZ des Lidl-Markts"
+        required: false
+        default: "01277"
+  push:
+    branches: [feature/lidl-prospekt-ocr]
+    paths:
+      - "src/scrapers/lidl_ocr.rs"
+      - "scripts/lidl_ocr.py"
+      - ".github/workflows/lidl-ocr-probe.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ZIP: ${{ inputs.zip || '01277' }}
+      LIDL_SOURCE: prospekt
+      LECHARIOT_PREVIEW: "1"
+      LIDL_OCR_CACHE: ${{ github.workspace }}/lidl-ocr-cache
+      LIDL_OCR: python3 ${{ github.workspace }}/scripts/lidl_ocr.py
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 -m pip install --quiet rapidocr_onnxruntime==1.2.3
+      - run: cargo build --release
+      - name: Erster Lauf (OCR kalt)
+        run: |
+          set -o pipefail
+          /usr/bin/time -v ./target/release/lechariot fetch --zip "$ZIP" --store lidl --dry-run \
+            > kalt.log 2>&1 || true
+          grep -E "Variante|Sternpreisen|OCR|Onlineshop|WARNUNG|Elapsed|Maximum resident|Angebote" kalt.log | tail -40
+      - name: Zweiter Lauf (OCR aus dem Cache)
+        run: |
+          /usr/bin/time -v ./target/release/lechariot fetch --zip "$ZIP" --store lidl --dry-run \
+            > warm.log 2>&1 || true
+          grep -E "Sternpreisen|OCR|Elapsed" warm.log | tail -20
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lidl-ocr-probe
+          path: |
+            kalt.log
+            warm.log
+            lidl-ocr-cache/
