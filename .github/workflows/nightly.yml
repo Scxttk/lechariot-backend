@@ -55,8 +55,24 @@ jobs:
       # und GitHub rechnet `null == false` zu **wahr** — ein `inputs.preview ==
       # false && '' || '1'` hätte den Zeitplan also still wieder ausgeschaltet.
       LECHARIOT_PREVIEW: ${{ (github.event_name == 'schedule' || inputs.preview) && '1' || '' }}
+      # Sprachmodell-Tags (src/llm_tags.rs): ohne das Secret
+      # ANTHROPIC_API_KEY bleibt alles beim Wörterbuch. `fill` ergänzt nur,
+      # wo das Wörterbuch nichts fand; `replace` erst nach gemessenem
+      # Goldsatz (docs/llm-tagging/README.md).
+      LLM_TAGS_MODE: fill
+      LLM_TAGS_CACHE: ${{ github.workspace }}/llm-tags.json
     steps:
       - uses: actions/checkout@v7
+
+      # Jedes Produkt geht genau einmal ans Modell; der Cache trägt die
+      # Antworten von Nacht zu Nacht. Caches sind unveränderlich, deshalb je
+      # Lauf ein neuer Schlüssel und Wiederherstellen über das Präfix.
+      - name: LLM-Tag-Cache wiederherstellen
+        uses: actions/cache/restore@v6
+        with:
+          path: llm-tags.json
+          key: llm-tags-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: llm-tags-
 
       - name: Preflight (ZIP variable, curl, sqlite3)
         run: |
@@ -168,6 +184,7 @@ jobs:
       - name: Sync regions (fetch+push per region)
         id: sync
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           REWE_CERT: ${{ steps.rewe.outputs.cert }}
@@ -200,6 +217,7 @@ jobs:
       - name: Fallback fetch+push (single ZIP)
         if: steps.sync.outputs.sync_failed == 'true' && inputs.market_id == ''
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           REWE_CERT: ${{ steps.rewe.outputs.cert }}
@@ -214,6 +232,13 @@ jobs:
             ${CERT_ARGS[@]+"${CERT_ARGS[@]}"} 2>&1 | tee -a "$LOG"
           ./target/release/lechariot push --db "$DB" \
             2>&1 | tee -a "$LOG"
+
+      - name: LLM-Tag-Cache sichern
+        if: always() && hashFiles('llm-tags.json') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: llm-tags.json
+          key: llm-tags-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Store summary + zero-offer check
         if: always()

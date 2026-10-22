@@ -240,6 +240,22 @@ pub fn match_keys_with_brand(
     match_keys(&format!("{brand} {title}"), subtitle, category)
 }
 
+/// Alle Begriffe des Wörterbuchs mit ihrem Oberbegriff, in JSON-Reihenfolge.
+///
+/// Aus derselben eingebetteten Datei wie `dict()`: `llm_tags` lässt das Modell
+/// genau aus diesen Begriffen wählen, und zwei Vokabulare nebeneinander wären
+/// die Sorte Abweichung, die erst im Laden auffällt.
+pub fn vocabulary() -> Vec<(String, Option<String>)> {
+    let v: serde_json::Value =
+        serde_json::from_str(DICT_JSON).expect("matching-woerterbuch.json ungültig");
+    v["begriffe"]
+        .as_object()
+        .expect("Sektion 'begriffe' fehlt")
+        .iter()
+        .map(|(key, def)| (key.clone(), def["oberbegriff"].as_str().map(str::to_string)))
+        .collect()
+}
+
 /// `match_key`-Tags für ein Angebot: Begriffs-Tags, `["nonfood"]` für
 /// erkanntes Non-Food, leer für ungetaggt.
 pub fn match_keys(title: &str, subtitle: Option<&str>, category: Option<&str>) -> Vec<String> {

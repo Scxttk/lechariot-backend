@@ -223,6 +223,22 @@ pub fn map_offer(offer: &Offer, chain: &str, nationwide: bool) -> Option<Supabas
     })
 }
 
+/// Was `llm_tags` über ein Angebot sieht: dieselben drei Felder, die auch das
+/// Wörterbuch liest, plus dessen Ergebnis als Hinweis und Rückfall.
+fn llm_input(offer: &Offer, chain: &str) -> crate::llm_tags::Input {
+    crate::llm_tags::Input {
+        title: offer.title.clone(),
+        subtitle: offer.subtitle.clone().unwrap_or_default(),
+        category: offer.category.clone().unwrap_or_default(),
+        dict: crate::matching::match_keys_with_brand(
+            &offer.title,
+            offer.subtitle.as_deref(),
+            offer.category.as_deref(),
+            brand_of(offer, chain),
+        ),
+    }
+}
+
 /// Die Marke — aber nur da, wo die Überzeile wirklich eine ist.
 ///
 /// **`overline` heißt je Kette etwas anderes**, und das ist der Grund, warum
@@ -477,12 +493,41 @@ fn load_grouped(opts: &PushOptions) -> Result<BTreeMap<&'static str, ChainRows>>
         }
     }
 
+    // Sprachmodell-Tags nur, wenn wirklich geschrieben wird: Ein Trockenlauf
+    // soll weder Geld kosten noch den Cache verändern.
+    let mut tagger = if opts.dry_run { None } else { crate::llm_tags::Tagger::from_env() };
+    if let Some(t) = tagger.as_mut() {
+        let inputs: Vec<_> = groups
+            .iter()
+            .flat_map(|(chain, (offers, _))| offers.iter().map(|o| llm_input(o, chain)))
+            .collect();
+        let u = t.ensure(&inputs);
+        let geaendert = inputs.iter().filter(|i| t.apply(i) != i.dict).count();
+        println!(
+            "LLM-Tags ({:?}): {} Anfragen ({} fehlgeschlagen), Tokens ein {} / Cache {} / aus {}, ≈ ${:.4}; {geaendert} von {} Angeboten weichen vom Wörterbuch ab.",
+            t.mode,
+            u.requests,
+            u.failed_requests,
+            u.input_tokens + u.cache_write_tokens,
+            u.cache_read_tokens,
+            u.output_tokens,
+            u.dollars(),
+            inputs.len()
+        );
+    }
+
     Ok(groups
         .into_iter()
         .map(|(chain, (offers, no_price))| {
             let mapped: Vec<SupabaseRow> = offers
                 .iter()
-                .filter_map(|o| map_offer(o, chain, opts.nationwide))
+                .filter_map(|o| {
+                    let mut row = map_offer(o, chain, opts.nationwide)?;
+                    if let Some(t) = &tagger {
+                        row.match_key = t.apply(&llm_input(o, chain));
+                    }
+                    Some(row)
+                })
                 .collect();
             let (rows, dateless): (Vec<_>, Vec<_>) =
                 mapped.into_iter().partition(|r| r.valid_from.is_some());

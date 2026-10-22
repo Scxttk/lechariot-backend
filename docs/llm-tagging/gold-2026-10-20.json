@@ -1,0 +1,2606 @@
+[
+{
+"set": "prod-leer",
+"title": "Buch",
+"market": "NORMA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Samedisoft Komfortstiefel",
+"market": "NORMA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "M&M’s",
+"market": "Netto",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"schokolade"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "LED-Lichtbogen*",
+"market": "Penny",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Mazzetti CREMAceto Classico je 250-ml-Fl. (1 l = 11,96 €)",
+"market": "REWE",
+"cat": "Vorräte & Kochen",
+"dict": [],
+"gold": [
+"essig"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "Steirisches Kürbiskernöl",
+"market": "ALDI Nord",
+"cat": "Obst & Gemüse",
+"dict": [],
+"gold": [
+"öl"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "Burgis Sonntagsknödel je 500-g-Pckg. (1 kg = 3,58 €)",
+"market": "REWE",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"knödel"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "Tuc Bake Rolls",
+"market": "NORMA",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": [
+"chips"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "PEANUTS, STITCH, THE GRINCH oder HARRY POTTER Haussocke* je Paar",
+"market": "Penny",
+"cat": "Kinder",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Nackenbraten XXL kg-Preis",
+"market": "ALDI Nord",
+"cat": "Fleisch & Wurst",
+"dict": [],
+"gold": [
+"schwein",
+"fleisch"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "Buch Shappulus (von Mark Keller & Elmar Schäfer) Onlineshop",
+"market": "Lidl",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "INTERSNACK Adventskalender*",
+"market": "Penny",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": null,
+"klasse": "U"
+},
+{
+"set": "prod-leer",
+"title": "Lazy Korean Noodles je 450-g-Btl. (1 kg = 8,87 €)",
+"market": "REWE",
+"cat": "Tiefkühl",
+"dict": [],
+"gold": [
+"nudeln",
+"fertiggericht"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "Geflügelmortadella",
+"market": "Netto",
+"cat": "Fleisch & Wurst",
+"dict": [],
+"gold": [
+"wurst"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "Tupperware Eiswürfelbehälter 2er Set",
+"market": "Netto",
+"cat": "Tiefkühl",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Bunte Tafelbirnen Sorte: siehe Etikett, Kl. I, je 1 kg",
+"market": "REWE",
+"cat": "Obst & Gemüse",
+"dict": [],
+"gold": [
+"birnen"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "JOIE Autokindersitz »Fortifi R129« Onlineshop",
+"market": "Lidl",
+"cat": "Kinder",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Soto Burrito-Röllchen je 190-g-Pckg. (1 kg = 13,11 €)",
+"market": "REWE",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"fertiggericht"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "Tupperware Snackdose",
+"market": "Netto",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "REESE’S Cups Minis oder Peanut Butter Bar*",
+"market": "Penny",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": [
+"schokolade"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "Baufix Schimmelfleckenblocker",
+"market": "NORMA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "LUPILU® Puppenhaus-Zubehör Onlineshop",
+"market": "Lidl",
+"cat": "Kinder",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "TRUMPF Edle Tropfen*",
+"market": "Penny",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": [
+"pralinen"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "Mon Cheri",
+"market": "Netto",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"pralinen"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "LED-Weihnachtsdorf*",
+"market": "Penny",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "LUPILU® Holz Küche, 24-teilig Onlineshop",
+"market": "Lidl",
+"cat": "Kinder",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "LED-Echtwachskerze*",
+"market": "Penny",
+"cat": "Haushalt",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Heitmann Pure Reine Citronensäure z.B. Pulver je 350 g",
+"market": "NORMA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Deutschland - Speisekürbis „Halloween“, Stück",
+"market": "EDEKA",
+"cat": "Obst & Gemüse",
+"dict": [],
+"gold": [
+"kürbis"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "Tupperware Keksdose",
+"market": "Netto",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Powertec Color Lackierroller-/ Lasurroller- oder Dispersionsroller-Set 14-tlg.",
+"market": "NORMA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Zündhölzer",
+"market": "ALDI Nord",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "HEISSE TASSE Suppensnack",
+"market": "Kaufland",
+"cat": "Vorräte & Kochen",
+"dict": [],
+"gold": [
+"tütensuppe"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "K-CLASSIC Pro Aqua",
+"market": "Kaufland",
+"cat": "Sonstiges",
+"dict": [],
+"gold": null,
+"klasse": "U"
+},
+{
+"set": "prod-leer",
+"title": "Heu-Heinrich Bio-Kräuterheu je 750-g-Pckg. (1 kg = 3,32 €)",
+"market": "REWE",
+"cat": "Obst & Gemüse",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "LE FAVORI Triple Sec",
+"market": "Kaufland",
+"cat": "Getränke",
+"dict": [],
+"gold": [
+"spirituosen",
+"likör"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "Bayerisches Leberkäsbrät",
+"market": "Netto",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"leberkäse",
+"wurst"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "Barefoot oder Gallo Family Vineyards je 0,75-l-Fl. (1 l = 5,32 €)",
+"market": "REWE",
+"cat": "Alkohol",
+"dict": [],
+"gold": [
+"wein"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "WIKANA Kalter Hund*",
+"market": "Penny",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": [
+"kuchen"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "RONDO Original*",
+"market": "Penny",
+"cat": "Sonstiges",
+"dict": [],
+"gold": null,
+"klasse": "U"
+},
+{
+"set": "prod-leer",
+"title": "AVERNA Amaro Siciliano",
+"market": "Kaufland",
+"cat": "Getränke",
+"dict": [],
+"gold": [
+"spirituosen",
+"likör"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "LED-Weihnachtshänger",
+"market": "ALDI Nord",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Wachs-Sticks 12er Set",
+"market": "Netto",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Suppenhuhn",
+"market": "Kaufland",
+"cat": "Tiefkühl",
+"dict": [],
+"gold": [
+"hähnchen"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "Crêpes",
+"market": "ALDI Nord",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"backwaren"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "Back- und Mess-Sortiment",
+"market": "ALDI Nord",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Saubermax Quick Dry Trockentuch je 2 Tücher",
+"market": "NORMA",
+"cat": "Alkohol",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Sommerblütenhonig oder Rapshonig cremig, je 225 g Glas",
+"market": "EDEKA",
+"cat": "Vorräte & Kochen",
+"dict": [],
+"gold": [
+"honig"
+],
+"klasse": "W-lücke"
+},
+{
+"set": "prod-leer",
+"title": "RAVENSBURGER Adventskalender Onlineshop",
+"market": "Lidl",
+"cat": "Fleisch & Wurst",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "K-CLASSIC Waffelmischung",
+"market": "Kaufland",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": [
+"backmischung"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "LUPILU® Premium Kinder Wollwalk-Jacke Onlineshop",
+"market": "Lidl",
+"cat": "Kinder",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Zentis Nusspli",
+"market": "REWE",
+"cat": "Vorräte & Kochen",
+"dict": [],
+"gold": [
+"nougatcreme"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "TUC Bake Rolls oder Mini versch. Sorten, je 150 g / 120 g Beutel",
+"market": "EDEKA",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": [
+"chips"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "Hello World sensitive Babypuder",
+"market": "EDEKA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Minibuch-Adventskalender »Marvel / PAW Patrol / Peppa Pig« Onlineshop",
+"market": "Lidl",
+"cat": "Kinder",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Grableger",
+"market": "Netto",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "EMOJI Halloween-Gummy-Mix",
+"market": "Kaufland",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"fruchtgummi"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "Toptex Pro Herren-Arbeits-Softshelljacke \"Handwerkerstyle\"",
+"market": "NORMA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Laugeneck 3 für 2 Mit Saaten 3 Stk · nur mit Lidl Plus",
+"market": "Lidl",
+"cat": "Backwaren",
+"dict": [],
+"gold": [
+"laugengebäck",
+"backwaren"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "Quattro Formaggi",
+"market": "ALDI Nord",
+"cat": "Sonstiges",
+"dict": [],
+"gold": null,
+"klasse": "U"
+},
+{
+"set": "prod-leer",
+"title": "Passionsfrüchte, Stück",
+"market": "ALDI SÜD",
+"cat": "Obst & Gemüse",
+"dict": [],
+"gold": [
+"passionsfrucht"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "Küchenwaage / Milchaufschäumer",
+"market": "ALDI Nord",
+"cat": "Haushalt",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "HOME IDEAS Seasons LED-Fensterbild INFINITY*",
+"market": "Penny",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Sesselüberwurf",
+"market": "ALDI Nord",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Bauernschätze Kaiserfleisch mild gepökelt und saftig gegart, 100 g",
+"market": "EDEKA",
+"cat": "Fleisch & Wurst",
+"dict": [],
+"gold": [
+"schinken",
+"wurst"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "LOUISA Rehkeule",
+"market": "Kaufland",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"fleisch"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "Amecke Sanfte Säfte oder Plus Säfte versch. Sorten, aus Konzentrat, je 1-l-Pckg.",
+"market": "REWE",
+"cat": "Getränke",
+"dict": [],
+"gold": [
+"saft"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "Digitale Heißluft-Fritteuse",
+"market": "Netto",
+"cat": "Haushalt",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "LED-Teelichte",
+"market": "ALDI Nord",
+"cat": "Getränke",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Philadelphia versch. Sorten, je 195-g-Pckg. (1 kg = 5,69 €)",
+"market": "REWE",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"frischkäse"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "Dauerback- / Ofenschutzfolie",
+"market": "ALDI Nord",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "LUPILU® Windeleimer Onlineshop",
+"market": "Lidl",
+"cat": "Kinder",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "VOGELY Hirsch-Edelgulasch",
+"market": "Kaufland",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"fleisch"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "VANTASTIC Bio-Choc-Bar",
+"market": "Kaufland",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"schokoriegel"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "Durstlöscher Fruchtsaftgetränk je 10 x 0,2 l, ohne Pfand",
+"market": "NORMA",
+"cat": "Obst & Gemüse",
+"dict": [],
+"gold": [
+"fruchtsaft",
+"saft"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "JACK LINK’S Beef Jerky*",
+"market": "Penny",
+"cat": "Fleisch & Wurst",
+"dict": [],
+"gold": [
+"fleisch"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "Feldschlösschen",
+"market": "Netto",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"bier"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "Baumkuchenspitzen 150 g, Amaretto",
+"market": "ALDI SÜD",
+"cat": "Alkohol",
+"dict": [],
+"gold": [
+"kuchen"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "Beemster Beemsdammer Scheiben 48% Fett i. Tr., 165 g Packung",
+"market": "EDEKA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"käse"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "Winterpunsch",
+"market": "ALDI Nord",
+"cat": "Getränke",
+"dict": [],
+"gold": [
+"glühwein"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "Nuss-Mix",
+"market": "ALDI Nord",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": [
+"nüsse"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "Speisekürbis Halloween",
+"market": "Netto",
+"cat": "Obst & Gemüse",
+"dict": [],
+"gold": [
+"kürbis"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "ADLER Edelcreme",
+"market": "Kaufland",
+"cat": "Molkerei & Eier",
+"dict": [],
+"gold": [
+"käse"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "EMMI KALTBACH Le Gruyère AOP",
+"market": "Kaufland",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"käse"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "I-Glow LED-Lichterdraht",
+"market": "NORMA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "HARRY 1688 Unser Mildes",
+"market": "Kaufland",
+"cat": "Vorräte & Kochen",
+"dict": [],
+"gold": [
+"brot"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "Rotbäckchen Mini-Säfte versch. Sorten, je 0,125 l Glasflasche",
+"market": "EDEKA",
+"cat": "Getränke",
+"dict": [],
+"gold": [
+"saft"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "Mini-Lebkuchenmännchen",
+"market": "ALDI Nord",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": [
+"lebkuchen"
+],
+"klasse": "W-lücke"
+},
+{
+"set": "prod-leer",
+"title": "Rentier-Set",
+"market": "ALDI Nord",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Nusskernmischung",
+"market": "Netto",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": [
+"nüsse"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "Herbstheide",
+"market": "Kaufland",
+"cat": "Obst & Gemüse",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "GUSTORIA Dampfgarschale*",
+"market": "Penny",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Tupperware Lunchbox mit Besteckset",
+"market": "Netto",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Rührschüsselset",
+"market": "ALDI Nord",
+"cat": "Haushalt",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Little-Friends Futterglocke",
+"market": "NORMA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "DUPLO",
+"market": "Lidl",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": [
+"schokoriegel",
+"schokolade"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "I-Glow LED-Mini-Laterne",
+"market": "NORMA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Createlli Weihnachts-Geschenktaschen",
+"market": "NORMA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "GLADE Duftkerze im Glas oder Raumduft LIMITED EDITION*",
+"market": "Penny",
+"cat": "Haushalt",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Duftkerze oder Raumduft*",
+"market": "Penny",
+"cat": "Haushalt",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Tiefkühldosen",
+"market": "ALDI Nord",
+"cat": "Tiefkühl",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Kinder Mix Adventskalender",
+"market": "NORMA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"schokolade"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "Toptex Premium-Rollenbox",
+"market": "NORMA",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Zuckerfiguren",
+"market": "ALDI Nord",
+"cat": "Vorräte & Kochen",
+"dict": [],
+"gold": null,
+"klasse": "U"
+},
+{
+"set": "prod-leer",
+"title": "Deutschland - III Freunde versch. Sorten, je 0,75 l Flasche",
+"market": "EDEKA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"wein"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "Heitech LED-Lichtleiste",
+"market": "NORMA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Steckschlüsselsatz 76-teilig",
+"market": "Netto",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Schürze / Küchenset",
+"market": "ALDI Nord",
+"cat": "Haushalt",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Powertec Color Farbwalzen 3er-Set",
+"market": "NORMA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "Powertec Electric Fluoreszierende Adapter",
+"market": "NORMA",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "NORDFROST Ice Tubes oder Crushed Ice",
+"market": "Kaufland",
+"cat": "Alkohol",
+"dict": [],
+"gold": [
+"eiswürfel"
+],
+"klasse": "W-syn"
+},
+{
+"set": "prod-leer",
+"title": "Grablichter / Apostellichter / Kompositions-Öllichter",
+"market": "ALDI Nord",
+"cat": "Vorräte & Kochen",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "FRITT Kaubonbon-Streifen",
+"market": "Kaufland",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": [
+"bonbons"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "NIPPON Minis",
+"market": "Kaufland",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"schokolade"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "Alpen Gaudi »AlpenRace Bob«, Lenkbob im Racing-Design Onlineshop",
+"market": "Lidl",
+"cat": "Sonstiges",
+"dict": [],
+"gold": [
+"nonfood"
+],
+"klasse": "N"
+},
+{
+"set": "prod-leer",
+"title": "HITSCHIES Saure Drachenzungen Brizzl-Bälle",
+"market": "Kaufland",
+"cat": "Süßes & Snacks",
+"dict": [],
+"gold": [
+"fruchtgummi"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "Corte Parma Apéritiv'O Spezialitäten aus Italien versch. Sorten, je 320-g-Pckg. (1 kg = 34,72 €)",
+"market": "REWE",
+"cat": "Sonstiges",
+"dict": [],
+"gold": null,
+"klasse": "U"
+},
+{
+"set": "prod-leer",
+"title": "AMECKE Plus",
+"market": "Kaufland",
+"cat": "Getränke",
+"dict": [],
+"gold": [
+"saft"
+],
+"klasse": "M"
+},
+{
+"set": "prod-leer",
+"title": "Tafelbirnen",
+"market": "ALDI Nord",
+"cat": "Obst & Gemüse",
+"dict": [],
+"gold": [
+"birnen"
+],
+"klasse": "W-form"
+},
+{
+"set": "prod-leer",
+"title": "METZGERFRISCH Frisches 517 g · nur mit Lidl Plus",
+"market": "Lidl",
+"cat": "Sonstiges",
+"dict": [],
+"gold": null,
+"klasse": "U"
+},
+{
+"set": "prod-getaggt",
+"title": "Prosciutto Cotto",
+"market": "Netto",
+"dict": [
+"wurst",
+"schinken"
+],
+"gold": [
+"wurst",
+"schinken"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Backaroma",
+"market": "ALDI Nord",
+"dict": [
+"mandelaroma"
+],
+"gold": [],
+"klasse": "falsch"
+},
+{
+"set": "prod-getaggt",
+"title": "Miracel Whip",
+"market": "Netto",
+"dict": [
+"soßen"
+],
+"gold": [
+"soßen"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Piccolinis Drei Käse",
+"market": "ALDI Nord",
+"dict": [
+"käse"
+],
+"gold": [
+"käse"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "K-PURLAND Halbes Schwein grob zerlegt",
+"market": "Kaufland",
+"dict": [
+"schwein"
+],
+"gold": [
+"schwein"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "JACOBS Krönung Instantkaffee",
+"market": "Kaufland",
+"dict": [
+"kaffee",
+"löslicher kaffee"
+],
+"gold": [
+"kaffee",
+"löslicher kaffee"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Pringles",
+"market": "ALDI Nord",
+"dict": [
+"chips"
+],
+"gold": [
+"chips"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Entenkeule mit Sauce",
+"market": "ALDI Nord",
+"dict": [
+"soßen"
+],
+"gold": [
+"ente"
+],
+"klasse": "falsch"
+},
+{
+"set": "prod-getaggt",
+"title": "K-CLASSIC Sonnenblumenöl",
+"market": "Kaufland",
+"dict": [
+"öl"
+],
+"gold": [
+"öl"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Schweine-Filet",
+"market": "REWE",
+"dict": [
+"schwein"
+],
+"gold": [
+"schwein"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Dr. Oetker Wölkchen oder Mousse",
+"market": "Netto",
+"dict": [
+"pudding"
+],
+"gold": [
+"pudding"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Tullamore D.E.W. Irish Whiskey verschiedene Sorten, 35/40 % Vol. Je nach Verfügbarkeit des Marktes., 0,7 Liter Flasche",
+"market": "EDEKA",
+"dict": [
+"spirituosen",
+"whisky"
+],
+"gold": [
+"spirituosen",
+"whisky"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Stremellachs versch. Sorten, je 100 g",
+"market": "REWE",
+"dict": [
+"fisch"
+],
+"gold": [
+"fisch"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "REWE Bio Räucherlachs in Scheiben, je 100-g-Pckg. (1 kg = 39,90 €)",
+"market": "REWE",
+"dict": [
+"fisch",
+"lachs"
+],
+"gold": [
+"fisch",
+"lachs"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "MÜHLENHOF Frische Schweine-Rouladen* z. B. 500 g",
+"market": "Penny",
+"dict": [
+"schwein"
+],
+"gold": [
+"schwein"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Storck Knoppers Minis",
+"market": "NORMA",
+"dict": [
+"schokolade"
+],
+"gold": [
+"schokolade"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Schinken-Krustenbraten pro kg",
+"market": "Netto",
+"dict": [
+"schwein",
+"wurst",
+"schinken"
+],
+"gold": [
+"schwein",
+"wurst",
+"schinken"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Ramazzotti Kräuterlikör",
+"market": "NORMA",
+"dict": [
+"spirituosen",
+"likör"
+],
+"gold": [
+"spirituosen",
+"likör"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "BÄCKERKRÖNUNG Käse-Mozzarella-Fächer*",
+"market": "Penny",
+"dict": [
+"käse",
+"mozzarella"
+],
+"gold": [
+"käse",
+"mozzarella"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Weizenmehl XXL",
+"market": "ALDI Nord",
+"dict": [
+"mehl"
+],
+"gold": [
+"mehl"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Ben & Jerry’s Ice Cream versch. Sorten, je 465-ml-Becher (1 l = 8,58 €)",
+"market": "REWE",
+"dict": [
+"eis"
+],
+"gold": [
+"eis"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "TRUE FRUITS Smoothie*",
+"market": "Penny",
+"dict": [
+"smoothie"
+],
+"gold": [
+"smoothie"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "MELITTA Kaffee* ",
+"market": "Penny",
+"dict": [
+"kaffee"
+],
+"gold": [
+"kaffee"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "K-PURLAND Schweinefilet am Stück",
+"market": "Kaufland",
+"dict": [
+"schwein",
+"fisch"
+],
+"gold": [
+"schwein"
+],
+"klasse": "falsch"
+},
+{
+"set": "prod-getaggt",
+"title": "Wirts Madl Bayrisch Hell je 20 x 0,5-l-Fl.-Kasten (1 l = 1,25 €), zzgl. 3,10 € Pfand",
+"market": "REWE",
+"dict": [
+"bier"
+],
+"gold": [
+"bier"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "HAVANA CLUB Spezi*",
+"market": "Penny",
+"dict": [
+"limonade",
+"cola",
+"spezi"
+],
+"gold": [
+"limonade",
+"cola",
+"spezi"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Actimel Kids XXL",
+"market": "ALDI Nord",
+"dict": [
+"joghurt"
+],
+"gold": [
+"joghurt"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Costa Rica - Bananen",
+"market": "EDEKA",
+"dict": [
+"bananen"
+],
+"gold": [
+"bananen"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Walnüsse",
+"market": "ALDI Nord",
+"dict": [
+"nüsse"
+],
+"gold": [
+"nüsse"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "K-WERTSCHÄTZE Kochhinterschinken",
+"market": "Kaufland",
+"dict": [
+"wurst",
+"schinken"
+],
+"gold": [
+"wurst",
+"schinken"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Schokodrink",
+"market": "ALDI Nord",
+"dict": [
+"schokolade"
+],
+"gold": [
+"schokolade"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "K-PURLAND Minutensteak XXL vom Jungbullen",
+"market": "Kaufland",
+"dict": [
+"rind"
+],
+"gold": [
+"rind"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Novantaceppi Primitivo Puglia, Rosato, Bio, Rosso Puglia Appassimento oder Pinot Grigio aus Italien, 0,75 Liter Flasche",
+"market": "EDEKA",
+"dict": [
+"wein",
+"weißwein",
+"rotwein",
+"roséwein"
+],
+"gold": [
+"wein",
+"weißwein",
+"rotwein",
+"roséwein"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Matjesfilets XXL",
+"market": "ALDI Nord",
+"dict": [
+"fisch"
+],
+"gold": [
+"fisch"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "LINDT Sensation Fruit",
+"market": "Kaufland",
+"dict": [
+"schokolade"
+],
+"gold": [
+"schokolade"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Müller Müllermilch versch. Sorten, je 400-ml-Fl. (1 l = 1,98 €), zzgl. 0,25 € Pfand",
+"market": "REWE",
+"dict": [
+"milch"
+],
+"gold": [
+"milch"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Hasseröder",
+"market": "Netto",
+"dict": [
+"bier"
+],
+"gold": [
+"bier"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Delikatess Leberwurst fein, im Fettdarm, 100 g",
+"market": "EDEKA",
+"dict": [
+"wurst",
+"leberwurst"
+],
+"gold": [
+"wurst",
+"leberwurst"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Doppio Passo Weine",
+"market": "Netto",
+"dict": [
+"wein"
+],
+"gold": [
+"wein"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Merano Südtiroler Speck je 350-g-Pckg. (1 kg = 14,26 €)",
+"market": "REWE",
+"dict": [
+"wurst",
+"bacon"
+],
+"gold": [
+"wurst",
+"bacon"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "EDEKA Bio Zucchini BIO ZUCCHINI IT II 500G SF",
+"market": "EDEKA",
+"dict": [
+"zucchini"
+],
+"gold": [
+"zucchini"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Lachs-Vielfalt 90 g, Räucherlachs",
+"market": "ALDI SÜD",
+"dict": [
+"fisch",
+"lachs"
+],
+"gold": [
+"fisch",
+"lachs"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Brasil./ghan. Papaya",
+"market": "Kaufland",
+"dict": [
+"papaya"
+],
+"gold": [
+"papaya"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Pulled Chicken",
+"market": "ALDI Nord",
+"dict": [
+"hähnchen"
+],
+"gold": [
+"hähnchen"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "III Freunde Wein oder Alkoholfrei* aus Deutschland, verschiedene Sorten *Je nach Verfügbarkeit des Marktes., 0,75 Liter Flasche",
+"market": "EDEKA",
+"dict": [
+"wein"
+],
+"gold": [
+"wein"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "HARIBO Merry Christmas*",
+"market": "Penny",
+"dict": [
+"schokolade"
+],
+"gold": [
+"schokolade"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Frischkäsezubereitung mit roten Zwiebeln und Schnittlauch, je 100 g",
+"market": "REWE",
+"dict": [
+"frischkäse",
+"zwiebeln",
+"schnittlauch"
+],
+"gold": [
+"frischkäse",
+"zwiebeln",
+"schnittlauch"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Maybach Qualitätswein versch. Sorten, trocken, je 0,75-l-Fl. (1 l = 3,99 €)",
+"market": "REWE",
+"dict": [
+"wein"
+],
+"gold": [
+"wein"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Apfelschorle oder Frucht G’Spritzter",
+"market": "Netto",
+"dict": [
+"saft"
+],
+"gold": [
+"saft"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Lecker Bratwurst oder Bifteki je 180-g-Pckg. (1 kg = 15,50 €)",
+"market": "REWE",
+"dict": [
+"bratwurst",
+"wurst"
+],
+"gold": [
+"bratwurst",
+"wurst"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Krombacher Bier verschiedene Sorten, 6 x 0,33 Liter Packung + 0,48 Pfand",
+"market": "EDEKA",
+"dict": [
+"bier"
+],
+"gold": [
+"bier"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Erntekrone Fresh Speisekartoffeln",
+"market": "NORMA",
+"dict": [
+"kartoffeln"
+],
+"gold": [
+"kartoffeln"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Corny Müsliriegel Protein Banane-Vanille, je 4 x 25-g-Riegel-Pckg. (1 kg = 17,90 €)",
+"market": "REWE",
+"dict": [
+"bananen",
+"vanille",
+"müsliriegel"
+],
+"gold": [
+"müsliriegel"
+],
+"klasse": "falsch"
+},
+{
+"set": "prod-getaggt",
+"title": "BÖKLUNDER Kleine Wiener*",
+"market": "Penny",
+"dict": [
+"wurst",
+"würstchen"
+],
+"gold": [
+"wurst",
+"würstchen"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "BEL&BIO Bio-Pralinen oder -Trüffel",
+"market": "Kaufland",
+"dict": [
+"schokolade",
+"trüffel",
+"pralinen"
+],
+"gold": [
+"schokolade",
+"trüffel",
+"pralinen"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "RIESA Hartweizennudeln",
+"market": "Kaufland",
+"dict": [
+"nudeln"
+],
+"gold": [
+"nudeln"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "PICK UP! Keksriegel",
+"market": "Kaufland",
+"dict": [
+"kekse"
+],
+"gold": [
+"kekse"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "STOCKMEYER Salami*",
+"market": "Penny",
+"dict": [
+"wurst",
+"salami"
+],
+"gold": [
+"wurst",
+"salami"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Chicken Wings",
+"market": "ALDI Nord",
+"dict": [
+"hähnchen"
+],
+"gold": [
+"hähnchen"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "K-CLASSIC Cola, Cola-Mix oder Limonade",
+"market": "Kaufland",
+"dict": [
+"limonade",
+"cola",
+"spezi"
+],
+"gold": [
+"limonade",
+"cola",
+"spezi"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Zott Dessert Butterkeks & Crunchy / Dessert z.B. Dessert je 150 g",
+"market": "NORMA",
+"dict": [
+"kekse",
+"pudding"
+],
+"gold": [
+"kekse",
+"pudding"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Laugenstange",
+"market": "Netto",
+"dict": [
+"backwaren",
+"laugengebäck"
+],
+"gold": [
+"backwaren",
+"laugengebäck"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Himbeeren Kl. I, je 125-g-Schale (1 kg = 13,52 €)",
+"market": "REWE",
+"dict": [
+"beeren",
+"himbeeren"
+],
+"gold": [
+"beeren",
+"himbeeren"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "LANDLIEBE Frische Weidemilch 3,8 % Fett",
+"market": "Kaufland",
+"dict": [
+"milch"
+],
+"gold": [
+"milch"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "PENFOLDS BIN 28 Shiraz, Rotwein 2023 Onlineshop",
+"market": "Lidl",
+"dict": [
+"wein",
+"rotwein"
+],
+"gold": [
+"wein",
+"rotwein"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Frische Hähnchenflügel Handelsklasse A, je 1 kg",
+"market": "EDEKA",
+"dict": [
+"hähnchen"
+],
+"gold": [
+"hähnchen"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Paulaner Spezi, Cola oder Limo versch. Sorten, koffeinhaltig, je 0,33-l-Dose (1 l = 2,09 €), zzgl. 0,25 € Pfand",
+"market": "REWE",
+"dict": [
+"limonade",
+"cola",
+"spezi"
+],
+"gold": [
+"limonade",
+"cola",
+"spezi"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Champignons weiß 400 g",
+"market": "ALDI SÜD",
+"dict": [
+"pilze"
+],
+"gold": [
+"pilze"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "EDEKA Bio - Rohrohrzucker",
+"market": "EDEKA",
+"dict": [
+"zucker"
+],
+"gold": [
+"zucker"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "BÄCKERKRÖNUNG Mini Chinois*",
+"market": "Penny",
+"dict": [
+"backwaren"
+],
+"gold": [
+"backwaren"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Farmerschinken",
+"market": "Netto",
+"dict": [
+"wurst",
+"schinken"
+],
+"gold": [
+"wurst",
+"schinken"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Frischwurst-Aufschnitt versch. Sorten, je 100 g",
+"market": "REWE",
+"dict": [
+"wurst",
+"aufschnitt"
+],
+"gold": [
+"wurst",
+"aufschnitt"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "McCain 1-2-3 Frites Original tiefgefroren, je 1500-g-Btl. (1 kg = 1,99 €)",
+"market": "REWE",
+"dict": [
+"pommes"
+],
+"gold": [
+"pommes"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Cronut Haselnuss-Krokant",
+"market": "Lidl",
+"dict": [
+"haselnüsse"
+],
+"gold": [
+"backwaren"
+],
+"klasse": "falsch"
+},
+{
+"set": "prod-getaggt",
+"title": "Youcook Internationales Fertiggericht versch. Sorten, je 420-g-Pckg. (1 kg = 9,02 €)",
+"market": "REWE",
+"dict": [
+"fertiggericht"
+],
+"gold": [
+"fertiggericht"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "BALISTO Schokoriegel*",
+"market": "Penny",
+"dict": [
+"schokolade",
+"schokoriegel"
+],
+"gold": [
+"schokolade",
+"schokoriegel"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "9 Mile Vodka 37,5% Vol., je 0,7-l-Fl. (1 l = 14,27 €)",
+"market": "REWE",
+"dict": [
+"spirituosen",
+"vodka"
+],
+"gold": [
+"spirituosen",
+"vodka"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Asia-Gemüse",
+"market": "ALDI Nord",
+"dict": [
+"tiefkühlgemüse"
+],
+"gold": [
+"tiefkühlgemüse"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Hähnchen-Mortadella",
+"market": "ALDI Nord",
+"dict": [
+"hähnchen",
+"wurst",
+"fleischwurst"
+],
+"gold": [
+"wurst"
+],
+"klasse": "falsch"
+},
+{
+"set": "prod-getaggt",
+"title": "FREIXENET Mederaño oder Mia",
+"market": "Kaufland",
+"dict": [
+"wein"
+],
+"gold": [
+"wein"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "K-CLASSIC Kürbiskerne",
+"market": "Kaufland",
+"dict": [
+"nüsse",
+"pinienkerne"
+],
+"gold": [
+"nüsse"
+],
+"klasse": "falsch"
+},
+{
+"set": "prod-getaggt",
+"title": "Fuet Ibérico",
+"market": "Netto",
+"dict": [
+"wurst"
+],
+"gold": [
+"wurst"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Pick up! Choco & Milk",
+"market": "ALDI Nord",
+"dict": [
+"kekse"
+],
+"gold": [
+"kekse"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "K-PURLAND Schweinehackfleisch",
+"market": "Kaufland",
+"dict": [
+"hackfleisch",
+"schwein"
+],
+"gold": [
+"hackfleisch",
+"schwein"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Jim Beam Black Whisky 45% Vol., je 0,7-l-Fl. (1 l = 24,27 €)",
+"market": "REWE",
+"dict": [
+"spirituosen",
+"schnaps",
+"whisky"
+],
+"gold": [
+"spirituosen",
+"schnaps",
+"whisky"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Käsewiener",
+"market": "Netto",
+"dict": [
+"käse",
+"wurst",
+"würstchen"
+],
+"gold": [
+"wurst",
+"würstchen"
+],
+"klasse": "falsch"
+},
+{
+"set": "prod-getaggt",
+"title": "Coca-Cola 2 Liter",
+"market": "NORMA",
+"dict": [
+"limonade",
+"cola"
+],
+"gold": [
+"limonade",
+"cola"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Frosta à la Carte Hähnchen alla Caprese tiefgefroren, je 450-g-Btl. (1 kg = 9,98 €)",
+"market": "REWE",
+"dict": [
+"hähnchen"
+],
+"gold": [
+"hähnchen"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Ritter Sport Mini Turm z.B. Movie Night je 150 g",
+"market": "NORMA",
+"dict": [
+"schokolade"
+],
+"gold": [
+"schokolade"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Lindt Weihnachtsbeutel",
+"market": "Netto",
+"dict": [
+"schokolade"
+],
+"gold": [
+"schokolade"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "RAMA Culinesse",
+"market": "Kaufland",
+"dict": [
+"margarine"
+],
+"gold": [
+"margarine"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "BALISTO oder TWIX Schokoriegel",
+"market": "Kaufland",
+"dict": [
+"schokolade",
+"schokoriegel"
+],
+"gold": [
+"schokolade",
+"schokoriegel"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Vernel Weichspüler verschiedene Sorten",
+"market": "EDEKA",
+"dict": [
+"waschmittel"
+],
+"gold": [
+"waschmittel"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Deutsche Radieschen* je Bund",
+"market": "Penny",
+"dict": [
+"radieschen"
+],
+"gold": [
+"radieschen"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "PRINGLES",
+"market": "Kaufland",
+"dict": [
+"chips"
+],
+"gold": [
+"chips"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "K-CLASSIC Kartoffelsalat",
+"market": "Kaufland",
+"dict": [
+"kartoffelsalat"
+],
+"gold": [
+"kartoffelsalat"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "Powertec Garden Kokos-Filzmatte",
+"market": "NORMA",
+"dict": [
+"kokosnuss"
+],
+"gold": [
+"nonfood"
+],
+"klasse": "falsch"
+},
+{
+"set": "prod-getaggt",
+"title": "Weihenstephan Rahmjoghurt versch. Sorten, je 150-g-Becher (1 kg = 3,67 €)",
+"market": "REWE",
+"dict": [
+"joghurt"
+],
+"gold": [
+"joghurt"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "MÜHLENHOF Frische dicke Rippe* z. B. 800 g",
+"market": "Penny",
+"dict": [
+"fleisch"
+],
+"gold": [
+"fleisch"
+],
+"klasse": "ok"
+},
+{
+"set": "prod-getaggt",
+"title": "3M Verpackungs-Klebeband 5er-Set",
+"market": "NORMA",
+"dict": [
+"büroklammern"
+],
+"gold": [
+"nonfood"
+],
+"klasse": "falsch"
+}
+]
