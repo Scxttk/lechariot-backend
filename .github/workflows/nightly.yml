@@ -56,10 +56,11 @@ jobs:
       # false && '' || '1'` hätte den Zeitplan also still wieder ausgeschaltet.
       LECHARIOT_PREVIEW: ${{ (github.event_name == 'schedule' || inputs.preview) && '1' || '' }}
       # Sprachmodell-Tags (src/llm_tags.rs): ohne das Secret
-      # ANTHROPIC_API_KEY bleibt alles beim Wörterbuch. `fill` ergänzt nur,
-      # wo das Wörterbuch nichts fand; `replace` erst nach gemessenem
-      # Goldsatz (docs/llm-tagging/README.md).
-      LLM_TAGS_MODE: fill
+      # ANTHROPIC_API_KEY bleibt alles beim Wörterbuch. `replace` lässt das
+      # Modell auch Wörterbuch-Tags überstimmen — auf dem Goldsatz vom
+      # 25.10. 92,1 % richtig gegen 87,3 % (`fill`) und 80,3 % (Wörterbuch),
+      # siehe docs/llm-tagging/README.md.
+      LLM_TAGS_MODE: replace
       LLM_TAGS_CACHE: ${{ github.workspace }}/llm-tags.json
     steps:
       - uses: actions/checkout@v7
