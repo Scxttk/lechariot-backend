@@ -223,6 +223,22 @@ pub fn map_offer(offer: &Offer, chain: &str, nationwide: bool) -> Option<Supabas
     })
 }
 
+/// Was `llm_tags` über ein Angebot sieht: dieselben drei Felder, die auch das
+/// Wörterbuch liest, plus dessen Ergebnis als Hinweis und Rückfall.
+fn llm_input(offer: &Offer, chain: &str) -> crate::llm_tags::Input {
+    crate::llm_tags::Input {
+        title: offer.title.clone(),
+        subtitle: offer.subtitle.clone().unwrap_or_default(),
+        category: offer.category.clone().unwrap_or_default(),
+        dict: crate::matching::match_keys_with_brand(
+            &offer.title,
+            offer.subtitle.as_deref(),
+            offer.category.as_deref(),
+            brand_of(offer, chain),
+        ),
+    }
+}
+
 /// Die Marke — aber nur da, wo die Überzeile wirklich eine ist.
 ///
 /// **`overline` heißt je Kette etwas anderes**, und das ist der Grund, warum
@@ -477,12 +493,41 @@ fn load_grouped(opts: &PushOptions) -> Result<BTreeMap<&'static str, ChainRows>>
         }
     }
 
+    // Sprachmodell-Tags nur, wenn wirklich geschrieben wird: Ein Trockenlauf
+    // soll weder Geld kosten noch den Cache verändern.
+    let mut tagger = if opts.dry_run { None } else { crate::llm_tags::Tagger::from_env() };
+    if let Some(t) = tagger.as_mut() {
+        let inputs: Vec<_> = groups
+            .iter()
+            .flat_map(|(chain, (offers, _))| offers.iter().map(|o| llm_input(o, chain)))
+            .collect();
+        let u = t.ensure(&inputs);
+        let geaendert = inputs.iter().filter(|i| t.apply(i) != i.dict).count();
+        println!(
+            "LLM-Tags ({:?}): {} Anfragen ({} fehlgeschlagen), Tokens ein {} / Cache {} / aus {}, ≈ ${:.4}; {geaendert} von {} Angeboten weichen vom Wörterbuch ab.",
+            t.mode,
+            u.requests,
+            u.failed_requests,
+            u.input_tokens + u.cache_write_tokens,
+            u.cache_read_tokens,
+            u.output_tokens,
+            u.dollars(),
+            inputs.len()
+        );
+    }
+
     Ok(groups
         .into_iter()
         .map(|(chain, (offers, no_price))| {
             let mapped: Vec<SupabaseRow> = offers
                 .iter()
-                .filter_map(|o| map_offer(o, chain, opts.nationwide))
+                .filter_map(|o| {
+                    let mut row = map_offer(o, chain, opts.nationwide)?;
+                    if let Some(t) = &tagger {
+                        row.match_key = t.apply(&llm_input(o, chain));
+                    }
+                    Some(row)
+                })
                 .collect();
             let (rows, dateless): (Vec<_>, Vec<_>) =
                 mapped.into_iter().partition(|r| r.valid_from.is_some());
@@ -786,6 +831,29 @@ pub fn upsert_offer_rows(
     Ok(())
 }
 
+/// Ab welcher Woche eine Filiale ihre älteren Zeilen verliert: die jüngste,
+/// die heute schon begonnen hat.
+///
+/// Nicht die jüngste überhaupt — das wäre seit der Vorschau die Folgewoche.
+/// Solange der Lauf die laufende Woche mitliefert, ändert das nichts, sie wird
+/// ja gleich wieder upsertet. Fehlt sie aber (Lidl-Prospekt ohne Textebene,
+/// 2026-10-20), hätte der Push der Vorschau die noch gültige Woche gelöscht.
+/// Eine Filiale, deren Zeilen alle in der Zukunft liegen, löscht deshalb nichts.
+fn stale_week_cutoffs<'a>(rows: &'a [SupabaseRow], today: &str) -> BTreeMap<&'a str, &'a str> {
+    let mut latest: BTreeMap<&str, &str> = BTreeMap::new();
+    for row in rows {
+        let Some(valid_from) = row.valid_from.as_deref() else { continue };
+        if valid_from > today {
+            continue;
+        }
+        let newest = latest.entry(row.market_id.as_str()).or_insert(valid_from);
+        if valid_from > *newest {
+            *newest = valid_from;
+        }
+    }
+    latest
+}
+
 /// Hochgeladene Produktnamen nach (Filiale, Woche) — der Sollstand, gegen den
 /// [`reconcile_week`] die Tabelle abgleicht.
 fn pushed_by_week(rows: &[SupabaseRow]) -> BTreeMap<(&str, &str), HashSet<&str>> {
@@ -983,6 +1051,10 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
             .header("Authorization", format!("Bearer {}", cfg.api_key))
     };
 
+    let today = chrono::Utc::now()
+        .with_timezone(&chrono_tz::Europe::Berlin)
+        .date_naive()
+        .to_string();
     let mut total = 0usize;
     for (chain, g) in &groups {
         let rows = &g.rows;
@@ -1002,14 +1074,7 @@ pub fn run(opts: &PushOptions, cfg: Option<&PushConfig>) -> Result<()> {
         // gehören Angebote der Filiale, und in einer PLZ können zwei Filialen
         // derselben Kette stehen — ein Ketten-Filter räumte beim Push der
         // einen die Wochen der anderen ab.
-        let mut latest: BTreeMap<&str, &str> = BTreeMap::new();
-        for row in rows {
-            let Some(valid_from) = row.valid_from.as_deref() else { continue };
-            let newest = latest.entry(row.market_id.as_str()).or_insert(valid_from);
-            if valid_from > *newest {
-                *newest = valid_from;
-            }
-        }
+        let latest = stale_week_cutoffs(rows, &today);
         // Gelöscht wird nur noch über die Filiale. Der Region-Filter, der hier
         // bis Migration v16 danebenstand, war nötig, solange dieselbe Filiale
         // unter mehreren PLZ geführt wurde — seit der Schlüssel
@@ -1152,6 +1217,34 @@ mod tests {
         };
         o.images = vec![image.to_string()];
         map_offer(&o, "Netto", false).unwrap()
+    }
+
+    fn row_from(market_id: &str, valid_from: &str) -> SupabaseRow {
+        let mut r = netto_row("https://example.org/a.webp");
+        r.market_id = market_id.into();
+        r.valid_from = Some(valid_from.into());
+        r
+    }
+
+    #[test]
+    fn the_preview_week_does_not_set_the_delete_cutoff() {
+        let rows = vec![
+            row_from("LIDL_1988", "2026-10-19"),
+            row_from("LIDL_1988", "2026-10-22"),
+            row_from("LIDL_1988", "2026-10-26"),
+        ];
+        let cut = stale_week_cutoffs(&rows, "2026-10-20");
+        assert_eq!(cut.get("LIDL_1988"), Some(&"2026-10-19"));
+    }
+
+    #[test]
+    fn a_market_with_only_future_rows_deletes_nothing() {
+        // Der Fall vom 2026-10-20: Lidls laufender Prospekt war unlesbar, nur
+        // die Vorschau kam durch. Ihr Push darf die gültige Woche nicht abräumen.
+        let rows = vec![row_from("LIDL_1988", "2026-10-26"), row_from("1665", "2026-10-19")];
+        let cut = stale_week_cutoffs(&rows, "2026-10-20");
+        assert_eq!(cut.get("LIDL_1988"), None);
+        assert_eq!(cut.get("1665"), Some(&"2026-10-19"));
     }
 
     fn groups_with(rows: Vec<SupabaseRow>) -> BTreeMap<&'static str, ChainRows> {

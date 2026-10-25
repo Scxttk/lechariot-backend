@@ -335,6 +335,26 @@ fn edeka_neues_preis_markup_parst_alle_preisarten() {
     assert_eq!(offers.iter().filter(|o| o.price.is_some()).count(), 3);
 }
 
+// Das Markup vom Oktober: Über der Liste steht „Gültig vom 05.10.2026 bis zum
+// 10.10.2026" statt „Gültig ab 05.10.2026". Ohne Wochenbeginn lädt der
+// Uploader keine einzige Zeile hoch, und der Ketten-Wächter hielt die Nightly
+// ab dem 23.09. rot. Auch hier bleiben die älteren Fixtures daneben stehen.
+#[test]
+fn edeka_gueltig_vom_bis_zum_liefert_beide_daten() {
+    let offers = scrapers::edeka::parse_offers(
+        include_str!("fixtures/edeka/angebote_2026-10.html"),
+        "421347",
+    )
+    .unwrap();
+    assert_eq!(offers.len(), 3);
+    for o in &offers {
+        assert_eq!(o.valid_from.as_deref(), Some("2026-10-05"), "{}", o.title);
+        assert_eq!(o.valid_until.as_deref(), Some("2026-10-10"), "{}", o.title);
+    }
+    let mandarinen = offers.iter().find(|o| o.title == "Mandarinen").unwrap();
+    assert_eq!(mandarinen.price, Some(1.99));
+}
+
 // EDEKA-NULL-Preise sind echt: "Tagespreis"-Kacheln und reine
 // PAYBACK-Punkte-Kacheln haben im HTML (Kachel + Dialog) keinen Preis.
 // Sie kommen bewusst mit price = None an — kein Parser-Bug.

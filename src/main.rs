@@ -137,6 +137,18 @@ enum Command {
         #[arg(long, default_value = "lechariot.db")]
         db: String,
     },
+    /// Sprachmodell-Tags gegen einen handbeschrifteten Goldsatz messen
+    /// (docs/llm-tagging/). Ohne `--estimate` braucht es ANTHROPIC_API_KEY
+    /// und kostet für 220 Produkte unter einem Cent.
+    LlmTags {
+        /// Goldsatz (JSON-Liste mit title, sub, cat, gold)
+        #[arg(long, default_value = "docs/llm-tagging/gold-2026-10-20.json")]
+        gold: String,
+
+        /// Nur Tokens und Kosten schätzen, kein API-Aufruf
+        #[arg(long, default_value_t = false)]
+        estimate: bool,
+    },
     /// Gespeicherte Angebote nach Supabase hochladen (public.offers)
     Push {
         /// Nur diesen Supermarkt pushen (Standard: alle)
@@ -565,6 +577,7 @@ fn main() -> Result<()> {
             lechariot::branches::sync(&cfg, &opts).map(|_| ())
         }
         Command::History { query, db } => history(query, db),
+        Command::LlmTags { gold, estimate } => lechariot::llm_tags::eval_gold(&gold, estimate),
         Command::AuditImages { sample, market, fail_on_dead_chain } => {
             let opts = lechariot::audit::AuditOptions { sample, market, fail_on_dead_chain };
             lechariot::audit::run(&opts, None)
