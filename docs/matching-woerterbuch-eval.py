@@ -1279,6 +1279,28 @@ _ADD_BRING = {
 for _t,_ex in _ADD_BRING.items():
     V[_t] = (V[_t][0]+_ex, V[_t][1], V[_t][2])
 
+# Was die Feedback-Runde übernommen hat (`lechariot feedback-runde`,
+# src/feedback.rs). Sie schreibt die JSON direkt und führt jede Änderung hier
+# mit, damit diese Quelle nicht hinter der Nightly zurückbleibt — dieselbe
+# Falle wie bei _ADD_BRING. Angewendet in Dateireihenfolge, hinten angehängt,
+# genau wie die Rust-Seite: dann ist die erzeugte JSON dieselbe.
+_FEEDBACK_PFAD = os.path.join(os.path.dirname(__file__), "matching-woerterbuch-feedback.json")
+if os.path.exists(_FEEDBACK_PFAD):
+    for _a in json.load(open(_FEEDBACK_PFAD))["aenderungen"]:
+        _op, _t, _w = _a["op"], _a["begriff"], _a["wort"]
+        if _op == "nonfood":
+            if _w not in NONFOOD_TERMS.pattern.split("|"):
+                NONFOOD_TERMS = re.compile(NONFOOD_TERMS.pattern + "|" + _w, re.I)
+            continue
+        _e, _s, _b = V[_t]
+        if _op == "sperrwort" and _w not in _b:
+            _b = _b + [_w]
+        elif _op == "synonym" and _w not in _e:
+            _e = _e + [_w]
+        elif _op == "streichen":
+            _e = [x for x in _e if x != _w]
+        V[_t] = (_e, _s, _b)
+
 NONFOOD_KEY = "nonfood"
 
 # Dieselbe Reihenfolge wie `dict()` in src/matching.rs: längste Marke zuerst,

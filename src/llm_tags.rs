@@ -441,7 +441,7 @@ const PRODUKTE_JE_WOCHE: f64 = 3637.0;
 /// Wie viele Produkte die beiden Schichten des Goldsatzes in der Produktion
 /// vertreten (2026-10-20): `match_key` leer bzw. mit Begriff getaggt.
 /// Der Goldsatz zieht aus beiden gleich viel, die Wirklichkeit nicht.
-const SCHICHT: [(&str, f64); 2] = [("prod-leer", 567.0), ("prod-getaggt", 2191.0)];
+pub(crate) const SCHICHT: [(&str, f64); 2] = [("prod-leer", 567.0), ("prod-getaggt", 2191.0)];
 /// Deutscher Angebotstext zerfällt dichter in Tokens als Englisch, und Haiku
 /// 5.5 zählt laut Anthropic dieselbe Eingabe rund 30 % höher als Haiku 4.5.
 /// 3,2 Zeichen je Token ist bewusst pessimistisch; ein echter Lauf ersetzt
@@ -465,7 +465,7 @@ struct Gold {
 /// Gold `None`: der Text sagt nicht, was es ist; jedes Essens-Tag ist geraten.
 /// Gold `["nonfood"]`: leer ist harmlos, ein Essens-Tag falsch.
 /// Sonst muss jedes Tag ein Gold-Tag sein oder dessen Ober-/Unterbegriff.
-fn urteil(tags: &[String], gold: &Option<Vec<String>>, ober: &HashMap<String, String>) -> &'static str {
+pub(crate) fn urteil(tags: &[String], gold: &Option<Vec<String>>, ober: &HashMap<String, String>) -> &'static str {
     let nonfood = [NONFOOD_KEY.to_string()];
     match gold {
         None => if tags.is_empty() || tags == nonfood { "ok" } else { "falsch" },
