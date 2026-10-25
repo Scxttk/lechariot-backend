@@ -93,7 +93,8 @@
     "quark",
     "camembert",
     "gouda",
-    "dessert"
+    "dessert",
+    "paradiescreme"
    ],
    "warengruppe": "Molkerei & Eier"
   },
@@ -294,7 +295,8 @@
     "sahnebonbon",
     "toffees",
     "fruchtjoghurt",
-    "hering"
+    "hering",
+    "kiri"
    ],
    "warengruppe": "Molkerei & Eier"
   },
@@ -339,7 +341,8 @@
     "tomatensaft",
     "tomatensuppe",
     "passierte tomaten",
-    "gehackte tomaten"
+    "gehackte tomaten",
+    "grillkäse"
    ],
    "warengruppe": "Obst & Gemüse"
   },
@@ -374,7 +377,8 @@
    "prefix": [],
    "block": [
     "paprikachips",
-    "paprikasauce"
+    "paprikasauce",
+    "peperoni"
    ],
    "warengruppe": "Obst & Gemüse"
   },
@@ -466,7 +470,8 @@
     "süßkartoffeln",
     "kartoffelecken",
     "kartoffelsnacks",
-    "kartoffelprodukt"
+    "kartoffelprodukt",
+    "mal anders"
    ],
    "warengruppe": "Obst & Gemüse"
   },
@@ -543,7 +548,8 @@
    "prefix": [],
    "block": [
     "orangensaft",
-    "orangenlimonade"
+    "orangenlimonade",
+    "gazoz"
    ],
    "warengruppe": "Obst & Gemüse"
   },
@@ -657,7 +663,8 @@
    "prefix": [],
    "block": [
     "pflaumentomaten",
-    "minipflaumen"
+    "minipflaumen",
+    "milchschnitte"
    ],
    "warengruppe": "Obst & Gemüse"
   },
@@ -1092,7 +1099,8 @@
     "innenfilet",
     "putenbrustfilet",
     "lachsschinken",
-    "lachsrolle"
+    "lachsrolle",
+    "goldfischli"
    ],
    "warengruppe": "Fisch"
   },
@@ -1256,7 +1264,8 @@
    "prefix": [],
    "block": [
     "müsliriegel",
-    "kokos"
+    "kokos",
+    "riegel"
    ],
    "warengruppe": "Vorräte & Kochen"
   },
@@ -1283,7 +1292,8 @@
     "biscuits",
     "pikanter",
     "pikant",
-    "herzhafter"
+    "herzhafter",
+    "eis"
    ],
    "warengruppe": "Vorräte & Kochen"
   },
@@ -1339,7 +1349,9 @@
    ],
    "prefix": [],
    "block": [
-    "eistee"
+    "eistee",
+    "matcha latte",
+    "müllermilch"
    ],
    "warengruppe": "Getränke"
   },
@@ -1353,7 +1365,9 @@
     "wasser"
    ],
    "prefix": [],
-   "block": [],
+   "block": [
+    "weingläser"
+   ],
    "warengruppe": "Getränke"
   },
   "saft": {
@@ -1683,7 +1697,10 @@
    ],
    "suffix": [],
    "prefix": [],
-   "block": [],
+   "block": [
+    "lachgummi",
+    "tomatensauce"
+   ],
    "warengruppe": "Vorräte & Kochen"
   },
   "eintopf": {
@@ -1772,7 +1789,9 @@
     "ketchup"
    ],
    "prefix": [],
-   "block": [],
+   "block": [
+    "amore"
+   ],
    "warengruppe": "Vorräte & Kochen"
   },
   "gewürze": {
@@ -1793,7 +1812,9 @@
    ],
    "prefix": [],
    "block": [
-    "gewürzgurken"
+    "gewürzgurken",
+    "geschnetzeltes",
+    "hüftsteak"
    ],
    "warengruppe": "Vorräte & Kochen"
   },
@@ -1973,7 +1994,10 @@
     "cashewkerne",
     "walnusskerne"
    ],
-   "block": [],
+   "block": [
+    "flips",
+    "stieleis"
+   ],
    "warengruppe": "Süßes & Snacks"
   },
   "margarine": {
@@ -5146,7 +5170,9 @@
     "kakao"
    ],
    "prefix": [],
-   "block": [],
+   "block": [
+    "berliner"
+   ],
    "warengruppe": "Getränke"
   },
   "ente": {

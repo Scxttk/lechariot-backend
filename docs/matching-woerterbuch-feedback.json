@@ -1,4 +1,152 @@
 {
-  "letzte_id": 0,
-  "aenderungen": []
+  "letzte_id": 263,
+  "aenderungen": [
+    {
+      "op": "sperrwort",
+      "begriff": "milch",
+      "wort": "paradiescreme",
+      "runde": "2026-10-25",
+      "meldungen": 2
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "soßen",
+      "wort": "amore",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "kakao",
+      "wort": "berliner",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "marmelade",
+      "wort": "eis",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "nüsse",
+      "wort": "flips",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "orangen",
+      "wort": "gazoz",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "gewürze",
+      "wort": "geschnetzeltes",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "fisch",
+      "wort": "goldfischli",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "tomaten",
+      "wort": "grillkäse",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "gewürze",
+      "wort": "hüftsteak",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "sahne",
+      "wort": "kiri",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "tofu",
+      "wort": "lachgummi",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "kartoffeln",
+      "wort": "mal anders",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "tee",
+      "wort": "matcha latte",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "pfirsich",
+      "wort": "milchschnitte",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "tee",
+      "wort": "müllermilch",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "paprika",
+      "wort": "peperoni",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "müsli",
+      "wort": "riegel",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "nüsse",
+      "wort": "stieleis",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "tofu",
+      "wort": "tomatensauce",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "wasser",
+      "wort": "weingläser",
+      "runde": "2026-10-25",
+      "meldungen": 1
+    }
+  ]
 }
