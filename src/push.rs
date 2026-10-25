@@ -225,7 +225,7 @@ pub fn map_offer(offer: &Offer, chain: &str, nationwide: bool) -> Option<Supabas
 
 /// Was `llm_tags` über ein Angebot sieht: dieselben drei Felder, die auch das
 /// Wörterbuch liest, plus dessen Ergebnis als Hinweis und Rückfall.
-fn llm_input(offer: &Offer, chain: &str) -> crate::llm_tags::Input {
+pub fn llm_input(offer: &Offer, chain: &str) -> crate::llm_tags::Input {
     crate::llm_tags::Input {
         title: offer.title.clone(),
         subtitle: offer.subtitle.clone().unwrap_or_default(),
