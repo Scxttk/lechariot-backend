@@ -13,7 +13,7 @@ Locally (for `lechariot llm-tags` or a hand push), the same variable goes in `~/
 - `push::load_grouped` collects every offer's (title, subtitle, raw category) plus the dictionary's tags, and sends uncached ones to Haiku in requests of 50 (4 in parallel). The model picks only from the dictionary's vocabulary. Anything else is dropped.
 - Cache key = model + prompt fingerprint (prompt and vocabulary) + text. Same input, same tags, so the T3 determinism gate holds. A `/pflegerunde` that changes the vocabulary re-tags everything once: about $0.04.
 - CI keeps the cache between nights with `actions/cache` (`llm-tags.json`).
-- `LLM_TAGS_MODE=fill` (set in `nightly.yml`): the model only fills products where the dictionary found nothing, so it can't break a tag that's right today. `replace` lets the model override; switch only after the gold set says it's better.
+- `LLM_TAGS_MODE=replace` (set in `nightly.yml` since 2026-10-25): the model's tags win over the dictionary's. `fill` only fills products where the dictionary found nothing; it lost to `replace` on the gold set (see Measuring).
 - Any API error leaves those products on the dictionary and the run continues. `LLM_TAGS_MAX_PER_RUN` (default 8000) caps a runaway.
 - The log line `LLM-Tags (Fill): … ≈ $… ; N of M offers differ from the dictionary` reports the real token usage each run.
 
@@ -32,12 +32,17 @@ Upper bound, since repeat products cost nothing. Even 10× off, it's ~$2/month. 
 
 ## Measuring
 
-`gold-2026-10-20.json`: 220 production products from 2026-10-20, labelled by hand. 120 are drawn from empty `match_key`, 100 from tagged. Weighted back to production, the dictionary today scores:
+`gold-2026-10-20.json`: 220 production products from 2026-10-20, labelled by hand. 120 are drawn from empty `match_key`, 100 from tagged. Measured 2026-10-25 with `claude-haiku-5-5`, weighted back to production:
 
 | | ok | missing | wrong |
 |---|---:|---:|---:|
 | dictionary | 80.3 % | 11.0 % | 8.8 % |
-| Haiku 5.5 | not measured yet | | |
+| Haiku `fill` | 87.3 % | 2.2 % | 10.4 % |
+| Haiku `replace` | **92.1 %** | 2.2 % | **5.6 %** |
+
+On the 100 already-tagged products, `replace` is right on 96.0 % against the dictionary's 90.0 %; on the 120 empty ones both modes reach 76.7 % (dictionary 10.8 %). `fill` adds coverage but keeps the dictionary's mistakes, which is why it ends up with more wrong tags than the dictionary alone.
+
+The run: 5 requests, none failed, 12,110 input / 15,572 cache-write / 3,893 cache-read / 3,873 output tokens, **$0.0051**. Projected from those real tokens: $0.08/week, **$0.37/month** — twice the estimate below, still far inside a $5 credit.
 
 ```
 cargo run --release -- llm-tags              # needs ANTHROPIC_API_KEY, costs < $0.01
@@ -50,6 +55,6 @@ Of the 58 food products the dictionary misses, 56 are word forms (Passionsfrüch
 
 ## Open
 
-- **The request has never been accepted by the API**: no key, only a 401 test. If a parameter is rejected (structured output with thinking off on Haiku 5.5), the first `llm-tags` run shows the 400 and production keeps the dictionary.
+- The first nightly with the key has not run yet. Its `LLM-Tags` log line is the first production number.
 - The gold labels are one person's judgement (mine, one pass).
 - The eval script `matching-woerterbuch-eval.py` measures coverage on a July corpus (91–93 %), while production has 20.6 % empty `match_key`. It also strips the `warengruppe` fields when it rewrites the JSON (since #88).
