@@ -3,6 +3,7 @@ pub mod audit;
 pub mod branches;
 pub mod db;
 pub mod enrich;
+pub mod feedback;
 pub mod llm_tags;
 pub mod matching;
 pub mod models;

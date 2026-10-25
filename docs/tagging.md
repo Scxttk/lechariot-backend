@@ -15,7 +15,10 @@ Quelle ist `docs/matching-woerterbuch.json` (Sektionen `begriffe` mit
 exact/suffix/prefix/block, `kategorien` Kategorie→Begriff und `marken`
 Marke→Begriff bzw. `NONFOOD`). Geschrieben wird sie nie von Hand, sondern von
 `docs/matching-woerterbuch-eval.py` — dort stehen die Listen mit ihrer
-Begründung.
+Begründung. Die einzige Ausnahme ist die wöchentliche Feedback-Runde
+(`docs/feedback-auswertung.md`): Sie schreibt die JSON direkt und trägt jede
+Änderung in `docs/matching-woerterbuch-feedback.json` ein, die das Eval-Skript
+mitliest.
 
 `suffix` und `prefix` sind die beiden Hälften des Kompositum-Wegs: das
 bekannte Wort steht im Deutschen mal hinten („Steinofen**baguette**") und mal

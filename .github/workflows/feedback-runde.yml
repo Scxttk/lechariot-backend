@@ -1,0 +1,105 @@
+# Meldungen aus der App (`match_feedback`) werden einmal pro Woche zu
+# Wörterbuch-Änderungen — als PR, nie als Commit auf master.
+#
+# Was hineinkommt, hat `lechariot feedback-runde` einzeln gemessen
+# (src/feedback.rs, docs/feedback-auswertung.md). Gemergt wird von Hand; die
+# App zieht ihre Kopie danach selbst nach (`woerterbuch-sync.yml` im App-Repo).
+#
+# Der Stand (letzte verarbeitete Meldung) liegt im PR, nicht in der Datenbank:
+# Er rückt erst vor, wenn jemand die Änderungen annimmt. Bleibt der PR liegen,
+# rechnet der nächste Lauf von master aus alles neu, die alten Meldungen und
+# die neuen, und ersetzt den Zweig. Ein PR, eine offene Runde.
+name: Feedback-Runde
+
+on:
+  schedule:
+    # Montag 06:15 UTC, nach der Nightly (04:30 UTC).
+    - cron: "15 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: feedback-runde
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  ZWEIG: feedback-runde
+
+jobs:
+  runde:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-lechariot
+
+      - name: Bauen
+        run: cargo build --release
+
+      - name: Runde
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: target/release/lechariot feedback-runde --bericht /tmp/bericht.md
+
+      - name: Etwas zu tun?
+        id: diff
+        run: |
+          if git diff --quiet; then
+            echo "Keine neuen Meldungen."
+            echo "neu=nein" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Steht der offene Zweig schon auf derselben letzten Meldung, ist
+          # seit dem letzten Lauf nichts dazugekommen. Neu rechnen hieße nur,
+          # dem Modell eine zweite Meinung zu denselben Fällen abzuringen.
+          neu=$(jq .letzte_id docs/matching-woerterbuch-feedback.json)
+          if git fetch -q origin "$ZWEIG" 2>/dev/null; then
+            alt=$(git show FETCH_HEAD:docs/matching-woerterbuch-feedback.json | jq .letzte_id)
+            if [ "$alt" = "$neu" ]; then
+              echo "Zweig $ZWEIG steht schon auf Meldung $neu."
+              echo "neu=nein" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "neu=ja" >> "$GITHUB_OUTPUT"
+
+      # Das Wörterbuch ist per include_str! einkompiliert: `cargo test` misst
+      # hier die Regressionsfälle aus src/matching.rs gegen die neue Datei.
+      # Ein PR, den GITHUB_TOKEN öffnet, löst ci.yml nicht aus — deshalb hier.
+      - name: Tests gegen das neue Wörterbuch
+        if: steps.diff.outputs.neu == 'ja'
+        run: |
+          cargo test --release
+          python3 scripts/woerterbuch-paritaet.py
+
+      - name: PR öffnen
+        if: steps.diff.outputs.neu == 'ja'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          titel=$(head -1 /tmp/bericht.md | sed 's/^# //')
+          tail -n +3 /tmp/bericht.md > /tmp/rumpf.md
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$ZWEIG"
+          git add docs/matching-woerterbuch.json docs/matching-woerterbuch-feedback.json
+          git commit -m "$titel"
+          git push --force origin "$ZWEIG"
+          if [ -n "$(gh pr list --head "$ZWEIG" --state open --json number --jq '.[].number')" ]; then
+            gh pr edit "$ZWEIG" --title "$titel" --body-file /tmp/rumpf.md
+          # Braucht in den Repo-Einstellungen „Allow GitHub Actions to create
+          # and approve pull requests“ (Settings → Actions → General). Ist das
+          # aus, liegt der Zweig trotzdem oben und der Lauf sagt, wo.
+          elif ! gh pr create --base master --head "$ZWEIG" --title "$titel" --body-file /tmp/rumpf.md; then
+            echo "::warning::PR nicht geöffnet. Zweig liegt oben: https://github.com/${GITHUB_REPOSITORY}/compare/master...${ZWEIG}?expand=1"
+            cat /tmp/rumpf.md >> "$GITHUB_STEP_SUMMARY"
+          fi

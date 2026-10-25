@@ -53,12 +53,15 @@ struct Dict {
 
 fn dict() -> &'static Dict {
     static DICT: OnceLock<Dict> = OnceLock::new();
-    DICT.get_or_init(|| {
-        let v: serde_json::Value =
-            serde_json::from_str(DICT_JSON).expect("matching-woerterbuch.json ungültig");
+    DICT.get_or_init(|| Dict::parse(DICT_JSON).expect("matching-woerterbuch.json ungültig"))
+}
+
+impl Dict {
+    fn parse(json: &str) -> Result<Dict, String> {
+        let v: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
         let terms = v["begriffe"]
             .as_object()
-            .expect("Sektion 'begriffe' fehlt")
+            .ok_or("Sektion 'begriffe' fehlt")?
             .iter()
             .map(|(key, def)| {
                 let list = |field: &str| -> Vec<String> {
@@ -83,7 +86,7 @@ fn dict() -> &'static Dict {
             .collect();
         let brands = v["marken"]
             .as_object()
-            .expect("Sektion 'marken' fehlt")
+            .ok_or("Sektion 'marken' fehlt")?
             .iter()
             .filter_map(|(brand, term)| {
                 let b = norm(brand);
@@ -110,11 +113,11 @@ fn dict() -> &'static Dict {
         // waren um 46 Kategorie- und 180 Titelmuster ärmer als die JSON — ein
         // umbenannter Schlüssel hätte den Filter halbiert, ohne dass irgendwo
         // etwas fehlgeschlagen wäre.
-        let rx = |field: &str| -> Regex {
+        let rx = |field: &str| -> Result<Regex, String> {
             let pattern = v[field]
                 .as_str()
-                .unwrap_or_else(|| panic!("matching-woerterbuch.json: Feld `{field}` fehlt"));
-            Regex::new(&format!("(?i){pattern}")).unwrap()
+                .ok_or_else(|| format!("matching-woerterbuch.json: Feld `{field}` fehlt"))?;
+            Regex::new(&format!("(?i){pattern}")).map_err(|e| format!("Feld `{field}`: {e}"))
         };
         // Fehlt die Sektion (alter JSON-Stand), bleibt die Zuordnung leer und
         // das Verhalten ist exakt das vor dieser Regel.
@@ -127,15 +130,96 @@ fn dict() -> &'static Dict {
                     .collect()
             })
             .unwrap_or_default();
-        Dict {
+        Ok(Dict {
             terms,
             categories,
             brands,
-            nonfood_cat: rx("nonfood_cat"),
-            nonfood_terms: rx("nonfood_terms"),
-            food_cat: rx("food_cat"),
+            nonfood_cat: rx("nonfood_cat")?,
+            nonfood_terms: rx("nonfood_terms")?,
+            food_cat: rx("food_cat")?,
+        })
+    }
+
+    /// Steht ein Sperrwort des Begriffs `key` im (normalisierten) Text?
+    fn sperrt(&self, key: &str, ntext: &str, toks: &HashSet<String>) -> bool {
+        self.terms.iter().filter(|t| t.key == key).any(|t| {
+            t.block_phrases.iter().any(|b| ntext.contains(b.as_str()))
+                || t.block_words.iter().any(|b| toks.contains(b))
+        })
+    }
+}
+
+/// Ein Wörterbuch aus beliebigem JSON-Text statt dem eingebetteten.
+///
+/// Für `feedback`: Die Runde misst eine geänderte Kopie gegen das Original,
+/// und beide müssen durch genau dieselbe Regel laufen wie die Nightly — eine
+/// zweite Implementierung zum Messen wäre die Abweichung, die der
+/// Paritätstest auf der Python-Seite schon einmal finden musste.
+pub struct Woerterbuch(Dict);
+
+impl Woerterbuch {
+    pub fn parse(json: &str) -> anyhow::Result<Woerterbuch> {
+        Dict::parse(json).map(Woerterbuch).map_err(|e| anyhow::anyhow!(e))
+    }
+
+    pub fn match_keys(&self, title: &str, subtitle: Option<&str>, category: Option<&str>) -> Vec<String> {
+        keys_in(&self.0, title, subtitle, category)
+    }
+
+    /// Was die App unter einer Suchanfrage versteht — der Zwilling von
+    /// `MatchDictionary.meaning` in der App: Je Wort die Begriffe, deren
+    /// exact-Liste (oder Name) es führt, ohne gesperrte; heißt ein Begriff wie
+    /// das Wort, nur er, sonst die mit den wenigsten Synonymen. Suffixe zählen
+    /// auf der Suchseite nicht. Dazu die ganze Anfrage als Wendung.
+    pub fn bedeutung(&self, query: &str) -> Vec<String> {
+        let nq = norm(query);
+        let eintraege: Vec<(&str, Vec<String>)> = self
+            .0
+            .terms
+            .iter()
+            .map(|t| {
+                let woerter = t
+                    .exact
+                    .iter()
+                    .cloned()
+                    .chain([norm(&t.key)])
+                    .filter(|w| !w.is_empty() && !t.block_words.contains(w) && !t.block_phrases.contains(w))
+                    .collect();
+                (t.key.as_str(), woerter)
+            })
+            .collect();
+        let mut out: Vec<String> = Vec::new();
+        let mut dazu = |k: &str| {
+            if !out.iter().any(|o| o == k) {
+                out.push(k.to_string());
+            }
+        };
+        for wort in nq.split(' ').filter(|w| w.chars().count() >= 2) {
+            let kand: Vec<(&str, usize)> = eintraege
+                .iter()
+                .filter(|(_, w)| w.iter().any(|x| x == wort))
+                .map(|(k, w)| (*k, w.len()))
+                .collect();
+            if kand.iter().any(|(k, _)| *k == wort) {
+                dazu(wort);
+            } else if let Some(engste) = kand.iter().map(|(_, n)| *n).min() {
+                kand.iter().filter(|(_, n)| *n == engste).for_each(|(k, _)| dazu(k));
+            }
         }
-    })
+        if nq.contains(' ') {
+            eintraege.iter().filter(|(_, w)| w.contains(&nq)).for_each(|(k, _)| dazu(k));
+        }
+        out
+    }
+
+    /// Sperrt der Begriff diesen Text? Die App fragt das auch bei
+    /// Direkttreffern (app#167): Steht das Suchwort wörtlich im Titel, gilt
+    /// der Treffer nur, wenn die Sperrliste des Begriffs nicht zuschlägt.
+    pub fn sperrt(&self, begriff: &str, text: &str) -> bool {
+        let ntext = norm(text);
+        let toks: HashSet<String> = tokens(&ntext).into_iter().collect();
+        self.0.sperrt(begriff, &ntext, &toks)
+    }
 }
 
 /// Normalisierung wie in der Python-Referenz: lowercase, ®*™ raus,
@@ -259,7 +343,10 @@ pub fn vocabulary() -> Vec<(String, Option<String>)> {
 /// `match_key`-Tags für ein Angebot: Begriffs-Tags, `["nonfood"]` für
 /// erkanntes Non-Food, leer für ungetaggt.
 pub fn match_keys(title: &str, subtitle: Option<&str>, category: Option<&str>) -> Vec<String> {
-    let d = dict();
+    keys_in(dict(), title, subtitle, category)
+}
+
+fn keys_in(d: &Dict, title: &str, subtitle: Option<&str>, category: Option<&str>) -> Vec<String> {
     let text = match subtitle {
         Some(sub) if !sub.is_empty() => format!("{title} {sub}"),
         _ => title.to_string(),
@@ -330,11 +417,7 @@ pub fn match_keys(title: &str, subtitle: Option<&str>, category: Option<&str>) -
         // über die Kategorie „Butter" zurück — die Blockliste wäre auf dem
         // neuen Weg schlicht wirkungslos gewesen.
         if let Some(key) = d.categories.get(norm(cat).as_str()) {
-            let blocked = d.terms.iter().filter(|t| t.key == *key).any(|t| {
-                t.block_phrases.iter().any(|b| ntext.contains(b.as_str()))
-                    || t.block_words.iter().any(|b| toks.contains(b))
-            });
-            if !blocked {
+            if !d.sperrt(key, &ntext, &toks) {
                 return vec![key.clone()];
             }
         }

@@ -149,6 +149,20 @@ enum Command {
         #[arg(long, default_value_t = false)]
         estimate: bool,
     },
+    /// Meldungen aus match_feedback zu geprüften Wörterbuch-Änderungen machen
+    FeedbackRunde {
+        /// Goldsatz, gegen den jede Änderung gemessen wird
+        #[arg(long, default_value = "docs/llm-tagging/gold-2026-10-20.json")]
+        gold: String,
+
+        /// Hierhin kommt der PR-Text
+        #[arg(long)]
+        bericht: Option<String>,
+
+        /// Nur die offenen Fälle zeigen: kein Modell, nichts geschrieben
+        #[arg(long, default_value_t = false)]
+        trocken: bool,
+    },
     /// Gespeicherte Angebote nach Supabase hochladen (public.offers)
     Push {
         /// Nur diesen Supermarkt pushen (Standard: alle)
@@ -578,6 +592,10 @@ fn main() -> Result<()> {
         }
         Command::History { query, db } => history(query, db),
         Command::LlmTags { gold, estimate } => lechariot::llm_tags::eval_gold(&gold, estimate),
+        Command::FeedbackRunde { gold, bericht, trocken } => {
+            let bericht = bericht.map(Into::into).unwrap_or_else(lechariot::feedback::bericht_pfad_standard);
+            lechariot::feedback::run(&lechariot::feedback::Optionen { gold, bericht, trocken })
+        }
         Command::AuditImages { sample, market, fail_on_dead_chain } => {
             let opts = lechariot::audit::AuditOptions { sample, market, fail_on_dead_chain };
             lechariot::audit::run(&opts, None)
