@@ -9,6 +9,20 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Die Edge Function `gerichte` (Deno). Prüft auch, dass ihre Kopie des
+  # Vokabulars zum Wörterbuch passt — wer `docs/matching-woerterbuch.json`
+  # ändert, muss `erzeuge_vokabular.ts` laufen lassen.
+  gerichte-funktion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno test
+        run: deno test --allow-read --allow-env supabase/functions/gerichte/
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
