@@ -94,6 +94,8 @@ pub struct Tagger {
     system: String,
     prompt_fp: String,
     vocab: HashSet<String>,
+    /// Sorte → Topf (`salami` → `wurst`), siehe [`Tagger::apply`].
+    ober: HashMap<String, String>,
     client: reqwest::blocking::Client,
 }
 
@@ -133,9 +135,10 @@ impl Tagger {
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
-        let mut vocab: HashSet<String> =
-            matching::vocabulary().into_iter().map(|(t, _)| t).collect();
+        let begriffe = matching::vocabulary();
+        let mut vocab: HashSet<String> = begriffe.iter().map(|(t, _)| t.clone()).collect();
         vocab.insert(NONFOOD_KEY.to_string());
+        let ober = begriffe.into_iter().filter_map(|(t, o)| o.map(|o| (t, o))).collect();
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(120))
             .build()
@@ -150,6 +153,7 @@ impl Tagger {
             system,
             prompt_fp,
             vocab,
+            ober,
             client,
         }
     }
@@ -166,12 +170,32 @@ impl Tagger {
     }
 
     /// Endgültige Tags nach `mode`.
+    ///
+    /// **Die Antwort des Modells bekommt die Oberbegriffe dazu.** Die App
+    /// sucht nur nach Tag-Gleichheit (`OfferMatcher`, Stufe 2): Wer „Wurst"
+    /// auf die Liste schreibt, findet die Salami nur über ihr `wurst`-Tag. Das
+    /// Wörterbuch setzt beide, das Modell nimmt meist nur die Sorte. Ergänzt
+    /// wird hier und nicht im Cache, damit vorhandene Antworten gültig bleiben.
     pub fn apply(&self, i: &Input) -> Vec<String> {
         match (self.mode, self.cached(i)) {
-            (Mode::Fill, Some(llm)) if i.dict.is_empty() => llm.clone(),
-            (Mode::Replace, Some(llm)) => llm.clone(),
+            (Mode::Fill, Some(llm)) if i.dict.is_empty() => self.mit_oberbegriffen(llm),
+            (Mode::Replace, Some(llm)) => self.mit_oberbegriffen(llm),
             _ => i.dict.clone(),
         }
+    }
+
+    fn mit_oberbegriffen(&self, tags: &[String]) -> Vec<String> {
+        let mut out = tags.to_vec();
+        for t in tags {
+            let mut t = t;
+            while let Some(o) = self.ober.get(t) {
+                if !out.contains(o) {
+                    out.push(o.clone());
+                }
+                t = o;
+            }
+        }
+        out
     }
 
     /// Alle noch nicht gecachten Angebote taggen lassen und den Cache
@@ -532,6 +556,9 @@ pub fn eval_gold(path: &str, estimate_only: bool) -> Result<()> {
     let ober: HashMap<String, String> =
         matching::vocabulary().into_iter().filter_map(|(t, o)| o.map(|o| (t, o))).collect();
     let mut stand: BTreeMap<(&str, &str), BTreeMap<&str, f64>> = BTreeMap::new();
+    // `urteil` zählt Sorte und Topf als gleichwertig. Die App tut das nicht:
+    // Fehlt `wurst` an der Salami, findet sie keiner, der „Wurst" sucht.
+    let mut ohne_topf: BTreeMap<&str, usize> = BTreeMap::new();
     let mut ohne_antwort = 0;
     for (g, i) in gold.iter().zip(&inputs) {
         let gewicht = SCHICHT
@@ -539,8 +566,16 @@ pub fn eval_gold(path: &str, estimate_only: bool) -> Result<()> {
             .find(|(s, _)| *s == g.set)
             .map(|(s, n)| n / gold.iter().filter(|x| x.set == *s).count() as f64)
             .unwrap_or(1.0);
+        let toepfe: Vec<&String> = g
+            .gold
+            .iter()
+            .flatten()
+            .flat_map(|t| std::iter::successors(ober.get(t), |o| ober.get(*o)))
+            .collect();
         let mut zaehle = |wer: &'static str, tags: &[String]| {
             let u = urteil(tags, &g.gold, &ober);
+            let topf_fehlt = u == "ok" && toepfe.iter().any(|o| !tags.contains(o));
+            *ohne_topf.entry(wer).or_default() += topf_fehlt as usize;
             for set in [g.set.as_str(), "gewichtet"] {
                 let w = if set == "gewichtet" { gewicht } else { 1.0 };
                 *stand.entry((wer, set)).or_default().entry(u).or_default() += w;
@@ -566,6 +601,9 @@ pub fn eval_gold(path: &str, estimate_only: bool) -> Result<()> {
             teil("fehlt"),
             teil("falsch")
         );
+    }
+    for (wer, n) in &ohne_topf {
+        println!("{wer:12} richtig, aber ohne Oberbegriff: {n} von {}", gold.len());
     }
     if ohne_antwort > 0 {
         println!("{ohne_antwort} Produkte ohne Modellantwort — sie zählen mit ihrem Wörterbuch-Tag.");
@@ -644,10 +682,21 @@ mod tests {
         let voll = input("Käsewiener", &["käse"]);
         t.cache.insert(t.key(&leer), vec!["passionsfrucht".into()]);
         t.cache.insert(t.key(&voll), vec!["würstchen".into()]);
-        assert_eq!(t.apply(&leer), vec!["passionsfrucht"]);
+        assert_eq!(t.apply(&leer), vec!["passionsfrucht", "obst"]);
         assert_eq!(t.apply(&voll), vec!["käse"]);
         t.mode = Mode::Replace;
-        assert_eq!(t.apply(&voll), vec!["würstchen"]);
+        assert_eq!(t.apply(&voll), vec!["würstchen", "wurst"]);
+    }
+
+    #[test]
+    fn die_sorte_bringt_ihren_topf_mit() {
+        let mut t = tagger(Mode::Replace);
+        let sekt = input("ROTKÄPPCHEN Sekt", &["wein", "sekt"]);
+        let wurst = input("Fleischwurst", &["wurst"]);
+        t.cache.insert(t.key(&sekt), vec!["sekt".into()]);
+        t.cache.insert(t.key(&wurst), vec!["salami".into(), "wurst".into()]);
+        assert_eq!(t.apply(&sekt), vec!["sekt", "wein"]);
+        assert_eq!(t.apply(&wurst), vec!["salami", "wurst"]);
     }
 
     #[test]

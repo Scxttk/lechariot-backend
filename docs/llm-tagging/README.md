@@ -11,6 +11,7 @@ Locally (for `lechariot llm-tags` or a hand push), the same variable goes in `~/
 ## How it works
 
 - `push::load_grouped` collects every offer's (title, subtitle, raw category) plus the dictionary's tags, and sends uncached ones to Haiku in requests of 50 (4 in parallel). The model picks only from the dictionary's vocabulary. Anything else is dropped.
+- The model's answer gets every parent term added (`salami` → `wurst`, `sekt` → `wein`) before it is written. The app matches tags by equality (`OfferMatcher`, stage 2) and never walks up to a parent, so a Salami without `wurst` is invisible to someone who writes "Wurst". Added at apply time, not in the cache, so cached answers stay valid.
 - Cache key = model + prompt fingerprint (prompt and vocabulary) + text. Same input, same tags, so the T3 determinism gate holds. A `/pflegerunde` that changes the vocabulary re-tags everything once: about $0.04.
 - CI keeps the cache between nights with `actions/cache` (`llm-tags.json`).
 - `LLM_TAGS_MODE=replace` (set in `nightly.yml` since 2026-10-25): the model's tags win over the dictionary's. `fill` only fills products where the dictionary found nothing; it lost to `replace` on the gold set (see Measuring).
@@ -53,8 +54,32 @@ It prints dictionary, `fill` and `replace` side by side, plus real token usage a
 
 Of the 58 food products the dictionary misses, 56 are word forms (Passionsfrüchte, Säfte), synonyms (Triple Sec, Crushed Ice) or brand-only names (Nusspli, DUPLO). That's the work a model does well. 9 of 120 untagged can't be fixed by a model either: 2 terms missing from the vocabulary (Honig, Lebkuchen), 7 lines whose text doesn't say what the product is.
 
+### Spot check against a real store (2026-10-25)
+
+Penny München, 269 offers with a price, `replace` against the dictionary, every differing offer judged by hand. `examples/llm_stichprobe.rs` repeats it for any store.
+
+| | differ | model better | dictionary better | both fine | both wrong |
+|---|---:|---:|---:|---:|---:|
+| prompt from #103 | 93 (34.6 %) | 41 | 35 | 9 | 8 |
+| parent terms + prompt fix | 53 (19.7 %) | 41 | 3 | 7 | 2 |
+
+Of the 35 cases where the dictionary was better, 24 were a dropped parent term (`wurst` on Salami, `käse` on Schnittkäse, `spirituosen` on Rum) and 7 a dropped broader term that is not a formal parent (`wurst` on Fleischwurst and Lyoner, `käse` on Hirtenkäse, `schnitzel` on Puten-Schnitzel). The prompt told the model to "tag the most specific term". Washing powder, toothpaste and deodorant went to `nonfood` although the vocabulary has `waschmittel`, `zahnpasta` and `deo`. The fix: parents are added in code, the prompt asks for the broader term too, and non-food takes a vocabulary term where one exists.
+
+What the dictionary still does better: `fruchtsaft` without `saft` (Granini; `fruchtsaft` has no parent in the vocabulary) and `pralinen` on Kinder bueno.
+
+**Haiku samples, and that is the biggest source of noise.** The same prompt over the same 269 offers, three fresh caches: 64 answers (24 %) differed between runs. Haiku 5.5 rejects `temperature`, so the cache holds one sample per product. Compare prompts over several runs, never one. Gold set, three runs each, `replace`, weighted:
+
+| | ok | missing | wrong | ok without parent |
+|---|---:|---:|---:|---:|
+| prompt from #103, no parent terms (one run) | 89.9 % | 2.4 % | 7.7 % | 24 of 220 |
+| prompt from #103 + parent terms | 90.6 % | 2.5 % | 6.9 % | 0 |
+| new prompt + parent terms | **92.3 %** | **1.4 %** | **6.3 %** | 0 |
+
+The gold scorer counts a child and its parent as equal, so it couldn't see the missing parents. `llm-tags` now also prints "richtig, aber ohne Oberbegriff".
+
 ## Open
 
 - The first nightly with the key has not run yet. Its `LLM-Tags` log line is the first production number.
-- The gold labels are one person's judgement (mine, one pass).
+- The gold labels are one person's judgement (mine, one pass). Candles are labelled `nonfood` although `kerzen` is a vocabulary term.
+- The vocabulary lacks some parents the app needs: `fleischwurst` → `wurst`, `feta` → `käse`, `fruchtsaft` → `saft`. Today the prompt has to catch them.
 - The eval script `matching-woerterbuch-eval.py` measures coverage on a July corpus (91–93 %), while production has 20.6 % empty `match_key`. It also strips the `warengruppe` fields when it rewrites the JSON (since #88).
