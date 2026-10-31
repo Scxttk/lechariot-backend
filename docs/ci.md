@@ -297,8 +297,10 @@ gh workflow run branches.yml -f area=01219      # nur ein Gebiet
 - **Einzelne Regionen dürfen fehlschlagen** — der Sync macht mit der
   nächsten Region weiter und schlägt nur fehl, wenn alle scheitern; dann
   greift der Einzel-PLZ-Fallback.
-- **Der Job schlägt fehl**, wenn am Ende **0 Angebote** in der DB liegen
-  oder auch der Fallback-Push nach Supabase scheitert.
+- **Der Job schlägt fehl**, wenn der Lauf **0 Angebote nach Supabase pusht**
+  oder auch der Fallback-Push nach Supabase scheitert. Die lokale SQLite-DB
+  enthält am Ende nur den jeweils zuletzt synchronisierten Store und ist
+  deshalb kein verlässlicher Laufzähler.
 
 ## Bekanntes Risiko: Akamai vs. Runner-IPs
 
