@@ -351,29 +351,29 @@ jobs:
             echo "<sub>In der lokalen DB stehen am Ende $COUNT Zeilen — das ist der"
             echo "letzte Sync, nicht der Lauf: \`sync.rs\` leert die Tabelle vor jedem.</sub>"
           } >> "$GITHUB_STEP_SUMMARY"
-          # Null Angebote heißt nicht immer dasselbe. Beim vollen Lauf ist es
-          # der Alarm, für den diese Prüfung gebaut wurde: acht Ketten
-          # gleichzeitig stumm, dann blockt sehr wahrscheinlich Akamai die
-          # Runner-IP. Bei einem Lauf für **eine** Filiale ist es dagegen eine
-          # ganz gewöhnliche Auskunft — EDEKA Böse (216653) etwa veröffentlicht
-          # auf edeka.de überhaupt keine Angebotsseite, bekannt und behandelt
-          # seit #4, und die App sagt es dem Nutzer auch so.
+          # Null hochgeladene Angebote heißt nicht immer dasselbe. Beim vollen
+          # Lauf ist es der Alarm, für den diese Prüfung gebaut wurde: alle
+          # Stores gleichzeitig stumm, dann blockt sehr wahrscheinlich Akamai
+          # die Runner-IP. Bei einem Lauf für **eine** Filiale ist es dagegen
+          # eine ganz gewöhnliche Auskunft — EDEKA Böse (216653) etwa
+          # veröffentlicht auf edeka.de überhaupt keine Angebotsseite, bekannt
+          # und behandelt seit #4, und die App sagt es dem Nutzer auch so.
           #
           # Am 2026-07-31 hat genau das einen roten Lauf erzeugt und ihm die
           # falsche Ursache angeheftet: „alle Stores fehlgeschlagen (Akamai)"
           # für einen Markt, der schlicht nichts zu holen hat. Dieselbe Form
           # wie #20/#27/#31 — die Regel beschreibt ihre Klasse richtig und
           # prüft sie zu wörtlich.
-          if [ "$COUNT" -eq 0 ]; then
+          if [ "$HOCHGELADEN" -eq 0 ]; then
             if [ -n "$ONLY_MARKET" ]; then
               echo "::warning title=Nightly sync::Filiale $ONLY_MARKET lieferte keine Angebote. Das ist kein Fehler des Laufs — diese Filiale veröffentlicht online nichts (oder der Prospekt ist gerade abgelaufen)."
               echo "> ℹ️ **Filiale $ONLY_MARKET veröffentlicht keine Angebote** — der Lauf selbst war in Ordnung." >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
-            echo "::error::0 Angebote in der DB — alle Stores fehlgeschlagen (Akamai blockt evtl. Runner-IPs, siehe docs/ci.md)."
+            echo "::error::0 Angebote nach Supabase gepusht — alle Stores fehlgeschlagen (Akamai blockt evtl. Runner-IPs, siehe docs/ci.md)."
             exit 1
           fi
-          echo "$COUNT Angebote in der DB."
+          echo "$HOCHGELADEN Angebote nach Supabase gepusht."
 
           # ----------------------------------------------------------------
           # Ketten-Wächter: Auch EINE stumme Kette ist ein Ausfall.
