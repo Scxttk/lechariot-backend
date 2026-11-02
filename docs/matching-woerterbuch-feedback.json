@@ -1,5 +1,5 @@
 {
-  "letzte_id": 263,
+  "letzte_id": 270,
   "aenderungen": [
     {
       "op": "sperrwort",
@@ -146,6 +146,20 @@
       "begriff": "wasser",
       "wort": "weingläser",
       "runde": "2026-10-25",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "tiefkühlgemüse",
+      "wort": "wok",
+      "runde": "2026-11-02",
+      "meldungen": 1
+    },
+    {
+      "op": "sperrwort",
+      "begriff": "tofu",
+      "wort": "wurstersatzprodukt",
+      "runde": "2026-11-02",
       "meldungen": 1
     }
   ]

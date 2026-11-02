@@ -1666,7 +1666,8 @@
     "gemüse"
    ],
    "block": [
-    "gemüsebrühe"
+    "gemüsebrühe",
+    "wok"
    ],
    "warengruppe": "Tiefkühl"
   },
@@ -1699,7 +1700,8 @@
    "prefix": [],
    "block": [
     "lachgummi",
-    "tomatensauce"
+    "tomatensauce",
+    "wurstersatzprodukt"
    ],
    "warengruppe": "Vorräte & Kochen"
   },
